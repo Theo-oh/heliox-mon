@@ -1,5 +1,5 @@
 .env
 *.db
 build/
-heliox-mon
+/heliox-mon
 *.log
