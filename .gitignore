@@ -1,0 +1,5 @@
+.env
+*.db
+build/
+heliox-mon
+*.log

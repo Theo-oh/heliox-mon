@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Heliox Monitor</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>📊 <span id="server-name">Heliox</span> Monitor</h1>
+        <span id="current-time" class="time"></span>
+      </header>
+
+      <!-- 系统资源 -->
+      <section class="card">
+        <h2>⚙️ 系统资源</h2>
+        <div class="metrics-grid">
+          <div class="metric">
+            <span class="label">CPU</span>
+            <span id="cpu" class="value">--%</span>
+          </div>
+          <div class="metric">
+            <span class="label">内存</span>
+            <span id="memory" class="value">-- / -- GB</span>
+          </div>
+          <div class="metric">
+            <span class="label">磁盘</span>
+            <span id="disk" class="value">-- / -- GB</span>
+          </div>
+          <div class="metric">
+            <span class="label">负载</span>
+            <span id="load" class="value">-- / -- / --</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 实时网速 -->
+      <section class="card">
+        <h2>🚀 实时网速</h2>
+        <div class="speed-grid">
+          <div class="speed-item">
+            <span class="label">↑ 上行</span>
+            <span id="tx-speed" class="value speed-up">-- MB/s</span>
+          </div>
+          <div class="speed-item">
+            <span class="label">↓ 下行</span>
+            <span id="rx-speed" class="value speed-down">-- MB/s</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 流量统计 -->
+      <section class="card">
+        <h2>📈 流量统计</h2>
+        <div class="traffic-grid">
+          <div class="traffic-item">
+            <span class="label">今日</span>
+            <div class="traffic-values">
+              <span id="today-tx" class="tx">↑ --</span>
+              <span id="today-rx" class="rx">↓ --</span>
+            </div>
+          </div>
+          <div class="traffic-item">
+            <span class="label">昨日</span>
+            <div class="traffic-values">
+              <span id="yesterday-tx" class="tx">↑ --</span>
+              <span id="yesterday-rx" class="rx">↓ --</span>
+            </div>
+          </div>
+          <div class="traffic-item">
+            <span class="label">本月</span>
+            <div class="traffic-values">
+              <span id="month-tx" class="tx">↑ --</span>
+              <span id="month-rx" class="rx">↓ --</span>
+            </div>
+          </div>
+          <div class="traffic-item">
+            <span class="label">上月</span>
+            <div class="traffic-values">
+              <span id="last-month-tx" class="tx">↑ --</span>
+              <span id="last-month-rx" class="rx">↓ --</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 流量配额 -->
+      <section class="card">
+        <h2>⚠️ 流量配额</h2>
+        <div class="quota-info">
+          <div class="quota-bar">
+            <div id="quota-fill" class="quota-fill" style="width: 0%"></div>
+          </div>
+          <div class="quota-text">
+            <span id="quota-used">0</span> / <span id="quota-limit">0</span> GB
+            (<span id="quota-percent">0</span>%)
+          </div>
+          <div class="quota-reset">
+            重置日: 每月 <span id="reset-day">1</span> 号
+          </div>
+        </div>
+      </section>
+
+      <!-- 延迟监控 -->
+      <section class="card">
+        <h2>📡 延迟监控</h2>
+        <div id="latency-container">
+          <canvas id="latency-chart"></canvas>
+        </div>
+      </section>
+
+      <!-- 流量趋势 -->
+      <section class="card">
+        <h2>📊 月度趋势</h2>
+        <div id="trend-container">
+          <canvas id="trend-chart"></canvas>
+        </div>
+      </section>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
