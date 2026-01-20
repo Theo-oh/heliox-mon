@@ -201,8 +201,37 @@ header h1 {
 /* 图表 */
 #latency-container,
 #trend-container {
-  height: 250px;
+  height: 280px;
   position: relative;
+}
+
+/* 延迟统计 */
+.latency-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.latency-stat-item {
+  flex: 1;
+  min-width: 200px;
+}
+
+.latency-stat-item .stat-tag {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.latency-stat-item .stat-values {
+  display: flex;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.latency-stat-item .stat-values strong {
+  color: var(--text-primary);
 }
 
 /* 响应式 */

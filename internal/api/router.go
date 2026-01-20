@@ -298,42 +298,76 @@ func (s *Server) handleTrafficRealtime(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleLatency 延迟数据
+// handleLatency 延迟数据（支持多 target、统计信息）
 func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
-	target := r.URL.Query().Get("target")
-	if target == "" && len(s.cfg.PingTargets) > 0 {
-		target = s.cfg.PingTargets[0].Tag
-	}
-
 	// 默认返回最近 24 小时
 	cutoff := time.Now().Add(-24 * time.Hour).Unix()
 
-	rows, err := s.db.Query(
-		"SELECT ts, rtt_ms FROM latency_records WHERE target = ? AND ts > ? ORDER BY ts",
-		target, cutoff,
-	)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	// 返回所有 target 的数据
+	result := map[string]interface{}{
+		"targets": []map[string]interface{}{},
 	}
-	defer rows.Close()
 
-	var data []map[string]interface{}
-	for rows.Next() {
-		var ts int64
-		var rtt *float64
-		rows.Scan(&ts, &rtt)
-		item := map[string]interface{}{"ts": ts}
-		if rtt != nil {
-			item["rtt_ms"] = *rtt
-		} else {
-			item["rtt_ms"] = nil
+	for _, pt := range s.cfg.PingTargets {
+		rows, err := s.db.Query(
+			"SELECT ts, rtt_ms FROM latency_records WHERE target = ? AND ts > ? ORDER BY ts",
+			pt.Tag, cutoff,
+		)
+		if err != nil {
+			continue
 		}
-		data = append(data, item)
+
+		var points []map[string]interface{}
+		var sum, min, max float64
+		var count int
+		min = 999999
+
+		for rows.Next() {
+			var ts int64
+			var rtt *float64
+			rows.Scan(&ts, &rtt)
+			point := map[string]interface{}{"ts": ts}
+			if rtt != nil {
+				point["rtt_ms"] = *rtt
+				sum += *rtt
+				count++
+				if *rtt < min {
+					min = *rtt
+				}
+				if *rtt > max {
+					max = *rtt
+				}
+			} else {
+				point["rtt_ms"] = nil
+			}
+			points = append(points, point)
+		}
+		rows.Close()
+
+		avg := 0.0
+		if count > 0 {
+			avg = sum / float64(count)
+		}
+		if min == 999999 {
+			min = 0
+		}
+
+		targetData := map[string]interface{}{
+			"tag":    pt.Tag,
+			"ip":     pt.IP,
+			"points": points,
+			"stats": map[string]interface{}{
+				"avg":   avg,
+				"min":   min,
+				"max":   max,
+				"count": count,
+			},
+		}
+		result["targets"] = append(result["targets"].([]map[string]interface{}), targetData)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+	json.NewEncoder(w).Encode(result)
 }
 
 // handleConfig 配置管理

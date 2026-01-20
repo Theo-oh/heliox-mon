@@ -111,55 +111,146 @@ function connectRealtime() {
 
 // 延迟图表
 let latencyChart = null;
+let latencyData = null;
+const latencyColors = [
+  { border: "#f9b920", bg: "rgba(249, 185, 32, 0.1)" },
+  { border: "#3fb950", bg: "rgba(63, 185, 80, 0.1)" },
+  { border: "#58a6ff", bg: "rgba(88, 166, 255, 0.1)" },
+  { border: "#a371f7", bg: "rgba(163, 113, 247, 0.1)" },
+  { border: "#f85149", bg: "rgba(248, 81, 73, 0.1)" },
+];
 
 async function fetchLatency() {
   try {
     const res = await fetch("/api/latency");
-    const data = await res.json();
-
-    const labels = data.map((d) => new Date(d.ts * 1000).toLocaleTimeString());
-    const values = data.map((d) => d.rtt_ms);
-
-    if (latencyChart) {
-      latencyChart.data.labels = labels;
-      latencyChart.data.datasets[0].data = values;
-      latencyChart.update();
-    } else {
-      const ctx = document.getElementById("latency-chart").getContext("2d");
-      latencyChart = new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: "延迟 (ms)",
-              data: values,
-              borderColor: "#58a6ff",
-              backgroundColor: "rgba(88, 166, 255, 0.1)",
-              fill: true,
-              tension: 0.3,
-              pointRadius: 0,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { display: false },
-            y: {
-              beginAtZero: true,
-              grid: { color: "#30363d" },
-              ticks: { color: "#8b949e" },
-            },
-          },
-        },
-      });
-    }
+    latencyData = await res.json();
+    renderLatencyChart();
+    renderLatencyStats();
   } catch (e) {
     console.error("获取延迟数据失败:", e);
   }
+}
+
+function renderLatencyChart() {
+  if (!latencyData || !latencyData.targets) return;
+
+  const datasets = [];
+  const annotations = {};
+
+  latencyData.targets.forEach((target, idx) => {
+    const color = latencyColors[idx % latencyColors.length];
+    const points = target.points || [];
+
+    // 主数据线
+    datasets.push({
+      label: target.tag,
+      data: points.map((p) => ({ x: p.ts * 1000, y: p.rtt_ms })),
+      borderColor: color.border,
+      backgroundColor: color.bg,
+      fill: false,
+      tension: 0.2,
+      pointRadius: 0,
+      borderWidth: 1.5,
+    });
+
+    // 平均值线
+    if (target.stats && target.stats.avg > 0) {
+      annotations[`avg-${idx}`] = {
+        type: "line",
+        yMin: target.stats.avg,
+        yMax: target.stats.avg,
+        borderColor: color.border,
+        borderWidth: 1,
+        borderDash: [5, 5],
+        label: {
+          display: true,
+          content: `平均 ${target.stats.avg.toFixed(1)}`,
+          position: "end",
+          backgroundColor: color.border,
+          color: "#0d1117",
+          font: { size: 10 },
+        },
+      };
+    }
+  });
+
+  // 获取所有时间戳作为 labels
+  const allPoints = latencyData.targets.flatMap((t) => t.points || []);
+  const labels = [...new Set(allPoints.map((p) => p.ts))].sort();
+
+  if (latencyChart) {
+    latencyChart.data.datasets = datasets;
+    latencyChart.options.plugins.annotation = { annotations };
+    latencyChart.update();
+  } else {
+    const ctx = document.getElementById("latency-chart").getContext("2d");
+    latencyChart = new Chart(ctx, {
+      type: "line",
+      data: { datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: {
+            display: true,
+            position: "top",
+            labels: { color: "#8b949e", usePointStyle: true, boxWidth: 8 },
+            onClick: (e, legendItem, legend) => {
+              const idx = legendItem.datasetIndex;
+              const meta = legend.chart.getDatasetMeta(idx);
+              meta.hidden = !meta.hidden;
+              legend.chart.update();
+            },
+          },
+          tooltip: {
+            callbacks: {
+              title: (items) =>
+                new Date(items[0].parsed.x).toLocaleString("zh-CN"),
+              label: (item) => `${item.dataset.label}: ${item.parsed.y?.toFixed(2) || "-"} ms`,
+            },
+          },
+          annotation: { annotations },
+        },
+        scales: {
+          x: {
+            type: "time",
+            time: { unit: "hour", displayFormats: { hour: "HH:mm" } },
+            grid: { display: false },
+            ticks: { color: "#8b949e" },
+          },
+          y: {
+            beginAtZero: true,
+            grid: { color: "#30363d" },
+            ticks: { color: "#8b949e" },
+            title: { display: true, text: "ms", color: "#8b949e" },
+          },
+        },
+      },
+    });
+  }
+}
+
+function renderLatencyStats() {
+  const container = document.getElementById("latency-stats");
+  if (!container || !latencyData || !latencyData.targets) return;
+
+  container.innerHTML = latencyData.targets
+    .map((t, idx) => {
+      const color = latencyColors[idx % latencyColors.length].border;
+      const stats = t.stats || {};
+      return `
+      <div class="latency-stat-item" style="border-left: 3px solid ${color}; padding-left: 8px; margin-bottom: 8px;">
+        <div class="stat-tag">${t.tag}</div>
+        <div class="stat-values">
+          <span>平均: <strong>${stats.avg?.toFixed(1) || "-"}</strong>ms</span>
+          <span>最小: <strong style="color:#3fb950">${stats.min?.toFixed(1) || "-"}</strong>ms</span>
+          <span>最大: <strong style="color:#f85149">${stats.max?.toFixed(1) || "-"}</strong>ms</span>
+        </div>
+      </div>
+    `;
+    })
+    .join("");
 }
 
 // 月度趋势图表
