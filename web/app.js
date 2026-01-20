@@ -76,9 +76,13 @@ async function fetchPortTraffic() {
   try {
     const res = await fetch("/api/traffic/ports");
     const data = await res.json();
+    console.log("端口流量 API 返回:", data);
 
     if (!data.ports || data.ports.length === 0) {
-      // 没有配置端口监控，隐藏端口流量区域
+      console.log("无端口配置或数据");
+      // 显示提示信息
+      const todayEl = document.getElementById("port-traffic-today");
+      if (todayEl) todayEl.innerHTML = '<div class="port-no-data">暂无端口流量数据</div>';
       return;
     }
 
