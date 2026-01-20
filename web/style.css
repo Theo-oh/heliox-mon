@@ -124,24 +124,129 @@ header h1 {
 }
 
 /* 流量统计 */
-.traffic-grid {
+.traffic-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 16px;
+  margin-bottom: 16px;
 }
 
-.traffic-item {
+.traffic-card {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+}
+
+.traffic-card-title {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.port-traffic-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.port-traffic-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border-radius: 8px;
+  border-left: 3px solid var(--accent);
+}
+
+.port-traffic-row .port-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.port-traffic-row .port-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 0.85rem;
+}
+
+.port-traffic-row .port-total {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.traffic-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border-radius: 8px;
+  border-left: 3px solid var(--warning);
+}
+
+.traffic-total .label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--warning);
+}
+
+.month-traffic-card {
   background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--border);
+}
+
+.port-traffic-month-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.port-month-item {
+  text-align: center;
+  padding: 16px;
+  background: var(--bg-card);
   border-radius: 8px;
 }
 
-.traffic-item .label {
+.port-month-item .port-name {
   font-size: 0.85rem;
   color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.port-month-item .port-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.month-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: var(--bg-card);
+  border-radius: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.month-total .label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.month-total .value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .traffic-values {

@@ -37,6 +37,7 @@ func NewServer(cfg *config.Config, db *storage.DB) *Server {
 	mux.HandleFunc("/api/traffic/daily", s.basicAuth(s.handleTrafficDaily))
 	mux.HandleFunc("/api/traffic/monthly", s.basicAuth(s.handleTrafficMonthly))
 	mux.HandleFunc("/api/traffic/realtime", s.basicAuth(s.handleTrafficRealtime))
+	mux.HandleFunc("/api/traffic/ports", s.basicAuth(s.handlePortTraffic))
 	mux.HandleFunc("/api/latency", s.basicAuth(s.handleLatency))
 	mux.HandleFunc("/api/config", s.basicAuth(s.handleConfig))
 
@@ -451,6 +452,97 @@ func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 		result["targets"] = append(result["targets"].([]map[string]interface{}), targetData)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// handlePortTraffic 端口流量统计
+func (s *Server) handlePortTraffic(w http.ResponseWriter, r *http.Request) {
+	tz := s.cfg.Timezone
+	now := time.Now().In(tz)
+	today := now.Format("2006-01-02")
+	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
+
+	// 计算计费周期
+	billingStart, _ := s.getBillingCycleDates(now)
+	lastMonthStart := time.Date(now.Year(), now.Month()-1, 1, 0, 0, 0, 0, tz)
+	lastMonthEnd := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, tz).Add(-time.Second)
+
+	// 获取配置的端口
+	ports := []struct {
+		Port int    `json:"port"`
+		Name string `json:"name"`
+	}{}
+	if s.cfg.SnellPort > 0 {
+		ports = append(ports, struct {
+			Port int    `json:"port"`
+			Name string `json:"name"`
+		}{Port: s.cfg.SnellPort, Name: "Snell"})
+	}
+	if s.cfg.VlessPort > 0 {
+		ports = append(ports, struct {
+			Port int    `json:"port"`
+			Name string `json:"name"`
+		}{Port: s.cfg.VlessPort, Name: "VLESS"})
+	}
+
+	result := map[string]interface{}{
+		"ports": []map[string]interface{}{},
+	}
+
+	for _, p := range ports {
+		portData := map[string]interface{}{
+			"port": p.Port,
+			"name": p.Name,
+		}
+
+		// 今日流量
+		row := s.db.QueryRow(`
+			SELECT COALESCE(MAX(tx_bytes) - MIN(tx_bytes), 0),
+			       COALESCE(MAX(rx_bytes) - MIN(rx_bytes), 0)
+			FROM port_traffic_snapshots
+			WHERE port = ? AND date(ts, 'unixepoch', '+8 hours') = ?
+		`, p.Port, today)
+		var todayTx, todayRx int64
+		row.Scan(&todayTx, &todayRx)
+		portData["today"] = map[string]int64{"tx": todayTx, "rx": todayRx, "total": todayTx + todayRx}
+
+		// 昨日流量
+		row = s.db.QueryRow(`
+			SELECT COALESCE(tx_bytes, 0), COALESCE(rx_bytes, 0)
+			FROM port_traffic_daily
+			WHERE port = ? AND date = ?
+		`, p.Port, yesterday)
+		var yesterdayTx, yesterdayRx int64
+		row.Scan(&yesterdayTx, &yesterdayRx)
+		portData["yesterday"] = map[string]int64{"tx": yesterdayTx, "rx": yesterdayRx, "total": yesterdayTx + yesterdayRx}
+
+		// 本月流量
+		row = s.db.QueryRow(`
+			SELECT COALESCE(SUM(tx_bytes), 0), COALESCE(SUM(rx_bytes), 0)
+			FROM port_traffic_daily
+			WHERE port = ? AND date >= ?
+		`, p.Port, billingStart.Format("2006-01-02"))
+		var monthTx, monthRx int64
+		row.Scan(&monthTx, &monthRx)
+		// 加上今日
+		monthTx += todayTx
+		monthRx += todayRx
+		portData["this_month"] = map[string]int64{"tx": monthTx, "rx": monthRx, "total": monthTx + monthRx}
+
+		// 上月流量
+		row = s.db.QueryRow(`
+			SELECT COALESCE(SUM(tx_bytes), 0), COALESCE(SUM(rx_bytes), 0)
+			FROM port_traffic_daily
+			WHERE port = ? AND date >= ? AND date <= ?
+		`, p.Port, lastMonthStart.Format("2006-01-02"), lastMonthEnd.Format("2006-01-02"))
+		var lastMonthTx, lastMonthRx int64
+		row.Scan(&lastMonthTx, &lastMonthRx)
+		portData["last_month"] = map[string]int64{"tx": lastMonthTx, "rx": lastMonthRx, "total": lastMonthTx + lastMonthRx}
+
+		result["ports"] = append(result["ports"].([]map[string]interface{}), portData)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

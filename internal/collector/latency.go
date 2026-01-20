@@ -87,7 +87,8 @@ func (c *Collector) doDailyAggregation() {
 	c.aggregateDailyTraffic(today)
 	c.aggregateDailyTraffic(yesterday)
 
-	// 汇总端口流量
+	// 汇总端口流量（今日 + 昨日）
+	c.aggregatePortDailyTraffic(today)
 	c.aggregatePortDailyTraffic(yesterday)
 
 	// 汇总延迟数据（降采样）

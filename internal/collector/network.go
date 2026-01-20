@@ -2,8 +2,10 @@ package collector
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -114,12 +116,40 @@ func (c *Collector) collectPortTraffic(now int64) {
 }
 
 // readIptablesPortTraffic 从 iptables 读取端口流量
-// 需要预先设置 iptables 规则
+// 需要预先设置 iptables 规则：
+// iptables -N HELIOX_STATS
+// iptables -I INPUT -j HELIOX_STATS
+// iptables -I OUTPUT -j HELIOX_STATS
+// iptables -A HELIOX_STATS -p tcp --sport <port>  # TX
+// iptables -A HELIOX_STATS -p tcp --dport <port>  # RX
 func (c *Collector) readIptablesPortTraffic(port int) (tx, rx uint64, err error) {
-	// TODO: 实现 iptables 计数读取
-	// 使用 exec.Command("iptables", "-L", "HELIOX_STATS", "-v", "-n", "-x") 解析输出
-	// 或者使用 netlink 库直接读取
+	// 读取 INPUT 链（RX = dport）
+	rx, _ = c.getIptablesBytes("HELIOX_STATS", "dpt", port)
+	// 读取 OUTPUT 链（TX = sport）
+	tx, _ = c.getIptablesBytes("HELIOX_STATS", "spt", port)
+	return tx, rx, nil
+}
 
-	// 暂时返回 0，后续实现
-	return 0, 0, nil
+// getIptablesBytes 解析 iptables 输出获取字节数
+func (c *Collector) getIptablesBytes(chain, portType string, port int) (uint64, error) {
+	cmd := exec.Command("iptables", "-L", chain, "-n", "-v", "-x")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+
+	// 查找匹配的行：... dpt:443 或 spt:443
+	target := fmt.Sprintf("%s:%d", portType, port)
+	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, target) {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				bytes, _ := strconv.ParseUint(fields[1], 10, 64)
+				return bytes, nil
+			}
+		}
+	}
+	return 0, nil
 }

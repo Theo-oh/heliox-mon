@@ -112,7 +112,39 @@ sudo ./deploy.sh monitor update
 
 ---
 
+## 端口流量监控
+
+支持按端口（如 Snell、VLESS）分别统计流量。
+
+### 启用步骤
+
+1. 设置 iptables 规则（VPS 上执行一次）：
+
+```bash
+sudo /opt/heliox-mon/scripts/setup-iptables.sh
+```
+
+2. 规则会在服务器重启后丢失，建议添加到启动脚本：
+
+```bash
+# 添加到 /etc/rc.local 或创建 systemd 服务
+```
+
+### 配置端口
+
+端口从 Heliox 的 `.env` 文件自动读取：
+
+- `SNELL_PORT` - Snell 端口
+- `VLESS_PORT` - VLESS 端口
+
+---
+
 ## 更新日志
+
+### v0.4.0
+
+- ✨ 端口流量统计（Snell/VLESS 分别统计）
+- ✨ 今日/昨日/本月端口流量明细
 
 ### v0.3.0
 

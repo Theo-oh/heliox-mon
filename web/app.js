@@ -43,6 +43,11 @@ async function fetchStats() {
     document.getElementById("last-month-rx").textContent =
       "↓ " + formatBytes(data.last_month.rx);
 
+    // 本月总计
+    const monthTotalBytes = data.this_month.tx + data.this_month.rx;
+    const monthTotalGB = (monthTotalBytes / 1024 / 1024 / 1024).toFixed(2);
+    document.getElementById("month-total").textContent = monthTotalGB + " GB";
+
     // 配额（使用后端根据 billing_mode 计算的 used_bytes）
     const usedGB = Math.round(data.used_bytes / 1024 / 1024 / 1024);
     const limitGB = data.monthly_limit_gb;
@@ -58,9 +63,75 @@ async function fetchStats() {
     quotaFill.classList.remove("warning", "danger");
     if (percent >= 90) quotaFill.classList.add("danger");
     else if (percent >= 80) quotaFill.classList.add("warning");
+
+    // 获取端口流量
+    fetchPortTraffic();
   } catch (e) {
     console.error("获取统计数据失败:", e);
   }
+}
+
+// 获取端口流量
+async function fetchPortTraffic() {
+  try {
+    const res = await fetch("/api/traffic/ports");
+    const data = await res.json();
+
+    if (!data.ports || data.ports.length === 0) {
+      // 没有配置端口监控，隐藏端口流量区域
+      return;
+    }
+
+    // 渲染今日端口流量
+    renderPortList("port-traffic-today", data.ports, "today");
+    // 渲染昨日端口流量
+    renderPortList("port-traffic-yesterday", data.ports, "yesterday");
+    // 渲染本月端口流量
+    renderPortMonthGrid("port-traffic-month", data.ports);
+  } catch (e) {
+    console.error("获取端口流量失败:", e);
+  }
+}
+
+// 渲染端口流量列表
+function renderPortList(containerId, ports, period) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  container.innerHTML = ports
+    .map((p) => {
+      const d = p[period];
+      return `
+      <div class="port-traffic-row">
+        <span class="port-name">${p.name}</span>
+        <div class="port-stats">
+          <span class="tx">↑ ${formatBytes(d.tx)}</span>
+          <span class="rx">↓ ${formatBytes(d.rx)}</span>
+          <span class="port-total">⇅ ${formatBytes(d.total)}</span>
+        </div>
+      </div>
+    `;
+    })
+    .join("");
+}
+
+// 渲染本月端口流量网格
+function renderPortMonthGrid(containerId, ports) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  container.innerHTML = ports
+    .map((p) => {
+      const d = p.this_month;
+      const gb = (d.total / 1024 / 1024 / 1024).toFixed(2);
+      return `
+      <div class="port-month-item">
+        <div class="port-name">${p.name}</div>
+        <div class="port-value">${gb} GB</div>
+      </div>
+    `;
+    })
+    .join("");
 }
 
 // 获取系统资源

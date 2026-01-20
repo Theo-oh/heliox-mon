@@ -54,34 +54,39 @@
       <!-- 流量统计 -->
       <section class="card">
         <h2>📈 流量统计</h2>
-        <div class="traffic-grid">
-          <div class="traffic-item">
-            <span class="label">今日</span>
-            <div class="traffic-values">
-              <span id="today-tx" class="tx">↑ --</span>
-              <span id="today-rx" class="rx">↓ --</span>
+        <div class="traffic-cards">
+          <!-- 今日流量 -->
+          <div class="traffic-card">
+            <div class="traffic-card-title">今日流量</div>
+            <div id="port-traffic-today" class="port-traffic-list"></div>
+            <div class="traffic-total">
+              <span class="label">整机</span>
+              <div class="traffic-values">
+                <span id="today-tx" class="tx">↑ --</span>
+                <span id="today-rx" class="rx">↓ --</span>
+              </div>
             </div>
           </div>
-          <div class="traffic-item">
-            <span class="label">昨日</span>
-            <div class="traffic-values">
-              <span id="yesterday-tx" class="tx">↑ --</span>
-              <span id="yesterday-rx" class="rx">↓ --</span>
+          <!-- 昨日流量 -->
+          <div class="traffic-card">
+            <div class="traffic-card-title">昨日流量</div>
+            <div id="port-traffic-yesterday" class="port-traffic-list"></div>
+            <div class="traffic-total">
+              <span class="label">整机</span>
+              <div class="traffic-values">
+                <span id="yesterday-tx" class="tx">↑ --</span>
+                <span id="yesterday-rx" class="rx">↓ --</span>
+              </div>
             </div>
           </div>
-          <div class="traffic-item">
-            <span class="label">本月</span>
-            <div class="traffic-values">
-              <span id="month-tx" class="tx">↑ --</span>
-              <span id="month-rx" class="rx">↓ --</span>
-            </div>
-          </div>
-          <div class="traffic-item">
-            <span class="label">上月</span>
-            <div class="traffic-values">
-              <span id="last-month-tx" class="tx">↑ --</span>
-              <span id="last-month-rx" class="rx">↓ --</span>
-            </div>
+        </div>
+        <!-- 本月流量统计 -->
+        <div class="month-traffic-card">
+          <div class="traffic-card-title">本月流量统计</div>
+          <div id="port-traffic-month" class="port-traffic-month-grid"></div>
+          <div class="month-total">
+            <span class="label">本月总计</span>
+            <span id="month-total" class="value">-- GB</span>
           </div>
         </div>
       </section>
