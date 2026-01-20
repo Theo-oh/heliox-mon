@@ -8,28 +8,46 @@
   </head>
   <body>
     <div class="container">
+      <!-- 顶部标题 -->
       <header>
-        <h1>📊 <span id="server-name">Heliox</span> Monitor</h1>
+        <div class="logo">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <circle
+              cx="16"
+              cy="16"
+              r="14"
+              stroke="var(--accent-blue)"
+              stroke-width="2"
+            />
+            <path
+              d="M10 16h12M16 10v12"
+              stroke="var(--accent-blue)"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+          </svg>
+          <h1><span id="server-name">Heliox</span> Monitor</h1>
+        </div>
         <span id="current-time" class="time"></span>
       </header>
 
       <!-- 系统资源 -->
-      <section class="card">
-        <h2>⚙️ 系统资源</h2>
-        <div class="metrics-grid">
-          <div class="metric">
+      <section class="card system-card">
+        <h2>系统资源</h2>
+        <div class="system-grid">
+          <div class="system-item">
             <span class="label">CPU</span>
             <span id="cpu" class="value">--%</span>
           </div>
-          <div class="metric">
+          <div class="system-item">
             <span class="label">内存</span>
             <span id="memory" class="value">-- / -- GB</span>
           </div>
-          <div class="metric">
+          <div class="system-item">
             <span class="label">磁盘</span>
             <span id="disk" class="value">-- / -- GB</span>
           </div>
-          <div class="metric">
+          <div class="system-item">
             <span class="label">负载</span>
             <span id="load" class="value">-- / -- / --</span>
           </div>
@@ -37,103 +55,116 @@
       </section>
 
       <!-- 实时网速 -->
-      <section class="card">
-        <h2>🚀 实时网速</h2>
+      <section class="card speed-card">
+        <h2>实时网速</h2>
         <div class="speed-grid">
           <div class="speed-item">
-            <span class="label">↑ 上行</span>
+            <span class="label">上行</span>
             <span id="tx-speed" class="value speed-up">-- MB/s</span>
           </div>
           <div class="speed-item">
-            <span class="label">↓ 下行</span>
+            <span class="label">下行</span>
             <span id="rx-speed" class="value speed-down">-- MB/s</span>
           </div>
         </div>
       </section>
 
       <!-- 流量统计 -->
-      <section class="card">
-        <h2>📈 流量统计</h2>
-        <div class="traffic-cards">
-          <!-- 今日流量 -->
-          <div class="traffic-card">
-            <div class="traffic-card-title">今日流量</div>
-            <div id="port-traffic-today" class="port-traffic-list"></div>
-            <div class="traffic-total">
-              <span class="label">整机</span>
-              <div class="traffic-values">
-                <span id="today-tx" class="tx">↑ --</span>
-                <span id="today-rx" class="rx">↓ --</span>
-              </div>
-            </div>
+      <section class="section-title">流量统计</section>
+
+      <!-- 今日/昨日流量 -->
+      <div class="traffic-row">
+        <div class="card traffic-card">
+          <h3 class="card-title">今日流量 <span id="today-date"></span></h3>
+          <div id="port-traffic-today" class="port-list">
+            <!-- 端口流量列表 -->
           </div>
-          <!-- 昨日流量 -->
-          <div class="traffic-card">
-            <div class="traffic-card-title">昨日流量</div>
-            <div id="port-traffic-yesterday" class="port-traffic-list"></div>
-            <div class="traffic-total">
-              <span class="label">整机</span>
-              <div class="traffic-values">
-                <span id="yesterday-tx" class="tx">↑ --</span>
-                <span id="yesterday-rx" class="rx">↓ --</span>
-              </div>
+          <div class="port-item total-item">
+            <span class="port-name">整机</span>
+            <div class="port-stats">
+              <span class="stat-down" id="today-rx">↓ --</span>
+              <span class="stat-up" id="today-tx">↑ --</span>
             </div>
           </div>
         </div>
-        <!-- 本月流量统计 -->
-        <div class="month-traffic-card">
-          <div class="traffic-card-title">本月流量统计</div>
-          <div id="port-traffic-month" class="port-traffic-month-grid"></div>
-          <div class="month-total">
-            <span class="label">本月总计</span>
-            <span id="month-total" class="value">-- GB</span>
+
+        <div class="card traffic-card">
+          <h3 class="card-title">昨日流量 <span id="yesterday-date"></span></h3>
+          <div id="port-traffic-yesterday" class="port-list">
+            <!-- 端口流量列表 -->
           </div>
+          <div class="port-item total-item">
+            <span class="port-name">整机</span>
+            <div class="port-stats">
+              <span class="stat-down" id="yesterday-rx">↓ --</span>
+              <span class="stat-up" id="yesterday-tx">↑ --</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 本月流量统计 -->
+      <section class="card month-card">
+        <h3 class="card-title">本月流量统计</h3>
+        <div id="port-traffic-month" class="month-grid">
+          <!-- 端口月流量 -->
+        </div>
+        <div class="month-divider"></div>
+        <div class="month-total">
+          <span class="label">本月总计</span>
+          <span id="month-total" class="value">-- GB</span>
         </div>
       </section>
 
       <!-- 流量配额 -->
-      <section class="card">
-        <h2>⚠️ 流量配额</h2>
+      <section class="card quota-card">
+        <h3 class="card-title">流量配额</h3>
+        <div class="quota-bar">
+          <div id="quota-fill" class="quota-fill" style="width: 0%"></div>
+        </div>
         <div class="quota-info">
-          <div class="quota-bar">
-            <div id="quota-fill" class="quota-fill" style="width: 0%"></div>
-          </div>
-          <div class="quota-text">
+          <span class="quota-text">
             <span id="quota-used">0</span> / <span id="quota-limit">0</span> GB
             (<span id="quota-percent">0</span>%)
-          </div>
-          <div class="quota-reset">
-            重置日: 每月 <span id="reset-day">1</span> 号
-          </div>
+          </span>
+          <span class="quota-reset"
+            >重置日: 每月 <span id="reset-day">1</span> 号</span
+          >
+        </div>
+      </section>
+
+      <!-- 历史趋势 -->
+      <section class="section-title">历史趋势</section>
+
+      <section class="card chart-card">
+        <h3 class="card-title">近6个月流量对比</h3>
+        <div id="trend-container">
+          <canvas id="trend-chart"></canvas>
+        </div>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="dot blue"></span>Snell</span>
+          <span class="legend-item"><span class="dot purple"></span>VLESS</span>
+          <span class="legend-item"><span class="dot green"></span>整机</span>
         </div>
       </section>
 
       <!-- 延迟监控 -->
-      <section class="card">
-        <h2>📡 延迟监控</h2>
+      <section class="section-title">延迟监控</section>
+
+      <section class="card chart-card">
         <div class="latency-controls">
           <div class="date-range">
             <input type="date" id="latency-start" />
-            <span>至</span>
+            <span class="range-sep">至</span>
             <input type="date" id="latency-end" />
-            <button id="latency-query" class="btn-small">查询</button>
-            <button id="latency-reset" class="btn-small btn-secondary">
-              重置
-            </button>
+            <button id="latency-query" class="btn">查询</button>
+            <button id="latency-reset" class="btn btn-secondary">重置</button>
           </div>
-          <span id="latency-granularity" class="granularity-info"></span>
+          <span id="latency-granularity" class="granularity"></span>
         </div>
         <div id="latency-stats" class="latency-stats"></div>
         <div id="latency-container">
           <canvas id="latency-chart"></canvas>
-        </div>
-      </section>
-
-      <!-- 流量趋势 -->
-      <section class="card">
-        <h2>📊 月度趋势</h2>
-        <div id="trend-container">
-          <canvas id="trend-chart"></canvas>
         </div>
       </section>
     </div>

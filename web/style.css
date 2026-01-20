@@ -1,14 +1,21 @@
+/* CSS Variables - 暗色仪表盘配色 */
 :root {
-  --bg-primary: #0d1117;
-  --bg-secondary: #161b22;
-  --bg-card: #21262d;
-  --text-primary: #f0f6fc;
-  --text-secondary: #8b949e;
-  --accent: #58a6ff;
-  --success: #3fb950;
-  --warning: #d29922;
-  --danger: #f85149;
-  --border: #30363d;
+  --bg: #0a0a0f;
+  --card: #161620;
+  --card-2: #1e1e2a;
+  --stroke: rgba(255, 255, 255, 0.06);
+  --stroke-hover: rgba(255, 255, 255, 0.12);
+  --text: #f5f5f7;
+  --muted: #6e6e80;
+  --accent-blue: #3b82f6;
+  --accent-purple: #a855f7;
+  --accent-green: #22c55e;
+  --accent-orange: #f59e0b;
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-hover: 0 12px 48px rgba(0, 0, 0, 0.5);
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
 }
 
 * {
@@ -18,87 +25,135 @@
 }
 
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
-    sans-serif;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
   line-height: 1.6;
+  min-height: 100vh;
 }
 
 .container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 40px 24px;
 }
 
+/* Header */
 header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
+  margin-bottom: 32px;
 }
 
-header h1 {
-  font-size: 1.5rem;
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo h1 {
+  font-size: 24px;
   font-weight: 600;
+  letter-spacing: -0.5px;
 }
 
 .time {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
+  color: var(--muted);
+  font-size: 14px;
 }
 
+/* Section Title */
+.section-title {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  margin: 48px 0 24px;
+}
+
+/* Card Base */
 .card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px;
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--stroke);
+  box-shadow: var(--shadow);
+  padding: 24px;
+  transition: all 0.25s ease-out;
   margin-bottom: 20px;
 }
 
-.card h2 {
-  font-size: 1.1rem;
-  font-weight: 500;
-  margin-bottom: 16px;
-  color: var(--text-secondary);
+.card:hover {
+  border-color: var(--stroke-hover);
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
 }
 
-/* 系统资源 */
-.metrics-grid {
+.card-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 20px;
+}
+
+/* System Card */
+.system-card h2 {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 20px;
+}
+
+.system-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
 }
 
-.metric {
+.system-item {
+  background: var(--card-2);
+  border-radius: var(--radius-md);
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 
-.metric .label {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
+.system-item .label {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
 }
 
-.metric .value {
-  font-size: 1.25rem;
+.system-item .value {
+  font-size: 20px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-/* 实时网速 */
+/* Speed Card */
+.speed-card h2 {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 20px;
+}
+
 .speed-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
+  gap: 16px;
 }
 
 .speed-item {
+  background: var(--card-2);
+  border-radius: var(--radius-md);
+  padding: 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -106,216 +161,213 @@ header h1 {
 }
 
 .speed-item .label {
-  color: var(--text-secondary);
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
 }
 
 .speed-item .value {
-  font-size: 2rem;
+  font-size: 28px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-.speed-up {
-  color: var(--success);
-}
+.speed-up { color: var(--accent-green); }
+.speed-down { color: var(--accent-blue); }
 
-.speed-down {
-  color: var(--accent);
-}
-
-/* 流量统计 */
-.traffic-cards {
+/* Traffic Row */
+.traffic-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 20px;
 }
 
 .traffic-card {
-  background: var(--bg-secondary);
-  border-radius: 12px;
-  padding: 16px;
-  border: 1px solid var(--border);
+  margin-bottom: 0;
 }
 
-.traffic-card-title {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  margin-bottom: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.port-traffic-list {
+/* Port List */
+.port-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   margin-bottom: 12px;
 }
 
-.port-traffic-row {
+.port-item {
+  background: var(--card-2);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
-  background: var(--bg-card);
-  border-radius: 8px;
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--accent-blue);
 }
 
-.port-traffic-row .port-name {
-  font-size: 0.9rem;
+.port-item.snell { border-left-color: var(--accent-blue); }
+.port-item.vless { border-left-color: var(--accent-purple); }
+.port-item.total-item { border-left-color: var(--accent-orange); }
+
+.port-name {
+  font-size: 14px;
   font-weight: 500;
 }
 
-.port-traffic-row .port-stats {
-  display: flex;
-  gap: 12px;
-  font-size: 0.85rem;
-}
-
-.port-traffic-row .port-total {
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.traffic-total {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  background: var(--bg-card);
-  border-radius: 8px;
-  border-left: 3px solid var(--warning);
-}
-
-.traffic-total .label {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--warning);
-}
-
-.month-traffic-card {
-  background: var(--bg-secondary);
-  border-radius: 12px;
-  padding: 20px;
-  border: 1px solid var(--border);
-}
-
-.port-traffic-month-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.port-month-item {
-  text-align: center;
-  padding: 16px;
-  background: var(--bg-card);
-  border-radius: 8px;
-}
-
-.port-month-item .port-name {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
-}
-
-.port-month-item .port-value {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.month-total {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
-  background: var(--bg-card);
-  border-radius: 8px;
-  border-top: 1px solid var(--border);
-}
-
-.month-total .label {
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-}
-
-.month-total .value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.traffic-values {
+.port-stats {
   display: flex;
   gap: 16px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
-.traffic-values .tx {
-  color: var(--success);
+.stat-down { color: var(--accent-blue); }
+.stat-up { color: var(--accent-green); }
+.stat-total {
+  font-weight: 600;
+  color: var(--text);
 }
 
-.traffic-values .rx {
-  color: var(--accent);
+/* Month Card */
+.month-card {
+  text-align: center;
 }
 
-/* 流量配额 */
-.quota-info {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.month-item {
+  background: var(--card-2);
+  border-radius: var(--radius-md);
+  padding: 20px;
+}
+
+.month-item .port-name {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.month-item .port-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.month-divider {
+  height: 1px;
+  background: var(--stroke);
+  margin: 20px 0;
+}
+
+.month-total {
+  padding: 20px;
+}
+
+.month-total .label {
+  display: block;
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.month-total .value {
+  font-size: 48px;
+  font-weight: 700;
+  letter-spacing: -1px;
+}
+
+/* Quota Card */
+.quota-card {
+  padding: 24px;
 }
 
 .quota-bar {
-  height: 12px;
-  background: var(--bg-secondary);
-  border-radius: 6px;
+  height: 10px;
+  background: var(--card-2);
+  border-radius: 5px;
   overflow: hidden;
+  margin-bottom: 16px;
 }
 
 .quota-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--success), var(--warning));
-  border-radius: 6px;
+  background: linear-gradient(90deg, var(--accent-green), var(--accent-blue));
+  border-radius: 5px;
   transition: width 0.5s ease;
 }
 
 .quota-fill.warning {
-  background: linear-gradient(90deg, var(--warning), var(--danger));
+  background: linear-gradient(90deg, var(--accent-orange), #ef4444);
 }
 
 .quota-fill.danger {
-  background: var(--danger);
+  background: #ef4444;
+}
+
+.quota-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .quota-text {
-  font-size: 1.1rem;
+  font-size: 16px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .quota-reset {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
+  font-size: 13px;
+  color: var(--muted);
 }
 
-/* 图表 */
+/* Chart Card */
+.chart-card {
+  padding: 24px;
+}
+
 #latency-container,
 #trend-container {
   height: 280px;
   position: relative;
 }
 
-/* 延迟控制栏 */
+.chart-legend {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 16px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.dot.blue { background: var(--accent-blue); }
+.dot.purple { background: var(--accent-purple); }
+.dot.green { background: var(--accent-green); }
+
+/* Latency Controls */
 .latency-controls {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
   flex-wrap: wrap;
   gap: 12px;
 }
@@ -323,90 +375,138 @@ header h1 {
 .date-range {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .date-range input[type="date"] {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-primary);
-  padding: 6px 10px;
-  font-size: 0.85rem;
+  background: var(--card-2);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 13px;
 }
 
-.btn-small {
-  background: var(--accent);
-  color: var(--bg-primary);
+.range-sep {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.btn {
+  background: var(--accent-blue);
+  color: white;
   border: none;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 0.85rem;
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: all 0.2s;
 }
 
-.btn-small:hover {
+.btn:hover {
   opacity: 0.9;
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
+  background: var(--card-2);
+  border: 1px solid var(--stroke);
 }
 
-.granularity-info {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
+.granularity {
+  font-size: 12px;
+  color: var(--muted);
 }
 
-/* 延迟统计 */
+/* Latency Stats */
 .latency-stats {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .latency-stat-item {
-  flex: 1;
-  min-width: 200px;
+  background: var(--card-2);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  min-width: 180px;
 }
 
 .latency-stat-item .stat-tag {
-  font-weight: 600;
-  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
 }
 
 .latency-stat-item .stat-values {
   display: flex;
   gap: 12px;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .latency-stat-item .stat-values strong {
-  color: var(--text-primary);
+  color: var(--text);
 }
 
-/* 响应式 */
-@media (max-width: 768px) {
-  .container {
-    padding: 12px;
-  }
+/* No Data */
+.port-no-data {
+  text-align: center;
+  color: var(--muted);
+  padding: 20px;
+  font-size: 13px;
+}
 
+/* Responsive */
+@media (max-width: 1024px) {
+  .traffic-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .system-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .month-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 24px 16px;
+  }
+  
   header {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
   }
-
-  .speed-item .value {
-    font-size: 1.5rem;
+  
+  .system-grid {
+    grid-template-columns: 1fr;
   }
-
-  .traffic-grid {
-    grid-template-columns: repeat(2, 1fr);
+  
+  .month-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .speed-item .value {
+    font-size: 22px;
+  }
+  
+  .month-total .value {
+    font-size: 36px;
+  }
+  
+  .latency-controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .date-range {
+    flex-wrap: wrap;
   }
 }

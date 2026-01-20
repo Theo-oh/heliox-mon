@@ -97,13 +97,14 @@ function renderPortList(containerId, ports, period) {
   container.innerHTML = ports
     .map((p) => {
       const d = p[period];
+      const cssClass = p.name.toLowerCase();
       return `
-      <div class="port-traffic-row">
+      <div class="port-item ${cssClass}">
         <span class="port-name">${p.name}</span>
         <div class="port-stats">
-          <span class="tx">↑ ${formatBytes(d.tx)}</span>
-          <span class="rx">↓ ${formatBytes(d.rx)}</span>
-          <span class="port-total">⇅ ${formatBytes(d.total)}</span>
+          <span class="stat-down">↓ ${formatBytes(d.rx)}</span>
+          <span class="stat-up">↑ ${formatBytes(d.tx)}</span>
+          <span class="stat-total">⇅ ${formatBytes(d.total)}</span>
         </div>
       </div>
     `;
@@ -121,7 +122,7 @@ function renderPortMonthGrid(containerId, ports) {
       const d = p.this_month;
       const gb = (d.total / 1024 / 1024 / 1024).toFixed(2);
       return `
-      <div class="port-month-item">
+      <div class="month-item">
         <div class="port-name">${p.name}</div>
         <div class="port-value">${gb} GB</div>
       </div>
