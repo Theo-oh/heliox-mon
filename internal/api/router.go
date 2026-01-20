@@ -267,10 +267,13 @@ func (s *Server) handleTrafficMonthly(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 查询端口流量
-	portData := make(map[string]map[int]int64) // month -> port -> total
+	// 查询端口流量（分上传下载）
+	type portTraffic struct {
+		tx, rx int64
+	}
+	portData := make(map[string]map[int]portTraffic) // month -> port -> {tx, rx}
 	rows2, err := s.db.Query(`
-		SELECT strftime('%Y-%m', date) as month, port, SUM(tx_bytes + rx_bytes)
+		SELECT strftime('%Y-%m', date) as month, port, SUM(tx_bytes), SUM(rx_bytes)
 		FROM port_traffic_daily
 		GROUP BY month, port
 	`)
@@ -279,31 +282,33 @@ func (s *Server) handleTrafficMonthly(w http.ResponseWriter, r *http.Request) {
 		for rows2.Next() {
 			var month string
 			var port int
-			var total int64
-			rows2.Scan(&month, &port, &total)
+			var tx, rx int64
+			rows2.Scan(&month, &port, &tx, &rx)
 			if portData[month] == nil {
-				portData[month] = make(map[int]int64)
+				portData[month] = make(map[int]portTraffic)
 			}
-			portData[month][port] = total
+			portData[month][port] = portTraffic{tx, rx}
 		}
 	}
 
 	// 组装结果
 	data := make([]map[string]interface{}, 6)
 	for i, month := range months {
-		snellTotal := int64(0)
-		vlessTotal := int64(0)
+		snell := portTraffic{}
+		vless := portTraffic{}
 		if pd, ok := portData[month]; ok {
-			snellTotal = pd[s.cfg.SnellPort]
-			vlessTotal = pd[s.cfg.VlessPort]
+			snell = pd[s.cfg.SnellPort]
+			vless = pd[s.cfg.VlessPort]
 		}
 		total := totalData[month]
 		totalGB := float64(total) / 1024 / 1024 / 1024
 
 		data[i] = map[string]interface{}{
 			"month":    month,
-			"snell":    snellTotal,
-			"vless":    vlessTotal,
+			"snell_tx": snell.tx,
+			"snell_rx": snell.rx,
+			"vless_tx": vless.tx,
+			"vless_rx": vless.rx,
 			"total":    total,
 			"total_gb": fmt.Sprintf("%.2f", totalGB),
 		}

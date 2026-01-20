@@ -137,14 +137,35 @@
       <section class="section-title">历史趋势</section>
 
       <section class="card chart-card">
-        <h3 class="card-title">近6个月流量对比</h3>
+        <div class="chart-header">
+          <h3 class="card-title">近6个月流量对比</h3>
+          <div class="view-toggle">
+            <button id="trend-detail" class="btn btn-sm active">详细</button>
+            <button id="trend-total" class="btn btn-sm btn-secondary">
+              总计
+            </button>
+          </div>
+        </div>
         <div id="trend-container">
           <canvas id="trend-chart"></canvas>
         </div>
-        <div class="chart-legend">
-          <span class="legend-item"><span class="dot blue"></span>Snell</span>
-          <span class="legend-item"><span class="dot purple"></span>VLESS</span>
-          <span class="legend-item"><span class="dot green"></span>整机</span>
+        <div id="trend-legend" class="chart-legend">
+          <span class="legend-item"
+            ><span class="dot" style="background: #3b82f6"></span>Snell
+            上传</span
+          >
+          <span class="legend-item"
+            ><span class="dot" style="background: #60a5fa"></span>Snell
+            下载</span
+          >
+          <span class="legend-item"
+            ><span class="dot" style="background: #a855f7"></span>VLESS
+            上传</span
+          >
+          <span class="legend-item"
+            ><span class="dot" style="background: #c084fc"></span>VLESS
+            下载</span
+          >
         </div>
       </section>
 

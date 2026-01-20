@@ -336,91 +336,157 @@ function renderLatencyStats() {
 
 // 月度趋势图表
 let trendChart = null;
+let trendData = null;
+let trendView = "detail"; // detail | total
 
 async function fetchMonthlyTrend() {
   try {
     const res = await fetch("/api/traffic/monthly");
-    const data = await res.json();
+    trendData = await res.json();
 
     // 空数据保护
-    if (!data || !Array.isArray(data)) {
+    if (!trendData || !Array.isArray(trendData)) {
       console.warn("月度趋势数据为空");
       return;
     }
 
-    const labels = data.map((d) => {
-      const parts = d.month.split("-");
-      return parts[1] + "月";
-    });
-    const snellData = data.map((d) => d.snell / 1024 / 1024 / 1024); // GB
-    const vlessData = data.map((d) => d.vless / 1024 / 1024 / 1024);
-    const totalLabels = data.map((d) => d.total_gb);
-
-    if (trendChart) {
-      trendChart.data.labels = labels;
-      trendChart.data.datasets[0].data = snellData;
-      trendChart.data.datasets[1].data = vlessData;
-      trendChart.options.plugins.datalabels = {
-        labels: { total: { formatter: (v, ctx) => totalLabels[ctx.dataIndex] } }
-      };
-      trendChart.update("none");
-    } else {
-      const ctx = document.getElementById("trend-chart").getContext("2d");
-      trendChart = new Chart(ctx, {
-        type: "bar",
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: "Snell",
-              data: snellData,
-              backgroundColor: "#3b82f6",
-              borderRadius: 4,
-            },
-            {
-              label: "VLESS",
-              data: vlessData,
-              backgroundColor: "#a855f7",
-              borderRadius: 4,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: false,
-          plugins: {
-            legend: {
-              display: false,
-            },
-            tooltip: {
-              callbacks: {
-                label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(2)} GB`,
-              },
-            },
-          },
-          scales: {
-            x: {
-              grid: { display: false },
-              ticks: { 
-                color: "#6e6e80",
-                callback: function(value, index) {
-                  return [totalLabels[index], labels[index]];
-                }
-              },
-            },
-            y: {
-              display: false,
-              beginAtZero: true,
-            },
-          },
-        },
-      });
-    }
+    renderTrendChart();
   } catch (e) {
     console.error("获取月度趋势失败:", e);
   }
 }
+
+function renderTrendChart() {
+  if (!trendData) return;
+
+  const labels = trendData.map((d) => {
+    const parts = d.month.split("-");
+    return parts[1] + "月";
+  });
+  const totalLabels = trendData.map((d) => d.total_gb);
+
+  let datasets = [];
+  let legendHtml = "";
+
+  if (trendView === "detail") {
+    // 详细视图：4根柱子
+    datasets = [
+      {
+        label: "Snell 上传",
+        data: trendData.map((d) => d.snell_tx / 1024 / 1024 / 1024),
+        backgroundColor: "#3b82f6",
+        borderRadius: 4,
+      },
+      {
+        label: "Snell 下载",
+        data: trendData.map((d) => d.snell_rx / 1024 / 1024 / 1024),
+        backgroundColor: "#60a5fa",
+        borderRadius: 4,
+      },
+      {
+        label: "VLESS 上传",
+        data: trendData.map((d) => d.vless_tx / 1024 / 1024 / 1024),
+        backgroundColor: "#a855f7",
+        borderRadius: 4,
+      },
+      {
+        label: "VLESS 下载",
+        data: trendData.map((d) => d.vless_rx / 1024 / 1024 / 1024),
+        backgroundColor: "#c084fc",
+        borderRadius: 4,
+      },
+    ];
+    legendHtml = `
+      <span class="legend-item"><span class="dot" style="background:#3b82f6"></span>Snell 上传</span>
+      <span class="legend-item"><span class="dot" style="background:#60a5fa"></span>Snell 下载</span>
+      <span class="legend-item"><span class="dot" style="background:#a855f7"></span>VLESS 上传</span>
+      <span class="legend-item"><span class="dot" style="background:#c084fc"></span>VLESS 下载</span>
+    `;
+  } else {
+    // 总计视图：1根柱子
+    datasets = [
+      {
+        label: "总计",
+        data: trendData.map((d) => d.total / 1024 / 1024 / 1024),
+        backgroundColor: "#22c55e",
+        borderRadius: 4,
+      },
+    ];
+    legendHtml = `<span class="legend-item"><span class="dot" style="background:#22c55e"></span>总计流量</span>`;
+  }
+
+  // 更新图例
+  document.getElementById("trend-legend").innerHTML = legendHtml;
+
+  if (trendChart) {
+    trendChart.data.labels = labels;
+    trendChart.data.datasets = datasets;
+    trendChart.update("none");
+  } else {
+    const ctx = document.getElementById("trend-chart").getContext("2d");
+    trendChart = new Chart(ctx, {
+      type: "bar",
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(2)} GB`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: {
+              color: "#6e6e80",
+              callback: function (value, index) {
+                return [totalLabels[index], labels[index]];
+              },
+            },
+          },
+          y: {
+            display: false,
+            beginAtZero: true,
+          },
+        },
+      },
+    });
+  }
+}
+
+// 视图切换
+function setupTrendToggle() {
+  const detailBtn = document.getElementById("trend-detail");
+  const totalBtn = document.getElementById("trend-total");
+
+  if (detailBtn) {
+    detailBtn.addEventListener("click", () => {
+      trendView = "detail";
+      detailBtn.classList.add("active");
+      detailBtn.classList.remove("btn-secondary");
+      totalBtn.classList.remove("active");
+      totalBtn.classList.add("btn-secondary");
+      renderTrendChart();
+    });
+  }
+
+  if (totalBtn) {
+    totalBtn.addEventListener("click", () => {
+      trendView = "total";
+      totalBtn.classList.add("active");
+      totalBtn.classList.remove("btn-secondary");
+      detailBtn.classList.remove("active");
+      detailBtn.classList.add("btn-secondary");
+      renderTrendChart();
+    });
+  }
+}
+
 
 // 初始化
 document.addEventListener("DOMContentLoaded", () => {
@@ -429,6 +495,7 @@ document.addEventListener("DOMContentLoaded", () => {
   fetchLatency();
   fetchMonthlyTrend();
   connectRealtime();
+  setupTrendToggle();
 
   // 延迟监控时间选择器
   const latencyStartEl = document.getElementById("latency-start");

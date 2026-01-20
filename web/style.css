@@ -331,6 +331,32 @@ header {
   padding: 24px;
 }
 
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.chart-header .card-title {
+  margin-bottom: 0;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.btn-sm.active {
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
+
 #latency-container,
 #trend-container {
   height: 280px;
