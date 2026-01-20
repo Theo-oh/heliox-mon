@@ -249,10 +249,13 @@ func (s *Server) handleTrafficMonthly(w http.ResponseWriter, r *http.Request) {
 		months[5-i] = m.Format("2006-01") // 倒序填充，最终正序
 	}
 
-	// 查询整体流量
-	totalData := make(map[string]int64)
+	// 查询整体流量（分上传下载）
+	type totalTraffic struct {
+		tx, rx int64
+	}
+	totalData := make(map[string]totalTraffic)
 	rows, err := s.db.Query(`
-		SELECT strftime('%Y-%m', date) as month, SUM(tx_bytes + rx_bytes)
+		SELECT strftime('%Y-%m', date) as month, SUM(tx_bytes), SUM(rx_bytes)
 		FROM traffic_daily
 		WHERE iface = 'total'
 		GROUP BY month
@@ -261,9 +264,9 @@ func (s *Server) handleTrafficMonthly(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close()
 		for rows.Next() {
 			var month string
-			var total int64
-			rows.Scan(&month, &total)
-			totalData[month] = total
+			var tx, rx int64
+			rows.Scan(&month, &tx, &rx)
+			totalData[month] = totalTraffic{tx, rx}
 		}
 	}
 
@@ -301,7 +304,8 @@ func (s *Server) handleTrafficMonthly(w http.ResponseWriter, r *http.Request) {
 			vless = pd[s.cfg.VlessPort]
 		}
 		total := totalData[month]
-		totalGB := float64(total) / 1024 / 1024 / 1024
+		totalSum := total.tx + total.rx
+		totalGB := float64(totalSum) / 1024 / 1024 / 1024
 
 		data[i] = map[string]interface{}{
 			"month":    month,
@@ -309,7 +313,9 @@ func (s *Server) handleTrafficMonthly(w http.ResponseWriter, r *http.Request) {
 			"snell_rx": snell.rx,
 			"vless_tx": vless.tx,
 			"vless_rx": vless.rx,
-			"total":    total,
+			"total_tx": total.tx,
+			"total_rx": total.rx,
+			"total":    totalSum,
 			"total_gb": fmt.Sprintf("%.2f", totalGB),
 		}
 	}

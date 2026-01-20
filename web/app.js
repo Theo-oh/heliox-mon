@@ -407,16 +407,25 @@ function renderTrendChart() {
       <span class="legend-item"><span class="dot" style="background:#c084fc"></span>vless 下载</span>
     `;
   } else {
-    // 总计视图：1根柱子
+    // 总计视图：2根柱子（上传/下载）
     datasets = [
       {
-        label: "总计",
-        data: trendData.map((d) => d.total / 1024 / 1024 / 1024),
+        label: "上传",
+        data: trendData.map((d) => d.total_tx / 1024 / 1024 / 1024),
         backgroundColor: "#22c55e",
         borderRadius: 4,
       },
+      {
+        label: "下载",
+        data: trendData.map((d) => d.total_rx / 1024 / 1024 / 1024),
+        backgroundColor: "#86efac",
+        borderRadius: 4,
+      },
     ];
-    legendHtml = `<span class="legend-item"><span class="dot" style="background:#22c55e"></span>总计流量</span>`;
+    legendHtml = `
+      <span class="legend-item"><span class="dot" style="background:#22c55e"></span>上传</span>
+      <span class="legend-item"><span class="dot" style="background:#86efac"></span>下载</span>
+    `;
   }
 
   // 更新图例
