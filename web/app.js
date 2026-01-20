@@ -179,7 +179,7 @@ function renderLatencyChart() {
   if (latencyChart) {
     latencyChart.data.datasets = datasets;
     latencyChart.options.plugins.annotation = { annotations };
-    latencyChart.update();
+    latencyChart.update("none"); // 禁用动画，避免闪烁
   } else {
     const ctx = document.getElementById("latency-chart").getContext("2d");
     latencyChart = new Chart(ctx, {
@@ -273,7 +273,7 @@ async function fetchMonthlyTrend() {
       trendChart.data.labels = labels;
       trendChart.data.datasets[0].data = txData;
       trendChart.data.datasets[1].data = rxData;
-      trendChart.update();
+      trendChart.update("none");
     } else {
       const ctx = document.getElementById("trend-chart").getContext("2d");
       trendChart = new Chart(ctx, {
