@@ -23,7 +23,7 @@ func NewDB(dataDir string) (*DB, error) {
 	}
 
 	dbPath := filepath.Join(dataDir, "heliox-mon.db")
-	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
+	db, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {
 		return nil, fmt.Errorf("打开数据库失败: %w", err)
 	}
