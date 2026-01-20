@@ -259,9 +259,15 @@ async function fetchMonthlyTrend() {
     const res = await fetch("/api/traffic/monthly");
     const data = await res.json();
 
-    const labels = data.map((d) => d.month).reverse();
-    const txData = data.map((d) => d.tx / 1024 / 1024 / 1024).reverse(); // GB
-    const rxData = data.map((d) => d.rx / 1024 / 1024 / 1024).reverse();
+    // 空数据保护
+    if (!data || !Array.isArray(data)) {
+      console.warn("月度趋势数据为空");
+      return;
+    }
+
+    const labels = data.map((d) => d.month);
+    const txData = data.map((d) => d.tx / 1024 / 1024 / 1024); // GB
+    const rxData = data.map((d) => d.rx / 1024 / 1024 / 1024);
 
     if (trendChart) {
       trendChart.data.labels = labels;

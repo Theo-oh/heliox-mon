@@ -235,16 +235,26 @@ func (s *Server) handleTrafficDaily(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(data)
 }
 
-// handleTrafficMonthly 月度汇总
+// handleTrafficMonthly 月度汇总（返回近 6 个月，无数据月份为 0）
 func (s *Server) handleTrafficMonthly(w http.ResponseWriter, r *http.Request) {
-	// 返回最近 12 个月
+	tz := s.cfg.Timezone
+	now := time.Now().In(tz)
+
+	// 生成近 6 个月的月份列表
+	months := make([]string, 6)
+	for i := 0; i < 6; i++ {
+		m := now.AddDate(0, -i, 0)
+		months[5-i] = m.Format("2006-01") // 倒序填充，最终正序
+	}
+
+	// 查询已有数据
 	rows, err := s.db.Query(`
 		SELECT strftime('%Y-%m', date) as month, SUM(tx_bytes), SUM(rx_bytes)
 		FROM traffic_daily
 		WHERE iface = 'total'
 		GROUP BY month
 		ORDER BY month DESC
-		LIMIT 12
+		LIMIT 6
 	`)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -252,16 +262,24 @@ func (s *Server) handleTrafficMonthly(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var data []map[string]interface{}
+	// 读取数据到 map
+	monthData := make(map[string][2]int64)
 	for rows.Next() {
 		var month string
 		var tx, rx int64
 		rows.Scan(&month, &tx, &rx)
-		data = append(data, map[string]interface{}{
+		monthData[month] = [2]int64{tx, rx}
+	}
+
+	// 组装结果（保证 6 个月完整）
+	data := make([]map[string]interface{}, 6)
+	for i, month := range months {
+		d := monthData[month]
+		data[i] = map[string]interface{}{
 			"month": month,
-			"tx":    tx,
-			"rx":    rx,
-		})
+			"tx":    d[0],
+			"rx":    d[1],
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
