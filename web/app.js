@@ -118,10 +118,25 @@ const latencyColors = [
   { border: "#f85149", bg: "rgba(248, 81, 73, 0.1)" },
 ];
 
-async function fetchLatency() {
+// 延迟查询参数
+let latencyStartDate = null;
+let latencyEndDate = null;
+
+async function fetchLatency(start = null, end = null) {
   try {
-    const res = await fetch("/api/latency");
+    let url = "/api/latency";
+    if (start && end) {
+      url += `?start=${start}&end=${end}`;
+    }
+    const res = await fetch(url);
     latencyData = await res.json();
+
+    // 显示粒度信息
+    const granularityEl = document.getElementById("latency-granularity");
+    if (granularityEl && latencyData.granularity) {
+      granularityEl.textContent = `粒度: ${latencyData.granularity} 分钟`;
+    }
+
     renderLatencyChart();
     renderLatencyStats();
   } catch (e) {
@@ -330,9 +345,52 @@ document.addEventListener("DOMContentLoaded", () => {
   fetchMonthlyTrend();
   connectRealtime();
 
+  // 延迟监控时间选择器
+  const latencyStartEl = document.getElementById("latency-start");
+  const latencyEndEl = document.getElementById("latency-end");
+  const latencyQueryBtn = document.getElementById("latency-query");
+  const latencyResetBtn = document.getElementById("latency-reset");
+
+  // 设置默认日期（今天）
+  const today = new Date().toISOString().split("T")[0];
+  if (latencyEndEl) latencyEndEl.value = today;
+
+  // 查询按钮
+  if (latencyQueryBtn) {
+    latencyQueryBtn.addEventListener("click", () => {
+      const start = latencyStartEl?.value;
+      const end = latencyEndEl?.value;
+      if (start && end) {
+        latencyStartDate = start;
+        latencyEndDate = end;
+        fetchLatency(start, end);
+      } else {
+        alert("请选择开始和结束日期");
+      }
+    });
+  }
+
+  // 重置按钮
+  if (latencyResetBtn) {
+    latencyResetBtn.addEventListener("click", () => {
+      if (latencyStartEl) latencyStartEl.value = "";
+      if (latencyEndEl) latencyEndEl.value = today;
+      latencyStartDate = null;
+      latencyEndDate = null;
+      fetchLatency();
+    });
+  }
+
   // 定时刷新
   setInterval(fetchStats, 60000); // 1 分钟
   setInterval(fetchSystem, 5000); // 5 秒
-  setInterval(fetchLatency, 60000); // 1 分钟
+  setInterval(() => {
+    // 延迟监控：如果有自定义时间范围则用该范围刷新，否则用默认
+    if (latencyStartDate && latencyEndDate) {
+      fetchLatency(latencyStartDate, latencyEndDate);
+    } else {
+      fetchLatency();
+    }
+  }, 60000); // 1 分钟
   setInterval(fetchMonthlyTrend, 3600000); // 1 小时
 });

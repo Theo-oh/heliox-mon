@@ -106,6 +106,18 @@
       <!-- 延迟监控 -->
       <section class="card">
         <h2>📡 延迟监控</h2>
+        <div class="latency-controls">
+          <div class="date-range">
+            <input type="date" id="latency-start" />
+            <span>至</span>
+            <input type="date" id="latency-end" />
+            <button id="latency-query" class="btn-small">查询</button>
+            <button id="latency-reset" class="btn-small btn-secondary">
+              重置
+            </button>
+          </div>
+          <span id="latency-granularity" class="granularity-info"></span>
+        </div>
         <div id="latency-stats" class="latency-stats"></div>
         <div id="latency-container">
           <canvas id="latency-chart"></canvas>

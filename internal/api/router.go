@@ -354,21 +354,55 @@ func (s *Server) handleTrafficRealtime(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleLatency 延迟数据（支持多 target、统计信息）
+// handleLatency 延迟数据（支持时间范围、动态粒度聚合）
 func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
-	// 默认返回最近 24 小时
-	cutoff := time.Now().Add(-24 * time.Hour).Unix()
+	tz := s.cfg.Timezone
+	now := time.Now().In(tz)
+
+	// 解析时间范围参数，默认最近 24 小时
+	startStr := r.URL.Query().Get("start")
+	endStr := r.URL.Query().Get("end")
+
+	var startTime, endTime time.Time
+	if startStr != "" && endStr != "" {
+		// 解析 YYYY-MM-DD 格式
+		startTime, _ = time.ParseInLocation("2006-01-02", startStr, tz)
+		endTime, _ = time.ParseInLocation("2006-01-02", endStr, tz)
+		endTime = endTime.Add(24*time.Hour - time.Second) // 包含当天最后一秒
+	} else {
+		// 默认最近 24 小时
+		endTime = now
+		startTime = now.Add(-24 * time.Hour)
+	}
+
+	// 计算时间跨度和粒度（保持约 1440 个点）
+	duration := endTime.Sub(startTime)
+	granularityMinutes := int(duration.Minutes() / 1440)
+	if granularityMinutes < 1 {
+		granularityMinutes = 1
+	}
+	granularitySec := int64(granularityMinutes * 60)
+
+	startTs := startTime.Unix()
+	endTs := endTime.Unix()
 
 	// 返回所有 target 的数据
 	result := map[string]interface{}{
-		"targets": []map[string]interface{}{},
+		"targets":     []map[string]interface{}{},
+		"start":       startTime.Format("2006-01-02 15:04:05"),
+		"end":         endTime.Format("2006-01-02 15:04:05"),
+		"granularity": granularityMinutes,
 	}
 
 	for _, pt := range s.cfg.PingTargets {
-		rows, err := s.db.Query(
-			"SELECT ts, rtt_ms FROM latency_records WHERE target = ? AND ts > ? ORDER BY ts",
-			pt.Tag, cutoff,
-		)
+		// 按粒度聚合查询：按时间桶分组，计算平均 RTT
+		rows, err := s.db.Query(`
+			SELECT (ts / ?) * ? as bucket_ts, AVG(rtt_ms) as avg_rtt
+			FROM latency_records
+			WHERE target = ? AND ts >= ? AND ts <= ? AND rtt_ms IS NOT NULL
+			GROUP BY bucket_ts
+			ORDER BY bucket_ts
+		`, granularitySec, granularitySec, pt.Tag, startTs, endTs)
 		if err != nil {
 			continue
 		}
@@ -380,23 +414,20 @@ func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
 
 		for rows.Next() {
 			var ts int64
-			var rtt *float64
+			var rtt float64
 			rows.Scan(&ts, &rtt)
-			point := map[string]interface{}{"ts": ts}
-			if rtt != nil {
-				point["rtt_ms"] = *rtt
-				sum += *rtt
-				count++
-				if *rtt < min {
-					min = *rtt
-				}
-				if *rtt > max {
-					max = *rtt
-				}
-			} else {
-				point["rtt_ms"] = nil
+			points = append(points, map[string]interface{}{
+				"ts":     ts,
+				"rtt_ms": rtt,
+			})
+			sum += rtt
+			count++
+			if rtt < min {
+				min = rtt
 			}
-			points = append(points, point)
+			if rtt > max {
+				max = rtt
+			}
 		}
 		rows.Close()
 
