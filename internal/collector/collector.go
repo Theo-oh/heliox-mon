@@ -121,7 +121,11 @@ func (c *Collector) collectLatency() {
 // runDailyAggregation 运行日汇总任务
 func (c *Collector) runDailyAggregation() {
 	defer c.wg.Done()
-	ticker := time.NewTicker(1 * time.Hour)
+
+	// 启动时立即执行一次汇总
+	c.doDailyAggregation()
+
+	ticker := time.NewTicker(1 * time.Minute) // 每分钟更新日汇总
 	defer ticker.Stop()
 
 	for {
