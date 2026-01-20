@@ -100,7 +100,8 @@ func (c *Collector) getMemoryInfo() (used, total uint64) {
 	}
 	defer file.Close()
 
-	var memTotal, memFree, buffers, cached uint64
+	var memTotal, memAvailable, memFree, buffers, cached uint64
+	hasMemAvailable := false
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -116,6 +117,9 @@ func (c *Collector) getMemoryInfo() (used, total uint64) {
 		switch fields[0] {
 		case "MemTotal:":
 			memTotal = value
+		case "MemAvailable:":
+			memAvailable = value
+			hasMemAvailable = true
 		case "MemFree:":
 			memFree = value
 		case "Buffers:":
@@ -125,8 +129,12 @@ func (c *Collector) getMemoryInfo() (used, total uint64) {
 		}
 	}
 
-	// 实际使用 = Total - Free - Buffers - Cached
-	used = memTotal - memFree - buffers - cached
+	// 优先使用 MemAvailable（更准确），否则回退到传统计算
+	if hasMemAvailable {
+		used = memTotal - memAvailable
+	} else {
+		used = memTotal - memFree - buffers - cached
+	}
 	return used, memTotal
 }
 
