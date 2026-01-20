@@ -157,8 +157,8 @@ func (c *Collector) aggregateLatencyData() {
 
 // cleanupOldSnapshots 清理过期快照
 func (c *Collector) cleanupOldSnapshots() {
-	// 保留最近 48 小时的流量快照
-	cutoff := time.Now().Add(-48 * time.Hour).Unix()
+	// 保留最近 24 小时的流量快照（足够日汇总计算）
+	cutoff := time.Now().Add(-24 * time.Hour).Unix()
 	_, _ = c.db.Exec("DELETE FROM traffic_snapshots WHERE ts < ?", cutoff)
 	_, _ = c.db.Exec("DELETE FROM port_traffic_snapshots WHERE ts < ?", cutoff)
 }

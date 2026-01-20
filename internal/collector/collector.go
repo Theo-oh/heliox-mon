@@ -86,7 +86,7 @@ func (c *Collector) collectSystemMetrics() {
 // collectTraffic 采集流量
 func (c *Collector) collectTraffic() {
 	defer c.wg.Done()
-	ticker := time.NewTicker(3 * time.Second) // 3秒采集一次，与SSE推送对齐
+	ticker := time.NewTicker(1 * time.Second) // 1秒采集，实时网速
 	defer ticker.Stop()
 
 	// 初始采集

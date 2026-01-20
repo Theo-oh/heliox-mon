@@ -298,7 +298,7 @@ func (s *Server) handleTrafficRealtime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ticker := time.NewTicker(3 * time.Second) // 与采集间隔对齐
+	ticker := time.NewTicker(1 * time.Second) // 1秒推送
 	defer ticker.Stop()
 
 	for {
