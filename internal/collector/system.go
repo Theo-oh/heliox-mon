@@ -32,32 +32,55 @@ func (c *Collector) doCollectSystemMetrics() {
 	_, _ = c.db.Exec("DELETE FROM system_metrics WHERE ts < ?", now-3600)
 }
 
-// getCPUPercent 获取 CPU 使用率
+// getCPUPercent 获取 CPU 使用率（通过两次采样差值计算）
 func (c *Collector) getCPUPercent() float64 {
-	// 读取 /proc/stat
+	total, idle := c.readCPUStat()
+	if total == 0 {
+		return 0
+	}
+
+	// 首次采样，保存基准值
+	if c.lastCPUTotal == 0 {
+		c.lastCPUTotal, c.lastCPUIdle = total, idle
+		return 0
+	}
+
+	// 计算差值
+	deltaTotal := total - c.lastCPUTotal
+	deltaIdle := idle - c.lastCPUIdle
+	c.lastCPUTotal, c.lastCPUIdle = total, idle
+
+	if deltaTotal == 0 {
+		return 0
+	}
+
+	return 100.0 * float64(deltaTotal-deltaIdle) / float64(deltaTotal)
+}
+
+// readCPUStat 读取 /proc/stat 获取 CPU 时间
+func (c *Collector) readCPUStat() (total, idle uint64) {
 	file, err := os.Open("/proc/stat")
 	if err != nil {
-		return 0
+		return 0, 0
 	}
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
 	if !scanner.Scan() {
-		return 0
+		return 0, 0
 	}
 
 	line := scanner.Text()
 	if !strings.HasPrefix(line, "cpu ") {
-		return 0
+		return 0, 0
 	}
 
 	fields := strings.Fields(line)
 	if len(fields) < 5 {
-		return 0
+		return 0, 0
 	}
 
 	// cpu user nice system idle iowait irq softirq steal guest guest_nice
-	var total, idle uint64
 	for i := 1; i < len(fields); i++ {
 		v, _ := strconv.ParseUint(fields[i], 10, 64)
 		total += v
@@ -66,12 +89,7 @@ func (c *Collector) getCPUPercent() float64 {
 		}
 	}
 
-	if total == 0 {
-		return 0
-	}
-
-	// 简化计算：1 - idle/total
-	return 100.0 * float64(total-idle) / float64(total)
+	return total, idle
 }
 
 // getMemoryInfo 获取内存信息

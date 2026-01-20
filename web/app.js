@@ -43,10 +43,8 @@ async function fetchStats() {
     document.getElementById("last-month-rx").textContent =
       "↓ " + formatBytes(data.last_month.rx);
 
-    // 配额
-    const usedGB = Math.round(
-      (data.this_month.tx + data.this_month.rx) / 1024 / 1024 / 1024,
-    );
+    // 配额（使用后端根据 billing_mode 计算的 used_bytes）
+    const usedGB = Math.round(data.used_bytes / 1024 / 1024 / 1024);
     const limitGB = data.monthly_limit_gb;
     const percent = limitGB > 0 ? Math.round((usedGB / limitGB) * 100) : 0;
 

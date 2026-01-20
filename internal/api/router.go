@@ -84,10 +84,11 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	today := now.Format("2006-01-02")
 	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
 
-	// 计算本月起止
-	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, tz)
-	lastMonthStart := monthStart.AddDate(0, -1, 0)
-	lastMonthEnd := monthStart.AddDate(0, 0, -1)
+	// 计算计费周期（支持 ResetDay）
+	billingStart, _ := s.getBillingCycleDates(now)
+	// 计算自然月（用于上月流量）
+	lastMonthStart := time.Date(now.Year(), now.Month()-1, 1, 0, 0, 0, 0, tz)
+	lastMonthEnd := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, tz).Add(-time.Second)
 
 	stats := map[string]interface{}{
 		"server_name":  s.cfg.ServerName,
@@ -95,7 +96,7 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		"current_time": now.Format("2006-01-02 15:04:05"),
 	}
 
-	// 今日流量
+	// 今日流量（从日汇总表读取，日汇总任务会实时更新）
 	row := s.db.QueryRow(
 		"SELECT COALESCE(tx_bytes, 0), COALESCE(rx_bytes, 0) FROM traffic_daily WHERE date = ? AND iface = 'total'",
 		today,
@@ -113,16 +114,16 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	row.Scan(&yesterdayTx, &yesterdayRx)
 	stats["yesterday"] = map[string]int64{"tx": yesterdayTx, "rx": yesterdayRx}
 
-	// 本月流量
+	// 本月/当前周期流量（根据 ResetDay 计算）
 	row = s.db.QueryRow(
 		"SELECT COALESCE(SUM(tx_bytes), 0), COALESCE(SUM(rx_bytes), 0) FROM traffic_daily WHERE date >= ? AND iface = 'total'",
-		monthStart.Format("2006-01-02"),
+		billingStart.Format("2006-01-02"),
 	)
 	var monthTx, monthRx int64
 	row.Scan(&monthTx, &monthRx)
 	stats["this_month"] = map[string]int64{"tx": monthTx, "rx": monthRx}
 
-	// 上月流量
+	// 上月流量（自然月）
 	row = s.db.QueryRow(
 		"SELECT COALESCE(SUM(tx_bytes), 0), COALESCE(SUM(rx_bytes), 0) FROM traffic_daily WHERE date >= ? AND date <= ? AND iface = 'total'",
 		lastMonthStart.Format("2006-01-02"),
@@ -132,6 +133,24 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	row.Scan(&lastMonthTx, &lastMonthRx)
 	stats["last_month"] = map[string]int64{"tx": lastMonthTx, "rx": lastMonthRx}
 
+	// 根据 billing_mode 计算已用流量
+	var usedBytes int64
+	switch s.cfg.BillingMode {
+	case "tx_only":
+		usedBytes = monthTx
+	case "rx_only":
+		usedBytes = monthRx
+	case "max_value":
+		if monthTx > monthRx {
+			usedBytes = monthTx
+		} else {
+			usedBytes = monthRx
+		}
+	default: // bidirectional
+		usedBytes = monthTx + monthRx
+	}
+	stats["used_bytes"] = usedBytes
+
 	// 流量限额
 	stats["monthly_limit_gb"] = s.cfg.MonthlyLimitGB
 	stats["billing_mode"] = s.cfg.BillingMode
@@ -139,6 +158,22 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
+}
+
+// getBillingCycleDates 根据 ResetDay 计算计费周期起止日期
+func (s *Server) getBillingCycleDates(now time.Time) (start, end time.Time) {
+	day := s.cfg.ResetDay
+	tz := s.cfg.Timezone
+
+	if now.Day() >= day {
+		// 当前周期从本月 ResetDay 开始
+		start = time.Date(now.Year(), now.Month(), day, 0, 0, 0, 0, tz)
+	} else {
+		// 当前周期从上月 ResetDay 开始
+		start = time.Date(now.Year(), now.Month()-1, day, 0, 0, 0, 0, tz)
+	}
+	end = start.AddDate(0, 1, 0).Add(-time.Second)
+	return
 }
 
 // handleSystem 系统资源
@@ -245,7 +280,7 @@ func (s *Server) handleTrafficRealtime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(3 * time.Second) // 与采集间隔对齐
 	defer ticker.Stop()
 
 	for {

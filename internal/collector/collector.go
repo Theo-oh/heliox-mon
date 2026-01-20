@@ -22,6 +22,10 @@ type Collector struct {
 	lastTotalRx uint64
 	lastPortTx  map[int]uint64
 	lastPortRx  map[int]uint64
+
+	// CPU 采样（用于计算实时使用率）
+	lastCPUTotal uint64
+	lastCPUIdle  uint64
 }
 
 // New 创建采集器
@@ -82,7 +86,7 @@ func (c *Collector) collectSystemMetrics() {
 // collectTraffic 采集流量
 func (c *Collector) collectTraffic() {
 	defer c.wg.Done()
-	ticker := time.NewTicker(5 * time.Second) // 5秒采集一次，支持实时网速
+	ticker := time.NewTicker(3 * time.Second) // 3秒采集一次，与SSE推送对齐
 	defer ticker.Stop()
 
 	// 初始采集

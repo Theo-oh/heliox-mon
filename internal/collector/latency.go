@@ -80,9 +80,11 @@ func (c *Collector) ping(target string) (time.Duration, error) {
 // doDailyAggregation 执行日汇总
 func (c *Collector) doDailyAggregation() {
 	now := time.Now().In(c.cfg.Timezone)
+	today := now.Format("2006-01-02")
 	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
 
-	// 汇总整体流量
+	// 汇总整体流量（今日 + 昨日）
+	c.aggregateDailyTraffic(today)
 	c.aggregateDailyTraffic(yesterday)
 
 	// 汇总端口流量
