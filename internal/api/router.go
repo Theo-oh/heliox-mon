@@ -556,15 +556,15 @@ func (s *Server) handlePortTraffic(w http.ResponseWriter, r *http.Request) {
 		row.Scan(&yesterdayTx, &yesterdayRx)
 		portData["yesterday"] = map[string]int64{"tx": yesterdayTx, "rx": yesterdayRx, "total": yesterdayTx + yesterdayRx}
 
-		// 本月流量
+		// 本月流量（从日表查询，排除今日避免重复）
 		row = s.db.QueryRow(`
 			SELECT COALESCE(SUM(tx_bytes), 0), COALESCE(SUM(rx_bytes), 0)
 			FROM port_traffic_daily
-			WHERE port = ? AND date >= ?
-		`, p.Port, billingStart.Format("2006-01-02"))
+			WHERE port = ? AND date >= ? AND date < ?
+		`, p.Port, billingStart.Format("2006-01-02"), today)
 		var monthTx, monthRx int64
 		row.Scan(&monthTx, &monthRx)
-		// 加上今日
+		// 加上今日（从快照计算的实时数据）
 		monthTx += todayTx
 		monthRx += todayRx
 		portData["this_month"] = map[string]int64{"tx": monthTx, "rx": monthRx, "total": monthTx + monthRx}
