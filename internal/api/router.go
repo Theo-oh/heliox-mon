@@ -4,12 +4,15 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io/fs"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/hh/heliox-mon/internal/config"
 	"github.com/hh/heliox-mon/internal/storage"
+	"github.com/hh/heliox-mon/web"
 )
 
 // Server HTTP 服务器
@@ -391,8 +394,28 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Not implemented", http.StatusNotImplemented)
 }
 
-// handleStatic 静态文件服务
+// handleStatic 静态文件服务（使用嵌入文件）
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
-	// TODO: 嵌入静态文件
-	http.ServeFile(w, r, "web"+r.URL.Path)
+	path := r.URL.Path
+	if path == "/" {
+		path = "/index.html"
+	}
+	path = strings.TrimPrefix(path, "/")
+
+	// 设置 Content-Type
+	switch {
+	case strings.HasSuffix(path, ".html"):
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	case strings.HasSuffix(path, ".css"):
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	case strings.HasSuffix(path, ".js"):
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	}
+
+	data, err := fs.ReadFile(web.Assets, path)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Write(data)
 }
