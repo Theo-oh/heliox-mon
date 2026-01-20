@@ -34,14 +34,6 @@ async function fetchStats() {
       "↑ " + formatBytes(data.yesterday.tx);
     document.getElementById("yesterday-rx").textContent =
       "↓ " + formatBytes(data.yesterday.rx);
-    document.getElementById("month-tx").textContent =
-      "↑ " + formatBytes(data.this_month.tx);
-    document.getElementById("month-rx").textContent =
-      "↓ " + formatBytes(data.this_month.rx);
-    document.getElementById("last-month-tx").textContent =
-      "↑ " + formatBytes(data.last_month.tx);
-    document.getElementById("last-month-rx").textContent =
-      "↓ " + formatBytes(data.last_month.rx);
 
     // 本月总计
     const monthTotalBytes = data.this_month.tx + data.this_month.rx;
