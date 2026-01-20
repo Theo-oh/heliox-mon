@@ -369,38 +369,42 @@ function renderTrendChart() {
   let legendHtml = "";
 
   if (trendView === "detail") {
-    // 详细视图：4根柱子
+    // 详细视图：2根柱子（snell/vless），每根柱子堆叠上传下载
     datasets = [
       {
-        label: "Snell 上传",
-        data: trendData.map((d) => d.snell_tx / 1024 / 1024 / 1024),
-        backgroundColor: "#3b82f6",
-        borderRadius: 4,
-      },
-      {
-        label: "Snell 下载",
+        label: "snell 下载",
         data: trendData.map((d) => d.snell_rx / 1024 / 1024 / 1024),
         backgroundColor: "#60a5fa",
-        borderRadius: 4,
+        borderRadius: { bottomLeft: 4, bottomRight: 4 },
+        stack: "snell",
       },
       {
-        label: "VLESS 上传",
-        data: trendData.map((d) => d.vless_tx / 1024 / 1024 / 1024),
-        backgroundColor: "#a855f7",
-        borderRadius: 4,
+        label: "snell 上传",
+        data: trendData.map((d) => d.snell_tx / 1024 / 1024 / 1024),
+        backgroundColor: "#3b82f6",
+        borderRadius: { topLeft: 4, topRight: 4 },
+        stack: "snell",
       },
       {
-        label: "VLESS 下载",
+        label: "vless 下载",
         data: trendData.map((d) => d.vless_rx / 1024 / 1024 / 1024),
         backgroundColor: "#c084fc",
-        borderRadius: 4,
+        borderRadius: { bottomLeft: 4, bottomRight: 4 },
+        stack: "vless",
+      },
+      {
+        label: "vless 上传",
+        data: trendData.map((d) => d.vless_tx / 1024 / 1024 / 1024),
+        backgroundColor: "#a855f7",
+        borderRadius: { topLeft: 4, topRight: 4 },
+        stack: "vless",
       },
     ];
     legendHtml = `
-      <span class="legend-item"><span class="dot" style="background:#3b82f6"></span>Snell 上传</span>
-      <span class="legend-item"><span class="dot" style="background:#60a5fa"></span>Snell 下载</span>
-      <span class="legend-item"><span class="dot" style="background:#a855f7"></span>VLESS 上传</span>
-      <span class="legend-item"><span class="dot" style="background:#c084fc"></span>VLESS 下载</span>
+      <span class="legend-item"><span class="dot" style="background:#3b82f6"></span>snell 上传</span>
+      <span class="legend-item"><span class="dot" style="background:#60a5fa"></span>snell 下载</span>
+      <span class="legend-item"><span class="dot" style="background:#a855f7"></span>vless 上传</span>
+      <span class="legend-item"><span class="dot" style="background:#c084fc"></span>vless 下载</span>
     `;
   } else {
     // 总计视图：1根柱子
