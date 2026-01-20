@@ -30,10 +30,14 @@ async function fetchStats() {
       "↑ " + formatBytes(data.today.tx);
     document.getElementById("today-rx").textContent =
       "↓ " + formatBytes(data.today.rx);
+    document.getElementById("today-total").textContent =
+      "⇅ " + formatBytes(data.today.tx + data.today.rx);
     document.getElementById("yesterday-tx").textContent =
       "↑ " + formatBytes(data.yesterday.tx);
     document.getElementById("yesterday-rx").textContent =
       "↓ " + formatBytes(data.yesterday.rx);
+    document.getElementById("yesterday-total").textContent =
+      "⇅ " + formatBytes(data.yesterday.tx + data.yesterday.rx);
 
     // 本月总计
     const monthTotalBytes = data.this_month.tx + data.this_month.rx;
