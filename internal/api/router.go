@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -525,8 +526,12 @@ func (s *Server) handlePortTraffic(w http.ResponseWriter, r *http.Request) {
 		}{Port: s.cfg.VlessPort, Name: "VLESS"})
 	}
 
+	// 检测 iptables 规则是否存在
+	iptablesOK := s.checkIptablesRules()
+
 	result := map[string]interface{}{
-		"ports": []map[string]interface{}{},
+		"ports":       []map[string]interface{}{},
+		"iptables_ok": iptablesOK,
 	}
 
 	for _, p := range ports {
@@ -631,4 +636,11 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(data)
+}
+
+// checkIptablesRules 检测 iptables 规则是否存在
+func (s *Server) checkIptablesRules() bool {
+	cmd := exec.Command("iptables", "-L", "HELIOX_STATS", "-n")
+	err := cmd.Run()
+	return err == nil
 }

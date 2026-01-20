@@ -82,6 +82,14 @@ async function fetchPortTraffic() {
       return;
     }
 
+    // 检查 iptables 规则状态
+    if (data.iptables_ok === false) {
+      const todayEl = document.getElementById("port-traffic-today");
+      if (todayEl) {
+        todayEl.innerHTML = '<div class="port-warning">⚠️ iptables 规则未配置，请运行 setup-iptables.sh</div>';
+      }
+    }
+
     // 渲染今日端口流量
     renderPortList("port-traffic-today", data.ports, "today");
     // 渲染昨日端口流量

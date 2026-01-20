@@ -135,7 +135,7 @@ func (c *Collector) getIptablesBytes(chain, portType string, port int) (uint64, 
 	cmd := exec.Command("iptables", "-L", chain, "-n", "-v", "-x")
 	output, err := cmd.Output()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("iptables 命令执行失败: %w", err)
 	}
 
 	// 查找匹配的行：... dpt:443 或 spt:443
@@ -151,5 +151,6 @@ func (c *Collector) getIptablesBytes(chain, portType string, port int) (uint64, 
 			}
 		}
 	}
-	return 0, nil
+	// 规则不存在时返回特定错误
+	return 0, fmt.Errorf("iptables 规则不存在: %s:%d", portType, port)
 }

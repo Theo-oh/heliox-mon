@@ -485,6 +485,16 @@ header {
   font-size: 13px;
 }
 
+.port-warning {
+  text-align: center;
+  color: var(--accent-orange);
+  padding: 16px;
+  font-size: 13px;
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .traffic-row {
