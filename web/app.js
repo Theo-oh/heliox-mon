@@ -348,14 +348,21 @@ async function fetchMonthlyTrend() {
       return;
     }
 
-    const labels = data.map((d) => d.month);
-    const txData = data.map((d) => d.tx / 1024 / 1024 / 1024); // GB
-    const rxData = data.map((d) => d.rx / 1024 / 1024 / 1024);
+    const labels = data.map((d) => {
+      const parts = d.month.split("-");
+      return parts[1] + "月";
+    });
+    const snellData = data.map((d) => d.snell / 1024 / 1024 / 1024); // GB
+    const vlessData = data.map((d) => d.vless / 1024 / 1024 / 1024);
+    const totalLabels = data.map((d) => d.total_gb);
 
     if (trendChart) {
       trendChart.data.labels = labels;
-      trendChart.data.datasets[0].data = txData;
-      trendChart.data.datasets[1].data = rxData;
+      trendChart.data.datasets[0].data = snellData;
+      trendChart.data.datasets[1].data = vlessData;
+      trendChart.options.plugins.datalabels = {
+        labels: { total: { formatter: (v, ctx) => totalLabels[ctx.dataIndex] } }
+      };
       trendChart.update("none");
     } else {
       const ctx = document.getElementById("trend-chart").getContext("2d");
@@ -365,36 +372,46 @@ async function fetchMonthlyTrend() {
           labels: labels,
           datasets: [
             {
-              label: "上行 (GB)",
-              data: txData,
-              backgroundColor: "#3fb950",
+              label: "Snell",
+              data: snellData,
+              backgroundColor: "#3b82f6",
+              borderRadius: 4,
             },
             {
-              label: "下行 (GB)",
-              data: rxData,
-              backgroundColor: "#58a6ff",
+              label: "VLESS",
+              data: vlessData,
+              backgroundColor: "#a855f7",
+              borderRadius: 4,
             },
           ],
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          animation: false,
           plugins: {
             legend: {
-              position: "top",
-              labels: { color: "#8b949e" },
+              display: false,
+            },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(2)} GB`,
+              },
             },
           },
           scales: {
             x: {
-              stacked: true,
               grid: { display: false },
-              ticks: { color: "#8b949e" },
+              ticks: { 
+                color: "#6e6e80",
+                callback: function(value, index) {
+                  return [totalLabels[index], labels[index]];
+                }
+              },
             },
             y: {
-              stacked: true,
-              grid: { color: "#30363d" },
-              ticks: { color: "#8b949e" },
+              display: false,
+              beginAtZero: true,
             },
           },
         },
