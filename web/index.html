@@ -10,6 +10,10 @@
     <div class="wrapper">
       <div class="top-bar">
         <div id="server-name" class="server-pill">Server</div>
+        <button id="theme-toggle" class="theme-toggle" type="button">
+          <span class="theme-swatch"></span>
+          <span class="theme-text">深色</span>
+        </button>
       </div>
       <!-- 顶部标题 -->
       <div class="hero">
@@ -208,29 +212,14 @@
           <div id="latency-stats" class="latency-stats"></div>
 
           <div class="latency-chart-wrap">
-            <canvas id="latency-chart"></canvas>
-          </div>
-
-          <div class="time-range-bar">
-            <span class="time-range-label">时间范围</span>
-            <input
-              type="range"
-              id="time-slider"
-              min="0"
-              max="1440"
-              value="1440"
-              step="30"
-              class="time-slider"
-            />
-            <span id="time-display">24h</span>
+            <div id="latency-chart"></div>
           </div>
         </div>
       </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

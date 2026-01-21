@@ -212,12 +212,40 @@ const latencyColors = [
 // 延迟查询参数
 let latencyStartDate = null;
 let latencyEndDate = null;
-let timeRangeMinutes = 1440; // 默认24小时
 let activeTags = new Set(); // 选中的运营商标签
 let filtersInitialized = false;
+const themeStorageKey = "heliox-theme";
 
 function formatDateValue(date) {
   return date.toISOString().split("T")[0];
+}
+
+function getCssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function applyTheme(theme) {
+  const isLight = theme === "light";
+  document.body.classList.toggle("theme-light", isLight);
+  const themeText = document.querySelector("#theme-toggle .theme-text");
+  if (themeText) {
+    themeText.textContent = isLight ? "浅色" : "深色";
+  }
+  renderLatencyChart();
+}
+
+function initThemeToggle() {
+  const stored = localStorage.getItem(themeStorageKey);
+  const preferred = stored || "dark";
+  applyTheme(preferred);
+
+  const toggleBtn = document.getElementById("theme-toggle");
+  if (!toggleBtn) return;
+  toggleBtn.addEventListener("click", () => {
+    const next = document.body.classList.contains("theme-light") ? "dark" : "light";
+    localStorage.setItem(themeStorageKey, next);
+    applyTheme(next);
+  });
 }
 
 function normalizeRange(startVal, endVal) {
@@ -281,12 +309,15 @@ function renderFilterCheckboxes(targets) {
     if (!container) return;
     
     container.innerHTML = "";
-    targets.forEach(t => {
+    targets.forEach((t, idx) => {
         // 默认全选
         activeTags.add(t.tag);
 
         const label = document.createElement("label");
         label.className = "filter-pill";
+        const dot = document.createElement("span");
+        dot.className = "latency-target-dot";
+        dot.style.background = latencyColors[idx % latencyColors.length].border;
         
         const input = document.createElement("input");
         input.type = "checkbox";
@@ -300,9 +331,11 @@ function renderFilterCheckboxes(targets) {
                 activeTags.delete(t.tag);
             }
             renderLatencyChart();
+            renderLatencyStats();
         });
 
         label.appendChild(input);
+        label.appendChild(dot);
         label.appendChild(document.createTextNode(" " + t.tag));
         container.appendChild(label);
     });
@@ -314,148 +347,214 @@ function renderLatencyChart() {
   const showMax = document.getElementById("show-max")?.checked ?? true;
   const showAvg = document.getElementById("show-avg")?.checked ?? true;
 
-  const datasets = [];
-  const annotations = {};
+  const chartEl = document.getElementById("latency-chart");
+  if (!chartEl || typeof echarts === "undefined") return;
 
-  latencyData.targets.forEach((target, idx) => {
-    // 过滤未选中的标签
-    if (!activeTags.has(target.tag)) return;
-
-    const color = latencyColors[idx % latencyColors.length];
-    const points = target.points || [];
-
-    // 过滤数据（根据时间滑块）
-    let filteredPoints = points;
-    if (timeRangeMinutes < 1440 && points.length > 0) {
-        const lastTs = points[points.length - 1].ts;
-        const startTs = lastTs - (timeRangeMinutes * 60);
-        filteredPoints = points.filter(p => p.ts >= startTs);
-    }
-    
-    // 找出极值点
-    let maxPoint = null, minPoint = null;
-    let maxVal = -Infinity, minVal = Infinity;
-    
-    if (showMax) {
-        filteredPoints.forEach(p => {
-            if(p.rtt_ms > maxVal) { maxVal = p.rtt_ms; maxPoint = p; }
-            if(p.rtt_ms < minVal) { minVal = p.rtt_ms; minPoint = p; }
-        });
-    }
-
-    const dataPoints = filteredPoints.map(p => ({ x: p.ts * 1000, y: p.rtt_ms }));
-    
-    // Point Styles (Bubble for Max/Min)
-    const pointRadiuses = filteredPoints.map(p => (p === maxPoint || p === minPoint ? 6 : 0));
-    const pointColors = filteredPoints.map(p => color.border);
-
-    datasets.push({
-      label: target.tag,
-      data: dataPoints,
-      borderColor: color.border,
-      backgroundColor: color.bg,
-      borderWidth: 2,
-      pointRadius: pointRadiuses,
-      pointBackgroundColor: pointColors,
-      pointHoverRadius: 6,
-      pointHitRadius: 12,
-      fill: true,
-      tension: 0.25, // Smooth curves
-    });
-
-    // Annotations: Average Line
-    if (showAvg && target.stats && target.stats.avg > 0) {
-      annotations[`avg-${idx}`] = {
-        type: "line",
-        yMin: target.stats.avg,
-        yMax: target.stats.avg,
-        borderColor: color.border,
-        borderWidth: 1,
-        borderDash: [5, 5],
-        label: {
-          display: true,
-          content: `${target.tag} Avg: ${target.stats.avg.toFixed(1)}`,
-          position: "end",
-          backgroundColor: color.border,
-          color: "#000",
-          font: { size: 10, weight: "bold" },
-          yAdjust: -10 * idx, // Stagger labels so they don't overlap
-        },
-      };
-    }
-    
-    // Annotations: Max/Min Labels (Simulated via Point Labels or just Tooltips? 
-    // Usually standard tooltip is enough, but user asked for bubbles. 
-    // ChartJS annotation plugin can do "point" annotations too, but let's stick to the pointRadius highlight + tooltip for now to avoid clutter.)
-  });
-
-  const ctx = document.getElementById("latency-chart").getContext("2d");
-
-  if (latencyChart) {
-    latencyChart.data.datasets = datasets;
-    latencyChart.options.plugins.annotation.annotations = annotations;
-    latencyChart.update("none");
-  } else {
-    latencyChart = new Chart(ctx, {
-      type: "line",
-      data: { datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: "nearest", axis: 'x', intersect: false },
-        plugins: {
-          legend: {
-            display: false, // Hidden because we have filters
-          },
-          tooltip: {
-             callbacks: {
-               title: (items) => new Date(items[0].parsed.x).toLocaleString("zh-CN"),
-               label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} ms`,
-             }
-          },
-          annotation: { annotations },
-        },
-        scales: {
-          x: {
-            type: "time",
-            time: { unit: "minute", displayFormats: { minute: "HH:mm" } },
-            grid: { display: false, borderColor: "#30363d" },
-            ticks: { color: "#8b949e", maxTicksLimit: 8 },
-          },
-          y: {
-            beginAtZero: true,
-            grid: { color: "rgba(255, 255, 255, 0.05)" },
-            ticks: {
-              color: "#8b949e",
-              callback: (value) => `${value} ms`,
-            },
-          },
-        },
-      },
+  if (!latencyChart) {
+    latencyChart = echarts.init(chartEl, null, { renderer: "canvas" });
+    window.addEventListener("resize", () => {
+      if (latencyChart) latencyChart.resize();
     });
   }
+
+  const textColor = getCssVar("--text");
+  const mutedColor = getCssVar("--muted");
+  const borderColor = getCssVar("--card-border");
+  const tooltipBg = getCssVar("--card-bg");
+  const isLight = document.body.classList.contains("theme-light");
+  const gridLine = isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.06)";
+  const zoomBg = isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(0, 0, 0, 0.2)";
+  const zoomFill = isLight ? "rgba(10, 132, 255, 0.25)" : "rgba(10, 132, 255, 0.2)";
+
+  const series = latencyData.targets
+    .filter((target) => activeTags.has(target.tag))
+    .map((target, idx) => {
+      const color = latencyColors[idx % latencyColors.length];
+      const points = target.points || [];
+      const data = points.map((p) => [p.ts * 1000, p.rtt_ms]);
+      const avg = target.stats?.avg ?? 0;
+
+      return {
+        name: target.tag,
+        type: "line",
+        smooth: true,
+        showSymbol: false,
+        data,
+        lineStyle: { color: color.border, width: 2 },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: color.bg.replace("0.1", "0.35") },
+            { offset: 1, color: "rgba(0,0,0,0)" },
+          ]),
+        },
+        emphasis: { focus: "series" },
+        markPoint: showMax
+          ? {
+              symbolSize: 46,
+              itemStyle: { color: color.border },
+              label: { color: "#000", fontWeight: "600", formatter: "{b}" },
+              data: [
+                { type: "max", name: "MAX" },
+                { type: "min", name: "MIN" },
+              ],
+            }
+          : undefined,
+        markLine:
+          showAvg && avg > 0
+            ? {
+                symbol: "none",
+                lineStyle: { color: color.border, width: 1, type: "dashed" },
+                label: {
+                  color: textColor,
+                  formatter: `${target.tag} 平均 ${avg.toFixed(1)}ms`,
+                  position: "end",
+                },
+                data: [{ yAxis: avg }],
+              }
+            : undefined,
+      };
+    });
+
+  const prevZoom = latencyChart.getOption().dataZoom?.[1];
+  const zoomStart = prevZoom?.start ?? 0;
+  const zoomEnd = prevZoom?.end ?? 100;
+
+  const option = {
+    animation: false,
+    grid: { left: 50, right: 24, top: 24, bottom: 54, containLabel: true },
+    tooltip: {
+      trigger: "axis",
+      backgroundColor: tooltipBg,
+      borderColor: borderColor,
+      textStyle: { color: textColor },
+      axisPointer: { type: "cross", label: { color: textColor } },
+      formatter: (params) => {
+        const time = new Date(params[0].value[0]).toLocaleString("zh-CN");
+        const rows = params
+          .map(
+            (p) =>
+              `<span style=\"display:inline-block;margin-right:6px;width:8px;height:8px;border-radius:50%;background:${p.color}\"></span>${p.seriesName}: ${p.value[1].toFixed(1)} ms`,
+          )
+          .join("<br/>");
+        return `${time}<br/>${rows}`;
+      },
+    },
+    xAxis: {
+      type: "time",
+      axisLine: { lineStyle: { color: borderColor } },
+      axisLabel: { color: mutedColor },
+      splitLine: { show: false },
+    },
+    yAxis: {
+      type: "value",
+      axisLine: { lineStyle: { color: borderColor } },
+      axisLabel: { color: mutedColor, formatter: "{value} ms" },
+      splitLine: { lineStyle: { color: gridLine } },
+    },
+    dataZoom: [
+      {
+        type: "inside",
+        xAxisIndex: 0,
+        start: zoomStart,
+        end: zoomEnd,
+      },
+      {
+        type: "slider",
+        xAxisIndex: 0,
+        height: 26,
+        bottom: 10,
+        start: zoomStart,
+        end: zoomEnd,
+        borderColor: borderColor,
+        backgroundColor: zoomBg,
+        fillerColor: zoomFill,
+        handleSize: "120%",
+        handleStyle: {
+          color: "#0a84ff",
+          borderColor: borderColor,
+        },
+        textStyle: { color: mutedColor },
+      },
+    ],
+    series,
+  };
+
+  if (!series.length) {
+    option.graphic = [
+      {
+        type: "text",
+        left: "center",
+        top: "middle",
+        style: { text: "暂无数据", fill: mutedColor, fontSize: 14 },
+      },
+    ];
+  }
+
+  latencyChart.setOption(option, true);
 }
 
 function renderLatencyStats() {
   const container = document.getElementById("latency-stats");
   if (!container || !latencyData || !latencyData.targets) return;
+  let totalCount = 0;
+  let sum = 0;
+  let min = Infinity;
+  let max = -Infinity;
 
-  container.innerHTML = latencyData.targets
+  const targetCards = latencyData.targets
+    .filter((t) => activeTags.has(t.tag))
     .map((t, idx) => {
-      const color = latencyColors[idx % latencyColors.length].border;
       const stats = t.stats || {};
+      const count = stats.count ?? (t.points ? t.points.length : 0);
+      if (count && stats.avg != null) {
+        sum += stats.avg * count;
+        totalCount += count;
+      }
+      if (stats.min != null && stats.min < min) min = stats.min;
+      if (stats.max != null && stats.max > max) max = stats.max;
+
+      const color = latencyColors[idx % latencyColors.length].border;
       return `
-      <div class="latency-stat-item" style="border-left: 3px solid ${color}; padding-left: 8px; margin-bottom: 8px;">
-        <div class="stat-tag">${t.tag}</div>
-        <div class="stat-values">
-          <span>平均: <strong>${stats.avg?.toFixed(1) || "-"}</strong>ms</span>
-          <span>最小: <strong style="color:#3fb950">${stats.min?.toFixed(1) || "-"}</strong>ms</span>
-          <span>最大: <strong style="color:#f85149">${stats.max?.toFixed(1) || "-"}</strong>ms</span>
+        <div class="latency-target-card">
+          <div class="latency-target-header">
+            <span class="latency-target-dot" style="background:${color}"></span>
+            <span>${t.tag}</span>
+          </div>
+          <div class="latency-target-values">
+            <span>均值 <strong>${stats.avg?.toFixed(1) ?? "-"}</strong>ms</span>
+            <span>最小 <strong>${stats.min?.toFixed(1) ?? "-"}</strong>ms</span>
+            <span>最大 <strong>${stats.max?.toFixed(1) ?? "-"}</strong>ms</span>
+          </div>
         </div>
-      </div>
-    `;
+      `;
     })
     .join("");
+
+  const hasData = totalCount > 0;
+  const avg = hasData ? sum / totalCount : 0;
+  if (min === Infinity) min = 0;
+  if (max === -Infinity) max = 0;
+  const avgText = hasData ? avg.toFixed(1) : "-";
+  const minText = hasData ? min.toFixed(1) : "-";
+  const maxText = hasData ? max.toFixed(1) : "-";
+
+  container.innerHTML = `
+    <div class="latency-summary">
+      <div class="latency-metric">
+        <span class="label">平均延迟</span>
+        <span class="value">${avgText}<small>ms</small></span>
+      </div>
+      <div class="latency-metric">
+        <span class="label">最小延迟</span>
+        <span class="value">${minText}<small>ms</small></span>
+      </div>
+      <div class="latency-metric">
+        <span class="label">最大延迟</span>
+        <span class="value">${maxText}<small>ms</small></span>
+      </div>
+    </div>
+    <div class="latency-targets">${targetCards}</div>
+  `;
 }
 
 // 月度趋势图表
@@ -631,6 +730,7 @@ document.addEventListener("DOMContentLoaded", () => {
   fetchMonthlyTrend();
   connectRealtime();
   setupTrendToggle();
+  initThemeToggle();
 
   // 延迟监控时间选择器
   const latencyEndEl = document.getElementById("latency-end");
@@ -639,8 +739,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const latencyResetBtn = document.getElementById("latency-reset");
   const datePrevBtn = document.getElementById("date-prev");
   const dateNextBtn = document.getElementById("date-next");
-  const timeSlider = document.getElementById("time-slider");
-  const timeDisplay = document.getElementById("time-display");
 
   // 设置默认日期（今天）
   const today = formatDateValue(new Date());
@@ -714,24 +812,6 @@ document.addEventListener("DOMContentLoaded", () => {
       });
   }
   
-  // 时间滑块
-  if (timeSlider && timeDisplay) {
-      timeSlider.addEventListener("input", (e) => {
-          const val = parseInt(e.target.value);
-          timeRangeMinutes = val;
-          if (val === 1440) {
-              timeDisplay.textContent = "24h";
-          } else {
-              const h = Math.floor(val / 60);
-              const m = val % 60;
-              timeDisplay.textContent = (h > 0 ? `${h}h` : "") + (m > 0 ? `${m}m` : "");
-              if (h===0 && m===0) timeDisplay.textContent = "0m";
-          }
-          // 重新渲染图表（不请求后端，前端过滤）
-          renderLatencyChart();
-      });
-  }
-  
   // 显示选项事件监听
   document.getElementById("show-max")?.addEventListener("change", renderLatencyChart);
   document.getElementById("show-avg")?.addEventListener("change", renderLatencyChart);
@@ -743,9 +823,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (latencyEndEl) latencyEndEl.value = today;
       latencyStartDate = today;
       latencyEndDate = today;
-      timeRangeMinutes = 1440;
-      if (timeSlider) timeSlider.value = "1440";
-      if (timeDisplay) timeDisplay.textContent = "24h";
       fetchLatency(today, today);
     });
   }
