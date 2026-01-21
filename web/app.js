@@ -221,7 +221,8 @@ function formatDateValue(date) {
 }
 
 function getCssVar(name) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const root = document.body || document.documentElement;
+  return getComputedStyle(root).getPropertyValue(name).trim();
 }
 
 function applyTheme(theme) {
@@ -415,7 +416,10 @@ function renderLatencyChart() {
       };
     });
 
-  const prevZoom = latencyChart.getOption().dataZoom?.[1];
+  const prevOption = latencyChart?.getOption ? latencyChart.getOption() : null;
+  const prevZoom = Array.isArray(prevOption?.dataZoom)
+    ? prevOption.dataZoom[1]
+    : null;
   const zoomStart = prevZoom?.start ?? 0;
   const zoomEnd = prevZoom?.end ?? 100;
 
