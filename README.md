@@ -73,7 +73,7 @@ uninstall  # 卸载
 | -------------------- | -------------- | --------------------------------- |
 | `HELIOX_MON_PASS`    | 密码           | 自动生成                          |
 | `SERVER_NAME`        | 服务器标识     | 主机名                            |
-| `HELIOX_MON_TZ`      | 时区           | Asia/Shanghai                    |
+| `HELIOX_MON_TZ`      | 时区           | Asia/Shanghai                     |
 | `MONTHLY_LIMIT_GB`   | 月流量限额(GB) | 1000                              |
 | `BILLING_MODE`       | 计费模式       | bidirectional                     |
 | `RESET_DAY`          | 计费周期重置日 | 1 (每月1号)                       |
@@ -127,23 +127,18 @@ sudo ./deploy.sh monitor update
 - 同时统计 TCP/UDP
 - 每秒采集快照，每分钟汇总到日统计
 
-### 启用步骤
+### 自动配置
 
-1. 设置 iptables 规则（VPS 上执行一次）：
+**无需手动操作。** 执行 `./deploy.sh monitor install` 时自动完成以下配置：
+
+1. 生成 iptables 规则脚本 `/opt/heliox-mon/setup-iptables.sh`
+2. 配置 systemd `ExecStartPre` 自动恢复规则
+3. **服务器重启后自动恢复**，无需 rc.local 或 iptables-persistent
+
+验证规则：
 
 ```bash
-sudo /opt/heliox-mon/scripts/setup-iptables.sh
-```
-
-2. 添加到开机自启（规则重启后丢失）：
-
-```bash
-# 方法1: 添加到 rc.local
-echo '/opt/heliox-mon/scripts/setup-iptables.sh' >> /etc/rc.local
-
-# 方法2: 使用 iptables-persistent
-apt install iptables-persistent
-netfilter-persistent save
+iptables -L HELIOX_STATS -n -v
 ```
 
 ### 配置端口
@@ -162,6 +157,11 @@ netfilter-persistent save
 - 重启服务不影响历史数据
 
 ## 更新日志
+
+### v0.5.0
+
+- ⚡ iptables 规则自动配置（无需手动执行脚本）
+- ⚡ 服务重启自动恢复规则（ExecStartPre 持久化）
 
 ### v0.4.0
 
