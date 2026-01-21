@@ -56,6 +56,9 @@ type Config struct {
 
 	// 延迟监控目标
 	PingTargets []PingTarget
+	PingCount   int
+	PingTimeout time.Duration
+	PingGap     time.Duration
 
 	// 服务器标识
 	ServerName string
@@ -75,6 +78,9 @@ func Load() (*Config, error) {
 		BillingMode:      getEnv("BILLING_MODE", "bidirectional"),
 		ResetDay:         getEnvInt("RESET_DAY", 1),
 		ServerName:       getEnv("SERVER_NAME", "Heliox"),
+		PingCount:        getEnvInt("PING_COUNT", 5),
+		PingTimeout:      time.Duration(getEnvInt("PING_TIMEOUT_MS", 1000)) * time.Millisecond,
+		PingGap:          time.Duration(getEnvInt("PING_GAP_MS", 200)) * time.Millisecond,
 	}
 
 	// 解析报警阈值

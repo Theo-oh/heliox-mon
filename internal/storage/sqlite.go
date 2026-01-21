@@ -91,6 +91,8 @@ func migrate(db *sql.DB) error {
 			ts INTEGER NOT NULL,
 			target TEXT NOT NULL,
 			rtt_ms REAL,
+			sent INTEGER DEFAULT 0,
+			lost INTEGER DEFAULT 0,
 			is_aggregated INTEGER DEFAULT 0
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_latency_ts ON latency_records(ts)`,
@@ -132,6 +134,10 @@ func migrate(db *sql.DB) error {
 			return fmt.Errorf("执行迁移失败 [%s]: %w", m[:50], err)
 		}
 	}
+
+	// 兼容旧版本（增加丢包统计字段）
+	_, _ = db.Exec("ALTER TABLE latency_records ADD COLUMN sent INTEGER DEFAULT 0")
+	_, _ = db.Exec("ALTER TABLE latency_records ADD COLUMN lost INTEGER DEFAULT 0")
 
 	return nil
 }

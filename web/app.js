@@ -201,6 +201,8 @@ function connectRealtime() {
 // 延迟图表
 let latencyChart = null;
 let latencyData = null;
+let latencyZoom = { start: 0, end: 100 };
+let latencyRange = null;
 const latencyColors = [
   { border: "#8FB0B8", bg: "rgba(143, 176, 184, 0.16)" }, // Muted teal
   { border: "#9BB59B", bg: "rgba(155, 181, 155, 0.16)" }, // Muted green
@@ -376,7 +378,10 @@ function renderLatencyChart() {
     .map((target, idx) => {
       const color = latencyColors[idx % latencyColors.length];
       const points = target.points || [];
-      const data = points.map((p) => [p.ts * 1000, p.rtt_ms]);
+      const data = points.map((p) => [
+        p.ts * 1000,
+        p.rtt_ms === null || p.rtt_ms === undefined ? null : p.rtt_ms,
+      ]);
       const stats = target.stats || {};
       const avg = stats.avg ?? 0;
 
@@ -442,12 +447,9 @@ function renderLatencyChart() {
       };
     });
 
-  const prevOption = latencyChart?.getOption ? latencyChart.getOption() : null;
-  const prevZoom = Array.isArray(prevOption?.dataZoom)
-    ? prevOption.dataZoom[1]
-    : null;
-  const zoomStart = prevZoom?.start ?? 0;
-  const zoomEnd = prevZoom?.end ?? 100;
+  latencyRange = getLatencyRange(series);
+  const zoomStart = latencyZoom.start ?? 0;
+  const zoomEnd = latencyZoom.end ?? 100;
 
   const option = {
     animation: false,
@@ -521,27 +523,33 @@ function renderLatencyChart() {
   }
 
   latencyChart.setOption(option, true);
+  bindLatencyZoom();
+  renderLatencyStats();
 }
 
 function renderLatencyStats() {
   const container = document.getElementById("latency-stats");
   if (!container || !latencyData || !latencyData.targets) return;
+  const range = getZoomRange();
   let totalCount = 0;
   let sum = 0;
   let min = Infinity;
   let max = -Infinity;
+  let totalSent = 0;
+  let totalLost = 0;
 
   const targetCards = latencyData.targets
     .filter((t) => activeTags.has(t.tag))
     .map((t, idx) => {
-      const stats = t.stats || {};
-      const count = stats.count ?? (t.points ? t.points.length : 0);
-      if (count && stats.avg != null) {
-        sum += stats.avg * count;
-        totalCount += count;
+      const stats = computeTargetStats(t.points || [], range);
+      if (stats.count && stats.avg != null) {
+        sum += stats.avg * stats.count;
+        totalCount += stats.count;
       }
       if (stats.min != null && stats.min < min) min = stats.min;
       if (stats.max != null && stats.max > max) max = stats.max;
+      totalSent += stats.sent;
+      totalLost += stats.lost;
 
       const color = latencyColors[idx % latencyColors.length].border;
       return `
@@ -551,9 +559,10 @@ function renderLatencyStats() {
             <span>${t.tag}</span>
           </div>
           <div class="latency-target-values">
-            <span>均值 <strong>${stats.avg?.toFixed(1) ?? "-"}</strong>ms</span>
-            <span>最小 <strong>${stats.min?.toFixed(1) ?? "-"}</strong>ms</span>
-            <span>最大 <strong>${stats.max?.toFixed(1) ?? "-"}</strong>ms</span>
+            <span>均值 <strong>${formatNumber(stats.avg)}</strong>ms</span>
+            <span>最小 <strong>${formatNumber(stats.min)}</strong>ms</span>
+            <span>最大 <strong>${formatNumber(stats.max)}</strong>ms</span>
+            <span>丢包 <strong>${formatPercent(stats.lossRate)}</strong></span>
           </div>
         </div>
       `;
@@ -561,30 +570,114 @@ function renderLatencyStats() {
     .join("");
 
   const hasData = totalCount > 0;
-  const avg = hasData ? sum / totalCount : 0;
-  if (min === Infinity) min = 0;
-  if (max === -Infinity) max = 0;
-  const avgText = hasData ? avg.toFixed(1) : "-";
-  const minText = hasData ? min.toFixed(1) : "-";
-  const maxText = hasData ? max.toFixed(1) : "-";
+  const avg = hasData ? sum / totalCount : null;
+  if (min === Infinity) min = null;
+  if (max === -Infinity) max = null;
+  const lossRate = totalSent > 0 ? (totalLost / totalSent) * 100 : null;
 
   container.innerHTML = `
     <div class="latency-summary">
       <div class="latency-metric">
         <span class="label">平均延迟</span>
-        <span class="value">${avgText}<small>ms</small></span>
+        <span class="value">${formatNumber(avg)}<small>ms</small></span>
       </div>
       <div class="latency-metric">
         <span class="label">最小延迟</span>
-        <span class="value">${minText}<small>ms</small></span>
+        <span class="value">${formatNumber(min)}<small>ms</small></span>
       </div>
       <div class="latency-metric">
         <span class="label">最大延迟</span>
-        <span class="value">${maxText}<small>ms</small></span>
+        <span class="value">${formatNumber(max)}<small>ms</small></span>
+      </div>
+      <div class="latency-metric">
+        <span class="label">丢包率</span>
+        <span class="value">${formatPercent(lossRate)}</span>
       </div>
     </div>
     <div class="latency-targets">${targetCards}</div>
   `;
+}
+
+function formatNumber(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "-";
+  return value.toFixed(1);
+}
+
+function formatPercent(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "-";
+  return `${value.toFixed(1)}%`;
+}
+
+function getLatencyRange(series) {
+  let min = Infinity;
+  let max = -Infinity;
+  series.forEach((s) => {
+    (s.data || []).forEach((point) => {
+      const ts = point[0];
+      if (ts < min) min = ts;
+      if (ts > max) max = ts;
+    });
+  });
+  if (min === Infinity || max === -Infinity) return null;
+  return { min, max };
+}
+
+function getZoomRange() {
+  if (!latencyRange) return null;
+  const span = latencyRange.max - latencyRange.min;
+  if (span <= 0) return null;
+  const start = latencyRange.min + (span * latencyZoom.start) / 100;
+  const end = latencyRange.min + (span * latencyZoom.end) / 100;
+  return { start, end };
+}
+
+function computeTargetStats(points, range) {
+  let sum = 0;
+  let count = 0;
+  let min = Infinity;
+  let max = -Infinity;
+  let sent = 0;
+  let lost = 0;
+  const start = range?.start ?? null;
+  const end = range?.end ?? null;
+
+  points.forEach((p) => {
+    const ts = p.ts * 1000;
+    if (start && ts < start) return;
+    if (end && ts > end) return;
+    if (p.rtt_ms !== null && p.rtt_ms !== undefined) {
+      sum += p.rtt_ms;
+      count += 1;
+      if (p.rtt_ms < min) min = p.rtt_ms;
+      if (p.rtt_ms > max) max = p.rtt_ms;
+    }
+    if (p.sent !== undefined && p.sent !== null) {
+      sent += p.sent;
+      lost += p.lost || 0;
+    }
+  });
+
+  return {
+    avg: count ? sum / count : null,
+    min: min === Infinity ? null : min,
+    max: max === -Infinity ? null : max,
+    count,
+    sent,
+    lost,
+    lossRate: sent ? (lost / sent) * 100 : null,
+  };
+}
+
+function bindLatencyZoom() {
+  if (!latencyChart || latencyChart.__zoomBound) return;
+  latencyChart.on("dataZoom", (evt) => {
+    const batch = evt?.batch?.[0];
+    if (batch && typeof batch.start === "number" && typeof batch.end === "number") {
+      latencyZoom = { start: batch.start, end: batch.end };
+      renderLatencyStats();
+    }
+  });
+  latencyChart.__zoomBound = true;
 }
 
 // 月度趋势图表
@@ -766,6 +859,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const latencyEndEl = document.getElementById("latency-end");
   const latencyStartEl = document.getElementById("latency-start");
   const latencyQueryBtn = document.getElementById("latency-query");
+  const latencyRecentBtn = document.getElementById("latency-recent");
   const latencyResetBtn = document.getElementById("latency-reset");
   const datePrevBtn = document.getElementById("date-prev");
   const dateNextBtn = document.getElementById("date-next");
@@ -798,7 +892,19 @@ document.addEventListener("DOMContentLoaded", () => {
       if (latencyEndEl) latencyEndEl.value = end;
       latencyStartDate = start;
       latencyEndDate = end;
+      latencyZoom = { start: 0, end: 100 };
       fetchLatency(start, end);
+    });
+  }
+
+  if (latencyRecentBtn) {
+    latencyRecentBtn.addEventListener("click", () => {
+      if (latencyStartEl) latencyStartEl.value = "";
+      if (latencyEndEl) latencyEndEl.value = "";
+      latencyStartDate = null;
+      latencyEndDate = null;
+      latencyZoom = { start: 0, end: 100 };
+      fetchLatency();
     });
   }
   
@@ -818,6 +924,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (latencyEndEl) latencyEndEl.value = newEnd;
           latencyStartDate = newStart;
           latencyEndDate = newEnd;
+          latencyZoom = { start: 0, end: 100 };
           fetchLatency(newStart, newEnd);
       });
   }
@@ -832,12 +939,21 @@ document.addEventListener("DOMContentLoaded", () => {
           const baseEnd = end || today;
           const newStart = shiftDateValue(baseStart, 1);
           const newEnd = shiftDateValue(baseEnd, 1);
-          if (newEnd > today) return;
+          if (newEnd > today) {
+            if (latencyStartEl) latencyStartEl.value = "";
+            if (latencyEndEl) latencyEndEl.value = "";
+            latencyStartDate = null;
+            latencyEndDate = null;
+            latencyZoom = { start: 0, end: 100 };
+            fetchLatency();
+            return;
+          }
 
           if (latencyStartEl) latencyStartEl.value = newStart;
           if (latencyEndEl) latencyEndEl.value = newEnd;
           latencyStartDate = newStart;
           latencyEndDate = newEnd;
+          latencyZoom = { start: 0, end: 100 };
           fetchLatency(newStart, newEnd);
       });
   }
@@ -853,6 +969,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (latencyEndEl) latencyEndEl.value = "";
       latencyStartDate = null;
       latencyEndDate = null;
+      latencyZoom = { start: 0, end: 100 };
       fetchLatency();
     });
   }

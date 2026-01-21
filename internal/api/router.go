@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -423,6 +424,9 @@ func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
 	// 计算时间跨度和粒度（保持约 1440 个点）
 	duration := endTime.Sub(startTime)
 	granularityMinutes := chooseLatencyGranularity(duration)
+	if startStr == "" || endStr == "" {
+		granularityMinutes = 1
+	}
 	granularitySec := int64(granularityMinutes * 60)
 
 	startTs := startTime.Unix()
@@ -439,9 +443,12 @@ func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
 	for _, pt := range s.cfg.PingTargets {
 		// 按粒度聚合查询：按时间桶分组，计算平均 RTT
 		rows, err := s.db.Query(`
-			SELECT (ts / ?) * ? as bucket_ts, AVG(rtt_ms) as avg_rtt
+			SELECT (ts / ?) * ? as bucket_ts,
+			       AVG(rtt_ms) as avg_rtt,
+			       SUM(COALESCE(sent, 0)) as sent,
+			       SUM(COALESCE(lost, 0)) as lost
 			FROM latency_records
-			WHERE target = ? AND ts >= ? AND ts <= ? AND rtt_ms IS NOT NULL
+			WHERE target = ? AND ts >= ? AND ts <= ?
 			GROUP BY bucket_ts
 			ORDER BY bucket_ts
 		`, granularitySec, granularitySec, pt.Tag, startTs, endTs)
@@ -453,23 +460,51 @@ func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
 		var sum, min, max float64
 		var count int
 		min = 999999
+		var totalSent, totalLost int64
 
 		for rows.Next() {
 			var ts int64
-			var rtt float64
-			rows.Scan(&ts, &rtt)
+			var rtt sql.NullFloat64
+			var sent sql.NullInt64
+			var lost sql.NullInt64
+			rows.Scan(&ts, &rtt, &sent, &lost)
+			sentVal := sent.Int64
+			lostVal := lost.Int64
+			if !sent.Valid {
+				sentVal = 0
+			}
+			if !lost.Valid {
+				lostVal = 0
+			}
+			totalSent += sentVal
+			totalLost += lostVal
+			lossRate := 0.0
+			if sentVal > 0 {
+				lossRate = float64(lostVal) / float64(sentVal) * 100
+			}
+
+			var rttVal interface{}
+			if rtt.Valid {
+				rttVal = rtt.Float64
+				sum += rtt.Float64
+				count++
+				if rtt.Float64 < min {
+					min = rtt.Float64
+				}
+				if rtt.Float64 > max {
+					max = rtt.Float64
+				}
+			} else {
+				rttVal = nil
+			}
+
 			points = append(points, map[string]interface{}{
 				"ts":     ts,
-				"rtt_ms": rtt,
+				"rtt_ms": rttVal,
+				"loss":   lossRate,
+				"sent":   sentVal,
+				"lost":   lostVal,
 			})
-			sum += rtt
-			count++
-			if rtt < min {
-				min = rtt
-			}
-			if rtt > max {
-				max = rtt
-			}
 		}
 		rows.Close()
 
@@ -479,6 +514,10 @@ func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
 		}
 		if min == 999999 {
 			min = 0
+		}
+		lossRate := 0.0
+		if totalSent > 0 {
+			lossRate = float64(totalLost) / float64(totalSent) * 100
 		}
 
 		targetData := map[string]interface{}{
@@ -490,6 +529,7 @@ func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
 				"min":   min,
 				"max":   max,
 				"count": count,
+				"loss":  lossRate,
 			},
 		}
 		result["targets"] = append(result["targets"].([]map[string]interface{}), targetData)
