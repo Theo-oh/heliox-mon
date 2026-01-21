@@ -391,7 +391,9 @@ function renderLatencyChart() {
   const gridLine = isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.06)";
   const zoomBg = isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(0, 0, 0, 0.2)";
   const zoomFill = isLight ? "rgba(10, 132, 255, 0.25)" : "rgba(10, 132, 255, 0.2)";
-  const labelBg = isLight ? "rgba(255, 255, 255, 0.85)" : "rgba(0, 0, 0, 0.35)";
+  const avgLabelBg = isLight ? "rgba(140, 140, 140, 0.18)" : "rgba(120, 120, 120, 0.2)";
+  const maxLabelBg = isLight ? "rgba(196, 142, 142, 0.18)" : "rgba(180, 120, 120, 0.22)";
+  const minLabelBg = isLight ? "rgba(136, 176, 150, 0.18)" : "rgba(110, 150, 125, 0.22)";
 
   const series = latencyData.targets
     .filter((target) => activeTags.has(target.tag))
@@ -426,7 +428,7 @@ function renderLatencyChart() {
                 lineStyle: { type: "dashed", color: color.border, opacity: 0.65 },
                 label: {
                   color: textColor,
-                  backgroundColor: labelBg,
+                  backgroundColor: avgLabelBg,
                   borderRadius: 6,
                   padding: [3, 6],
                   formatter: ({ value }) => `${value.toFixed(1)}ms`,
@@ -443,7 +445,6 @@ function renderLatencyChart() {
               label: {
                 color: textColor,
                 fontSize: 11,
-                backgroundColor: labelBg,
                 borderRadius: 6,
                 padding: [2, 6],
                 formatter: (param) => {
@@ -456,7 +457,10 @@ function renderLatencyChart() {
                 position: "top",
                 distance: 6,
               },
-              data: [{ type: "max" }, { type: "min" }],
+              data: [
+                { type: "max", label: { backgroundColor: maxLabelBg } },
+                { type: "min", label: { backgroundColor: minLabelBg } },
+              ],
             }
           : undefined,
       };

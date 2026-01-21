@@ -2,12 +2,11 @@ package collector
 
 import (
 	"log"
-	"net"
-	"os"
+	"os/exec"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
-
-	"golang.org/x/net/icmp"
-	"golang.org/x/net/ipv4"
 )
 
 // doCollectLatency 执行延迟采集
@@ -28,7 +27,7 @@ func (c *Collector) doCollectLatency() {
 	}
 }
 
-// pingStats 对目标进行多次 ping，返回平均 RTT（ms）、发送次数、丢失次数
+// pingStats 使用系统 ping 命令进行延迟测试，返回平均 RTT（ms）、发送次数、丢失次数
 func (c *Collector) pingStats(target string) (*float64, int, int) {
 	count := c.cfg.PingCount
 	if count <= 0 {
@@ -38,81 +37,74 @@ func (c *Collector) pingStats(target string) (*float64, int, int) {
 	if timeout <= 0 {
 		timeout = 1 * time.Second
 	}
-	gap := c.cfg.PingGap
-	if gap <= 0 {
-		gap = 200 * time.Millisecond
+
+	// 使用系统 ping 命令
+	// -c count: 发送次数
+	// -W timeout: 单次超时（秒）
+	// -q: 静默模式，只输出统计
+	timeoutSec := int(timeout.Seconds())
+	if timeoutSec < 1 {
+		timeoutSec = 1
 	}
 
-	rtts, lost := c.pingMulti(target, count, timeout, gap)
-	sent := count
-	if len(rtts) == 0 {
-		return nil, sent, lost
+	cmd := exec.Command("ping", "-c", strconv.Itoa(count), "-W", strconv.Itoa(timeoutSec), "-q", target)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// ping 命令失败（如目标不可达），返回全丢包
+		return nil, count, count
 	}
 
-	var sum time.Duration
-	for _, rtt := range rtts {
-		sum += rtt
-	}
-	avg := float64(sum.Microseconds()) / 1000.0 / float64(len(rtts))
-	return &avg, sent, lost
+	// 解析 ping 输出
+	return parsePingOutput(string(output), count)
 }
 
-func (c *Collector) pingMulti(target string, count int, timeout time.Duration, gap time.Duration) ([]time.Duration, int) {
-	conn, err := icmp.ListenPacket("udp4", "0.0.0.0")
-	if err != nil {
-		return nil, count
+// parsePingOutput 解析系统 ping 命令输出
+// 示例输出：
+// --- 8.8.8.8 ping statistics ---
+// 5 packets transmitted, 5 received, 0% packet loss, time 4005ms
+// rtt min/avg/max/mdev = 10.123/15.456/20.789/3.214 ms
+func parsePingOutput(output string, expectedCount int) (*float64, int, int) {
+	var transmitted, received int
+	var avgRtt float64
+
+	// 解析发送/接收统计
+	// 格式: "5 packets transmitted, 5 received, 0% packet loss"
+	statsRe := regexp.MustCompile(`(\d+) packets transmitted, (\d+) (?:packets )?received`)
+	if match := statsRe.FindStringSubmatch(output); match != nil {
+		transmitted, _ = strconv.Atoi(match[1])
+		received, _ = strconv.Atoi(match[2])
+	} else {
+		// 解析失败，返回全丢包
+		return nil, expectedCount, expectedCount
 	}
-	defer conn.Close()
 
-	dst, err := net.ResolveIPAddr("ip4", target)
-	if err != nil {
-		return nil, count
+	lost := transmitted - received
+	if lost < 0 {
+		lost = 0
 	}
 
-	rtts := make([]time.Duration, 0, count)
-	lost := 0
+	// 如果全部丢包，不解析 RTT
+	if received == 0 {
+		return nil, transmitted, lost
+	}
 
-	for i := 0; i < count; i++ {
-		seq := i + 1
-		msg := icmp.Message{
-			Type: ipv4.ICMPTypeEcho,
-			Code: 0,
-			Body: &icmp.Echo{
-				ID:   os.Getpid() & 0xffff,
-				Seq:  seq,
-				Data: []byte("HELIOX"),
-			},
-		}
-		msgBytes, err := msg.Marshal(nil)
-		if err != nil {
-			lost++
-			continue
-		}
-
-		start := time.Now()
-		if _, err := conn.WriteTo(msgBytes, &net.UDPAddr{IP: dst.IP}); err != nil {
-			lost++
-			continue
-		}
-
-		conn.SetReadDeadline(time.Now().Add(timeout))
-		reply := make([]byte, 1500)
-		n, _, err := conn.ReadFrom(reply)
-		if err != nil {
-			lost++
+	// 解析 RTT 统计
+	// 格式: "rtt min/avg/max/mdev = 10.123/15.456/20.789/3.214 ms"
+	rttRe := regexp.MustCompile(`rtt min/avg/max/(?:mdev|stddev) = [\d.]+/([\d.]+)/`)
+	if match := rttRe.FindStringSubmatch(output); match != nil {
+		avgRtt, _ = strconv.ParseFloat(match[1], 64)
+	} else {
+		// 兼容旧版本 ping 输出（可能没有 mdev）
+		// 尝试匹配 "round-trip min/avg/max = ..."
+		altRttRe := regexp.MustCompile(`(?:rtt|round-trip) .*?= [\d.]+/([\d.]+)/`)
+		if match := altRttRe.FindStringSubmatch(output); match != nil {
+			avgRtt, _ = strconv.ParseFloat(match[1], 64)
 		} else {
-			msg, err := icmp.ParseMessage(1, reply[:n])
-			if err != nil || msg.Type != ipv4.ICMPTypeEchoReply {
-				lost++
-			} else {
-				rtts = append(rtts, time.Since(start))
-			}
-		}
-
-		if i < count-1 {
-			time.Sleep(gap)
+			// 无法解析 RTT，但有接收包，返回 nil 表示数据不可信
+			log.Printf("警告：无法解析 ping 输出的 RTT：%s", strings.TrimSpace(output))
+			return nil, transmitted, lost
 		}
 	}
 
-	return rtts, lost
+	return &avgRtt, transmitted, lost
 }

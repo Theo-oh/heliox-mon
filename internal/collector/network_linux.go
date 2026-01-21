@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -217,6 +218,64 @@ type portCounters struct {
 }
 
 func (c *Collector) readIptablesPortsTraffic(ports []int) (map[int]portCounters, error) {
+	// 使用 iptables-save -c 获取计数器
+	// 输出格式固定：[pkts:bytes] -A HELIOX_STATS -p tcp --dport 443
+	cmd := exec.Command("iptables-save", "-c", "-t", "filter")
+	output, err := cmd.Output()
+	if err != nil {
+		// 回退到传统方法
+		return c.readIptablesPortsTrafficLegacy(ports)
+	}
+
+	counters := make(map[int]portCounters, len(ports))
+	targets := make(map[int]struct{}, len(ports))
+	for _, port := range ports {
+		if port <= 0 {
+			continue
+		}
+		targets[port] = struct{}{}
+		counters[port] = portCounters{}
+	}
+
+	// 正则匹配：[pkts:bytes] -A HELIOX_STATS ... --(dport|sport) 443
+	re := regexp.MustCompile(`\[(\d+):(\d+)\] -A HELIOX_STATS .+ -p (tcp|udp) .+ --(dport|sport) (\d+)`)
+
+	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	for scanner.Scan() {
+		line := scanner.Text()
+		match := re.FindStringSubmatch(line)
+		if match == nil {
+			continue
+		}
+
+		// match[1] = pkts, match[2] = bytes, match[3] = proto, match[4] = dport/sport, match[5] = port
+		bytes, _ := strconv.ParseUint(match[2], 10, 64)
+		port, _ := strconv.Atoi(match[5])
+		direction := match[4] // "dport" or "sport"
+
+		if _, ok := targets[port]; !ok {
+			continue
+		}
+
+		entry := counters[port]
+		if direction == "dport" {
+			entry.rx += bytes
+			entry.rxOK = true
+		} else if direction == "sport" {
+			entry.tx += bytes
+			entry.txOK = true
+		}
+		counters[port] = entry
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return counters, nil
+}
+
+// readIptablesPortsTrafficLegacy 回退方法（兼容旧版本 iptables）
+func (c *Collector) readIptablesPortsTrafficLegacy(ports []int) (map[int]portCounters, error) {
 	cmd := exec.Command("iptables", "-L", "HELIOX_STATS", "-n", "-v", "-x")
 	output, err := cmd.Output()
 	if err != nil {

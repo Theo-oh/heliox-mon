@@ -434,6 +434,12 @@ body.theme-light .section-title {
   margin-bottom: 20px;
 }
 
+.view-toggle {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .chart-legend {
   display: flex;
   justify-content: center;

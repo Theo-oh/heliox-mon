@@ -23,15 +23,18 @@ func NewDB(dataDir string) (*DB, error) {
 	}
 
 	dbPath := filepath.Join(dataDir, "heliox-mon.db")
-	// 增加 busy_timeout 到 10 秒，避免并发写入冲突
-	db, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_busy_timeout=10000&_synchronous=NORMAL")
+	// WAL 模式 + 优化参数
+	// - busy_timeout=10000: 锁等待 10 秒
+	// - cache_size=-64000: 64MB 内存缓存
+	// - temp_store=2: 临时表存内存
+	db, err := sql.Open("sqlite", dbPath+"?_journal_mode=WAL&_busy_timeout=10000&_synchronous=NORMAL&cache_size=-64000&temp_store=2")
 	if err != nil {
 		return nil, fmt.Errorf("打开数据库失败: %w", err)
 	}
 
-	// 限制并发连接数，SQLite 单写入者模式
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	// 连接池优化：WAL 模式支持 1 writer + 多 readers
+	db.SetMaxOpenConns(3) // 足够应对并发读写
+	db.SetMaxIdleConns(2) // 保持 2 个空闲连接
 
 	// 执行迁移
 	if err := migrate(db); err != nil {
