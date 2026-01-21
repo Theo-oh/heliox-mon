@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"math"
 	"net/http"
 	"os/exec"
 	"strings"
@@ -401,13 +402,18 @@ func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
 	// 解析时间范围参数，默认最近 24 小时
 	startStr := r.URL.Query().Get("start")
 	endStr := r.URL.Query().Get("end")
+	todayStr := now.Format("2006-01-02")
 
 	var startTime, endTime time.Time
 	if startStr != "" && endStr != "" {
 		// 解析 YYYY-MM-DD 格式
 		startTime, _ = time.ParseInLocation("2006-01-02", startStr, tz)
 		endTime, _ = time.ParseInLocation("2006-01-02", endStr, tz)
-		endTime = endTime.Add(24*time.Hour - time.Second) // 包含当天最后一秒
+		if endStr == todayStr {
+			endTime = now
+		} else {
+			endTime = endTime.Add(24*time.Hour - time.Second) // 包含当天最后一秒
+		}
 	} else {
 		// 默认最近 24 小时
 		endTime = now
@@ -416,10 +422,7 @@ func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
 
 	// 计算时间跨度和粒度（保持约 1440 个点）
 	duration := endTime.Sub(startTime)
-	granularityMinutes := int(duration.Minutes() / 1440)
-	if granularityMinutes < 1 {
-		granularityMinutes = 1
-	}
+	granularityMinutes := chooseLatencyGranularity(duration)
 	granularitySec := int64(granularityMinutes * 60)
 
 	startTs := startTime.Unix()
@@ -494,6 +497,27 @@ func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
+}
+
+func chooseLatencyGranularity(duration time.Duration) int {
+	minutes := int(math.Ceil(duration.Minutes()))
+	if minutes <= 0 {
+		return 1
+	}
+
+	raw := int(math.Ceil(float64(minutes) / 1440.0))
+	if raw < 1 {
+		raw = 1
+	}
+
+	steps := []int{1, 2, 3, 5, 10, 15, 30, 60, 120, 180, 240, 360, 720, 1440}
+	for _, step := range steps {
+		if raw <= step {
+			return step
+		}
+	}
+
+	return raw
 }
 
 // handlePortTraffic 端口流量统计

@@ -202,11 +202,11 @@ function connectRealtime() {
 let latencyChart = null;
 let latencyData = null;
 const latencyColors = [
-  { border: "#FFD60A", bg: "rgba(255, 214, 10, 0.1)" }, // Yellow
-  { border: "#30D158", bg: "rgba(48, 209, 88, 0.1)" }, // Green
-  { border: "#0A84FF", bg: "rgba(10, 132, 255, 0.1)" }, // Blue
-  { border: "#BF5AF2", bg: "rgba(191, 90, 242, 0.1)" }, // Purple
-  { border: "#FF453A", bg: "rgba(255, 69, 58, 0.1)" }, // Red
+  { border: "#8FB0B8", bg: "rgba(143, 176, 184, 0.16)" }, // Muted teal
+  { border: "#9BB59B", bg: "rgba(155, 181, 155, 0.16)" }, // Muted green
+  { border: "#9AA5C8", bg: "rgba(154, 165, 200, 0.16)" }, // Muted blue
+  { border: "#C1A3C8", bg: "rgba(193, 163, 200, 0.16)" }, // Muted purple
+  { border: "#C4A098", bg: "rgba(196, 160, 152, 0.16)" }, // Muted red
 ];
 
 // 延迟查询参数
@@ -289,7 +289,11 @@ async function fetchLatency(start = null, end = null) {
     // 显示粒度信息
     const granularityEl = document.getElementById("latency-granularity");
     if (granularityEl && latencyData.granularity) {
-      granularityEl.textContent = `粒度: ${latencyData.granularity} 分钟`;
+      let label = `粒度: ${latencyData.granularity} 分钟`;
+      if (!range.start && !range.end) {
+        label += " · 最近24小时";
+      }
+      granularityEl.textContent = label;
     }
 
     // 初始化过滤器 (仅一次)
@@ -345,8 +349,8 @@ function renderFilterCheckboxes(targets) {
 function renderLatencyChart() {
   if (!latencyData || !latencyData.targets) return;
 
-  const showMax = document.getElementById("show-max")?.checked ?? true;
-  const showAvg = document.getElementById("show-avg")?.checked ?? true;
+  const showMax = document.getElementById("show-max")?.checked ?? false;
+  const showAvg = document.getElementById("show-avg")?.checked ?? false;
 
   const chartEl = document.getElementById("latency-chart");
   if (!chartEl || typeof echarts === "undefined") return;
@@ -373,7 +377,8 @@ function renderLatencyChart() {
       const color = latencyColors[idx % latencyColors.length];
       const points = target.points || [];
       const data = points.map((p) => [p.ts * 1000, p.rtt_ms]);
-      const avg = target.stats?.avg ?? 0;
+      const stats = target.stats || {};
+      const avg = stats.avg ?? 0;
 
       return {
         name: target.tag,
@@ -384,35 +389,56 @@ function renderLatencyChart() {
         lineStyle: { color: color.border, width: 2 },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: color.bg.replace("0.1", "0.35") },
+            { offset: 0, color: color.bg.replace("0.16", "0.28") },
             { offset: 1, color: "rgba(0,0,0,0)" },
           ]),
         },
         emphasis: { focus: "series" },
-        markPoint: showMax
-          ? {
-              symbolSize: 46,
-              itemStyle: { color: color.border },
-              label: { color: "#000", fontWeight: "600", formatter: "{b}" },
-              data: [
-                { type: "max", name: "MAX" },
-                { type: "min", name: "MIN" },
-              ],
-            }
-          : undefined,
-        markLine:
-          showAvg && avg > 0
-            ? {
-                symbol: "none",
-                lineStyle: { color: color.border, width: 1, type: "dashed" },
-                label: {
-                  color: textColor,
-                  formatter: `${target.tag} 平均 ${avg.toFixed(1)}ms`,
-                  position: "end",
-                },
-                data: [{ yAxis: avg }],
-              }
-            : undefined,
+        markLine: (() => {
+          const lines = [];
+          if (showAvg && avg > 0) {
+            lines.push({
+              yAxis: avg,
+              name: "平均",
+              lineStyle: { type: "dashed", color: color.border, opacity: 0.65 },
+              label: {
+                color: textColor,
+                formatter: ({ value }) => `平均 ${value.toFixed(1)}ms`,
+                position: "end",
+              },
+            });
+          }
+          if (showMax && stats.max != null && stats.max > 0) {
+            lines.push({
+              yAxis: stats.max,
+              name: "最大",
+              lineStyle: { type: "solid", color: color.border, opacity: 0.55 },
+              label: {
+                color: textColor,
+                formatter: ({ value }) => `最大 ${value.toFixed(1)}ms`,
+                position: "end",
+              },
+            });
+          }
+          if (showMax && stats.min != null) {
+            lines.push({
+              yAxis: stats.min,
+              name: "最小",
+              lineStyle: { type: "solid", color: color.border, opacity: 0.45 },
+              label: {
+                color: textColor,
+                formatter: ({ value }) => `最小 ${value.toFixed(1)}ms`,
+                position: "end",
+              },
+            });
+          }
+          if (!lines.length) return undefined;
+          return {
+            symbol: "none",
+            label: { show: true },
+            data: lines,
+          };
+        })(),
       };
     });
 
@@ -746,12 +772,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 设置默认日期（今天）
   const today = formatDateValue(new Date());
-  if (latencyEndEl) latencyEndEl.value = today;
-  if (latencyStartEl) latencyStartEl.value = today;
-  latencyStartDate = today;
-  latencyEndDate = today;
+  if (latencyEndEl) latencyEndEl.value = "";
+  if (latencyStartEl) latencyStartEl.value = "";
+  latencyStartDate = null;
+  latencyEndDate = null;
 
-  fetchLatency(latencyStartDate, latencyEndDate);
+  fetchLatency();
 
   // 查询按钮
   if (latencyQueryBtn) {
@@ -823,11 +849,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // 重置按钮
   if (latencyResetBtn) {
     latencyResetBtn.addEventListener("click", () => {
-      if (latencyStartEl) latencyStartEl.value = today;
-      if (latencyEndEl) latencyEndEl.value = today;
-      latencyStartDate = today;
-      latencyEndDate = today;
-      fetchLatency(today, today);
+      if (latencyStartEl) latencyStartEl.value = "";
+      if (latencyEndEl) latencyEndEl.value = "";
+      latencyStartDate = null;
+      latencyEndDate = null;
+      fetchLatency();
     });
   }
 
