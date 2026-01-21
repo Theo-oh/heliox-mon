@@ -153,18 +153,22 @@ body {
 .speed-item {
   background: var(--item-bg);
   border-radius: var(--radius-sm);
-  padding: 20px;
-  margin-bottom: 16px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
   border: 1px solid rgba(255, 255, 255, 0.04);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 24px;
+  gap: 10px;
 }
 
 .user-row:last-child,
 .port-item:last-child {
   margin-bottom: 0;
+}
+
+.total-item {
+  margin-top: 12px;
 }
 
 .port-name,
@@ -471,9 +475,54 @@ body {
   text-align: right;
 }
 
+/* Filters & Pills */
+.filter-group,
+.display-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border-left: 1px solid rgba(255,255,255,0.1);
+}
+
+.opt-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-right: 4px;
+}
+
+.filter-pill,
+.opt-pill {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  padding: 4px 10px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-pill:hover,
+.opt-pill:hover {
+  background: var(--item-bg);
+  color: var(--text);
+  border-color: var(--card-hover-border);
+}
+
+.filter-pill input,
+.opt-pill input {
+  margin: 0;
+  accent-color: var(--accent-blue);
+}
+
 .control-actions {
   display: flex;
   gap: 8px;
+  margin-left: auto;
 }
 
 .granularity-tag {

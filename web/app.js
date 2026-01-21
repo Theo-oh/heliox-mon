@@ -213,6 +213,8 @@ const latencyColors = [
 let latencyStartDate = null;
 let latencyEndDate = null;
 let timeRangeMinutes = 1440; // 默认24小时
+let activeTags = new Set(); // 选中的运营商标签
+let filtersInitialized = false;
 
 async function fetchLatency(start = null, end = null) {
   try {
@@ -238,6 +240,12 @@ async function fetchLatency(start = null, end = null) {
       granularityEl.textContent = `粒度: ${latencyData.granularity} 分钟`;
     }
 
+    // 初始化过滤器 (仅一次)
+    if (!filtersInitialized && latencyData.targets) {
+        renderFilterCheckboxes(latencyData.targets);
+        filtersInitialized = true;
+    }
+
     renderLatencyChart();
     renderLatencyStats();
   } catch (e) {
@@ -245,19 +253,55 @@ async function fetchLatency(start = null, end = null) {
   }
 }
 
+function renderFilterCheckboxes(targets) {
+    const container = document.getElementById("target-filters");
+    if (!container) return;
+    
+    container.innerHTML = "";
+    targets.forEach(t => {
+        // 默认全选
+        activeTags.add(t.tag);
+
+        const label = document.createElement("label");
+        label.className = "filter-pill";
+        
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = true;
+        input.dataset.tag = t.tag;
+        
+        input.addEventListener("change", (e) => {
+            if (e.target.checked) {
+                activeTags.add(t.tag);
+            } else {
+                activeTags.delete(t.tag);
+            }
+            renderLatencyChart();
+        });
+
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(" " + t.tag));
+        container.appendChild(label);
+    });
+}
+
 function renderLatencyChart() {
   if (!latencyData || !latencyData.targets) return;
+
+  const showMax = document.getElementById("show-max")?.checked ?? true;
+  const showAvg = document.getElementById("show-avg")?.checked ?? true;
 
   const datasets = [];
   const annotations = {};
 
   latencyData.targets.forEach((target, idx) => {
+    // 过滤未选中的标签
+    if (!activeTags.has(target.tag)) return;
+
     const color = latencyColors[idx % latencyColors.length];
     const points = target.points || [];
 
     // 过滤数据（根据时间滑块）
-    // timeRangeMinutes = 1440 (24h) -> all data
-    // timeRangeMinutes = 60 (1h) -> last 1 hour of data
     let filteredPoints = points;
     if (timeRangeMinutes < 1440 && points.length > 0) {
         const lastTs = points[points.length - 1].ts;
@@ -265,39 +309,37 @@ function renderLatencyChart() {
         filteredPoints = points.filter(p => p.ts >= startTs);
     }
     
-    // 找出最大值点以便高亮
-    let maxPoint = null;
-    let maxVal = -1;
-    filteredPoints.forEach(p => {
-        if(p.rtt_ms > maxVal) {
-            maxVal = p.rtt_ms;
-            maxPoint = p;
-        }
-    });
+    // 找出极值点
+    let maxPoint = null, minPoint = null;
+    let maxVal = -Infinity, minVal = Infinity;
+    
+    if (showMax) {
+        filteredPoints.forEach(p => {
+            if(p.rtt_ms > maxVal) { maxVal = p.rtt_ms; maxPoint = p; }
+            if(p.rtt_ms < minVal) { minVal = p.rtt_ms; minPoint = p; }
+        });
+    }
 
     const dataPoints = filteredPoints.map(p => ({ x: p.ts * 1000, y: p.rtt_ms }));
     
-    // Create point style array: radius 0 for normal, 6 for max point
-    const pointRadiuses = filteredPoints.map(p => (p === maxPoint ? 6 : 0));
-    const pointStyles = filteredPoints.map(p => (p === maxPoint ? 'circle' : 'circle'));
-    const pointColors = filteredPoints.map(p => (p === maxPoint ? color.border : color.border));
+    // Point Styles (Bubble for Max/Min)
+    const pointRadiuses = filteredPoints.map(p => (p === maxPoint || p === minPoint ? 6 : 0));
+    const pointColors = filteredPoints.map(p => color.border);
 
-    // 主数据线
     datasets.push({
       label: target.tag,
       data: dataPoints,
       borderColor: color.border,
       backgroundColor: color.bg,
-      fill: false,
-      tension: 0.2,
-      pointRadius: pointRadiuses,
-      pointHoverRadius: 6,
-      pointBackgroundColor: pointColors,
       borderWidth: 1.5,
+      pointRadius: pointRadiuses,
+      pointBackgroundColor: pointColors,
+      pointHoverRadius: 6,
+      tension: 0.2, // Smooth curves
     });
 
-    // 平均值线
-    if (target.stats && target.stats.avg > 0) {
+    // Annotations: Average Line
+    if (showAvg && target.stats && target.stats.avg > 0) {
       annotations[`avg-${idx}`] = {
         type: "line",
         yMin: target.stats.avg,
@@ -307,67 +349,57 @@ function renderLatencyChart() {
         borderDash: [5, 5],
         label: {
           display: true,
-          content: `平均 ${target.stats.avg.toFixed(1)}`,
+          content: `${target.tag} Avg: ${target.stats.avg.toFixed(1)}`,
           position: "end",
           backgroundColor: color.border,
-          color: "#0d1117",
-          font: { size: 10 },
+          color: "#000",
+          font: { size: 10, weight: "bold" },
+          yAdjust: -10 * idx, // Stagger labels so they don't overlap
         },
       };
     }
+    
+    // Annotations: Max/Min Labels (Simulated via Point Labels or just Tooltips? 
+    // Usually standard tooltip is enough, but user asked for bubbles. 
+    // ChartJS annotation plugin can do "point" annotations too, but let's stick to the pointRadius highlight + tooltip for now to avoid clutter.)
   });
 
-  // 获取所有时间戳作为 labels
-  const allPoints = latencyData.targets.flatMap((t) => t.points || []);
-  const labels = [...new Set(allPoints.map((p) => p.ts))].sort();
+  const ctx = document.getElementById("latency-chart").getContext("2d");
 
   if (latencyChart) {
     latencyChart.data.datasets = datasets;
-    latencyChart.options.plugins.annotation = { annotations };
-    latencyChart.update("none"); // 禁用动画，避免闪烁
+    latencyChart.options.plugins.annotation.annotations = annotations;
+    latencyChart.update("none");
   } else {
-    const ctx = document.getElementById("latency-chart").getContext("2d");
     latencyChart = new Chart(ctx, {
       type: "line",
       data: { datasets },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
+        interaction: { mode: "nearest", axis: 'x', intersect: false },
         plugins: {
           legend: {
-            display: true,
-            position: "top",
-            labels: { color: "#8b949e", usePointStyle: true, boxWidth: 8 },
-            onClick: (e, legendItem, legend) => {
-              const idx = legendItem.datasetIndex;
-              const meta = legend.chart.getDatasetMeta(idx);
-              meta.hidden = !meta.hidden;
-              legend.chart.update();
-            },
+            display: false, // Hidden because we have filters
           },
           tooltip: {
-            callbacks: {
-              title: (items) =>
-                new Date(items[0].parsed.x).toLocaleString("zh-CN"),
-              label: (item) =>
-                `${item.dataset.label}: ${item.parsed.y?.toFixed(2) || "-"} ms`,
-            },
+             callbacks: {
+               title: (items) => new Date(items[0].parsed.x).toLocaleString("zh-CN"),
+             }
           },
           annotation: { annotations },
         },
         scales: {
           x: {
             type: "time",
-            time: { unit: "hour", displayFormats: { hour: "HH:mm" } },
-            grid: { display: false },
-            ticks: { color: "#8b949e" },
+            time: { unit: "minute", displayFormats: { minute: "HH:mm" } },
+            grid: { display: false, borderColor: "#30363d" },
+            ticks: { color: "#8b949e", maxTicksLimit: 8 },
           },
           y: {
             beginAtZero: true,
-            grid: { color: "#30363d" },
+            grid: { color: "rgba(255, 255, 255, 0.05)" },
             ticks: { color: "#8b949e" },
-            title: { display: true, text: "ms", color: "#8b949e" },
           },
         },
       },
@@ -639,6 +671,10 @@ document.addEventListener("DOMContentLoaded", () => {
           renderLatencyChart();
       });
   }
+  
+  // 显示选项事件监听
+  document.getElementById("show-max")?.addEventListener("change", renderLatencyChart);
+  document.getElementById("show-avg")?.addEventListener("change", renderLatencyChart);
 
   // 重置按钮
   if (latencyResetBtn) {
