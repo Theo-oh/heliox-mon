@@ -146,7 +146,7 @@ function renderPortMonthGrid(containerId, ports) {
       const gb = (d.total / 1024 / 1024 / 1024).toFixed(2);
       return `
       <div class="month-item">
-        <div class="port-name">${p.name}</div>
+        <div class="port-name">${p.name.toLowerCase()}</div>
         <div class="port-value">${gb} GB</div>
       </div>
     `;
@@ -212,13 +212,23 @@ const latencyColors = [
 // 延迟查询参数
 let latencyStartDate = null;
 let latencyEndDate = null;
+let timeRangeMinutes = 1440; // 默认24小时
 
 async function fetchLatency(start = null, end = null) {
   try {
     let url = "/api/latency";
-    if (start && end) {
-      url += `?start=${start}&end=${end}`;
+    // 如果没有指定日期，默认使用今日
+    if (!start && !end) {
+       const today = new Date().toISOString().split("T")[0];
+       end = today; 
+       // start 默认为空，后端会自动处理为 end 的0点
     }
+    
+    if (end) {
+        url += `?end=${end}`;
+        if (start) url += `&start=${start}`;
+    }
+
     const res = await fetch(url);
     latencyData = await res.json();
 
@@ -245,15 +255,44 @@ function renderLatencyChart() {
     const color = latencyColors[idx % latencyColors.length];
     const points = target.points || [];
 
+    // 过滤数据（根据时间滑块）
+    // timeRangeMinutes = 1440 (24h) -> all data
+    // timeRangeMinutes = 60 (1h) -> last 1 hour of data
+    let filteredPoints = points;
+    if (timeRangeMinutes < 1440 && points.length > 0) {
+        const lastTs = points[points.length - 1].ts;
+        const startTs = lastTs - (timeRangeMinutes * 60);
+        filteredPoints = points.filter(p => p.ts >= startTs);
+    }
+    
+    // 找出最大值点以便高亮
+    let maxPoint = null;
+    let maxVal = -1;
+    filteredPoints.forEach(p => {
+        if(p.rtt_ms > maxVal) {
+            maxVal = p.rtt_ms;
+            maxPoint = p;
+        }
+    });
+
+    const dataPoints = filteredPoints.map(p => ({ x: p.ts * 1000, y: p.rtt_ms }));
+    
+    // Create point style array: radius 0 for normal, 6 for max point
+    const pointRadiuses = filteredPoints.map(p => (p === maxPoint ? 6 : 0));
+    const pointStyles = filteredPoints.map(p => (p === maxPoint ? 'circle' : 'circle'));
+    const pointColors = filteredPoints.map(p => (p === maxPoint ? color.border : color.border));
+
     // 主数据线
     datasets.push({
       label: target.tag,
-      data: points.map((p) => ({ x: p.ts * 1000, y: p.rtt_ms })),
+      data: dataPoints,
       borderColor: color.border,
       backgroundColor: color.bg,
       fill: false,
       tension: 0.2,
-      pointRadius: 0,
+      pointRadius: pointRadiuses,
+      pointHoverRadius: 6,
+      pointBackgroundColor: pointColors,
       borderWidth: 1.5,
     });
 
@@ -534,28 +573,71 @@ document.addEventListener("DOMContentLoaded", () => {
   setupTrendToggle();
 
   // 延迟监控时间选择器
-  const latencyStartEl = document.getElementById("latency-start");
   const latencyEndEl = document.getElementById("latency-end");
   const latencyQueryBtn = document.getElementById("latency-query");
   const latencyResetBtn = document.getElementById("latency-reset");
+  const datePrevBtn = document.getElementById("date-prev");
+  const dateNextBtn = document.getElementById("date-next");
+  const timeSlider = document.getElementById("time-slider");
+  const timeDisplay = document.getElementById("time-display");
 
   // 设置默认日期（今天）
   const today = new Date().toISOString().split("T")[0];
   if (latencyEndEl) latencyEndEl.value = today;
+  latencyEndDate = today;
 
   // 查询按钮
   if (latencyQueryBtn) {
     latencyQueryBtn.addEventListener("click", () => {
-      const start = latencyStartEl?.value;
       const end = latencyEndEl?.value;
-      if (start && end) {
-        latencyStartDate = start;
+      if (end) {
         latencyEndDate = end;
-        fetchLatency(start, end);
-      } else {
-        alert("请选择开始和结束日期");
+        fetchLatency(null, end);
       }
     });
+  }
+  
+  // 前一天/后一天
+  if (datePrevBtn && latencyEndEl) {
+      datePrevBtn.addEventListener("click", () => {
+          const curr = new Date(latencyEndEl.value);
+          curr.setDate(curr.getDate() - 1);
+          const newDate = curr.toISOString().split("T")[0];
+          latencyEndEl.value = newDate;
+          latencyEndDate = newDate;
+          fetchLatency(null, newDate);
+      });
+  }
+  
+  if (dateNextBtn && latencyEndEl) {
+      dateNextBtn.addEventListener("click", () => {
+          const curr = new Date(latencyEndEl.value);
+          curr.setDate(curr.getDate() + 1);
+          const newDate = curr.toISOString().split("T")[0];
+          // 不允许超过今天
+          if (newDate > today) return;
+          latencyEndEl.value = newDate;
+          latencyEndDate = newDate;
+          fetchLatency(null, newDate);
+      });
+  }
+  
+  // 时间滑块
+  if (timeSlider && timeDisplay) {
+      timeSlider.addEventListener("input", (e) => {
+          const val = parseInt(e.target.value);
+          timeRangeMinutes = val;
+          if (val === 1440) {
+              timeDisplay.textContent = "24h";
+          } else {
+              const h = Math.floor(val / 60);
+              const m = val % 60;
+              timeDisplay.textContent = (h > 0 ? `${h}h` : "") + (m > 0 ? `${m}m` : "");
+              if (h===0 && m===0) timeDisplay.textContent = "0m";
+          }
+          // 重新渲染图表（不请求后端，前端过滤）
+          renderLatencyChart();
+      });
   }
 
   // 重置按钮
