@@ -158,59 +158,71 @@
       <!-- 延迟监控 -->
       <div class="section">
         <div class="section-title">延迟监控</div>
-        <div class="chart-container">
+        <div class="chart-container latency-card">
           <div class="latency-controls">
-            <div class="date-nav">
-              <button id="date-prev" class="btn btn-icon" title="前一天">
-                ❮
-              </button>
-              <div class="date-picker-wrapper">
-                <input type="date" id="latency-end" />
+            <div class="latency-row latency-row-top">
+              <div class="date-nav">
+                <button id="date-prev" class="btn btn-icon" title="前一天">
+                  ❮
+                </button>
+                <div class="date-range">
+                  <div class="date-field">
+                    <span class="date-label">开始</span>
+                    <input type="date" id="latency-start" />
+                  </div>
+                  <span class="date-sep">—</span>
+                  <div class="date-field">
+                    <span class="date-label">结束</span>
+                    <input type="date" id="latency-end" />
+                  </div>
+                </div>
+                <button id="date-next" class="btn btn-icon" title="后一天">
+                  ❯
+                </button>
               </div>
-              <button id="date-next" class="btn btn-icon" title="后一天">
-                ❯
-              </button>
+
+              <div class="control-actions">
+                <button id="latency-query" class="btn">查询</button>
+                <button id="latency-reset" class="btn btn-secondary">重置</button>
+              </div>
+              <span id="latency-granularity" class="granularity-tag"></span>
             </div>
 
-            <!-- 过滤器与选项 -->
-            <div id="target-filters" class="filter-group">
-              <!-- JS生成的复选框 -->
-            </div>
+            <div class="latency-row latency-row-mid">
+              <div id="target-filters" class="filter-group">
+                <!-- JS生成的复选框 -->
+              </div>
 
-            <div class="display-options">
-              <span class="opt-label">显示</span>
-              <label class="opt-pill"
-                ><input type="checkbox" id="show-max" checked /> 极值</label
-              >
-              <label class="opt-pill"
-                ><input type="checkbox" id="show-avg" checked /> 平均线</label
-              >
+              <div class="display-options">
+                <span class="opt-label">显示</span>
+                <label class="opt-pill"
+                  ><input type="checkbox" id="show-max" checked /> 极值</label
+                >
+                <label class="opt-pill"
+                  ><input type="checkbox" id="show-avg" checked /> 平均线</label
+                >
+              </div>
             </div>
-
-            <div class="time-range-wrapper">
-              <input
-                type="range"
-                id="time-slider"
-                min="0"
-                max="1440"
-                value="1440"
-                step="30"
-                class="time-slider"
-              />
-              <span id="time-display">24h</span>
-            </div>
-
-            <div class="control-actions">
-              <button id="latency-query" class="btn">查询</button>
-              <button id="latency-reset" class="btn btn-secondary">重置</button>
-            </div>
-            <span id="latency-granularity" class="granularity-tag"></span>
           </div>
 
           <div id="latency-stats" class="latency-stats"></div>
 
-          <div style="height: 220px; position: relative">
+          <div class="latency-chart-wrap">
             <canvas id="latency-chart"></canvas>
+          </div>
+
+          <div class="time-range-bar">
+            <span class="time-range-label">时间范围</span>
+            <input
+              type="range"
+              id="time-slider"
+              min="0"
+              max="1440"
+              value="1440"
+              step="30"
+              class="time-slider"
+            />
+            <span id="time-display">24h</span>
           </div>
         </div>
       </div>

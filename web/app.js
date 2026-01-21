@@ -216,19 +216,42 @@ let timeRangeMinutes = 1440; // 默认24小时
 let activeTags = new Set(); // 选中的运营商标签
 let filtersInitialized = false;
 
+function formatDateValue(date) {
+  return date.toISOString().split("T")[0];
+}
+
+function normalizeRange(startVal, endVal) {
+  let start = startVal ? String(startVal).trim() : "";
+  let end = endVal ? String(endVal).trim() : "";
+
+  if (!start && !end) {
+    return { start: null, end: null };
+  }
+
+  if (!start && end) start = end;
+  if (start && !end) end = start;
+
+  if (start && end && start > end) {
+    const tmp = start;
+    start = end;
+    end = tmp;
+  }
+
+  return { start, end };
+}
+
+function shiftDateValue(dateStr, offsetDays) {
+  const date = new Date(dateStr);
+  date.setDate(date.getDate() + offsetDays);
+  return formatDateValue(date);
+}
+
 async function fetchLatency(start = null, end = null) {
   try {
     let url = "/api/latency";
-    // 如果没有指定日期，默认使用今日
-    if (!start && !end) {
-       const today = new Date().toISOString().split("T")[0];
-       end = today; 
-       // start 默认为空，后端会自动处理为 end 的0点
-    }
-    
-    if (end) {
-        url += `?end=${end}`;
-        if (start) url += `&start=${start}`;
+    const range = normalizeRange(start, end);
+    if (range.start && range.end) {
+      url += `?start=${range.start}&end=${range.end}`;
     }
 
     const res = await fetch(url);
@@ -331,11 +354,13 @@ function renderLatencyChart() {
       data: dataPoints,
       borderColor: color.border,
       backgroundColor: color.bg,
-      borderWidth: 1.5,
+      borderWidth: 2,
       pointRadius: pointRadiuses,
       pointBackgroundColor: pointColors,
       pointHoverRadius: 6,
-      tension: 0.2, // Smooth curves
+      pointHitRadius: 12,
+      fill: true,
+      tension: 0.25, // Smooth curves
     });
 
     // Annotations: Average Line
@@ -385,6 +410,7 @@ function renderLatencyChart() {
           tooltip: {
              callbacks: {
                title: (items) => new Date(items[0].parsed.x).toLocaleString("zh-CN"),
+               label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} ms`,
              }
           },
           annotation: { annotations },
@@ -399,7 +425,10 @@ function renderLatencyChart() {
           y: {
             beginAtZero: true,
             grid: { color: "rgba(255, 255, 255, 0.05)" },
-            ticks: { color: "#8b949e" },
+            ticks: {
+              color: "#8b949e",
+              callback: (value) => `${value} ms`,
+            },
           },
         },
       },
@@ -599,13 +628,13 @@ function setupTrendToggle() {
 document.addEventListener("DOMContentLoaded", () => {
   fetchStats();
   fetchSystem();
-  fetchLatency();
   fetchMonthlyTrend();
   connectRealtime();
   setupTrendToggle();
 
   // 延迟监控时间选择器
   const latencyEndEl = document.getElementById("latency-end");
+  const latencyStartEl = document.getElementById("latency-start");
   const latencyQueryBtn = document.getElementById("latency-query");
   const latencyResetBtn = document.getElementById("latency-reset");
   const datePrevBtn = document.getElementById("date-prev");
@@ -614,43 +643,74 @@ document.addEventListener("DOMContentLoaded", () => {
   const timeDisplay = document.getElementById("time-display");
 
   // 设置默认日期（今天）
-  const today = new Date().toISOString().split("T")[0];
+  const today = formatDateValue(new Date());
   if (latencyEndEl) latencyEndEl.value = today;
+  if (latencyStartEl) latencyStartEl.value = today;
+  latencyStartDate = today;
   latencyEndDate = today;
+
+  fetchLatency(latencyStartDate, latencyEndDate);
 
   // 查询按钮
   if (latencyQueryBtn) {
     latencyQueryBtn.addEventListener("click", () => {
-      const end = latencyEndEl?.value;
-      if (end) {
-        latencyEndDate = end;
-        fetchLatency(null, end);
+      const { start, end } = normalizeRange(
+        latencyStartEl?.value,
+        latencyEndEl?.value,
+      );
+
+      if (!start && !end) {
+        latencyStartDate = null;
+        latencyEndDate = null;
+        fetchLatency();
+        return;
       }
+
+      if (latencyStartEl) latencyStartEl.value = start;
+      if (latencyEndEl) latencyEndEl.value = end;
+      latencyStartDate = start;
+      latencyEndDate = end;
+      fetchLatency(start, end);
     });
   }
   
   // 前一天/后一天
   if (datePrevBtn && latencyEndEl) {
       datePrevBtn.addEventListener("click", () => {
-          const curr = new Date(latencyEndEl.value);
-          curr.setDate(curr.getDate() - 1);
-          const newDate = curr.toISOString().split("T")[0];
-          latencyEndEl.value = newDate;
-          latencyEndDate = newDate;
-          fetchLatency(null, newDate);
+          const { start, end } = normalizeRange(
+            latencyStartEl?.value,
+            latencyEndEl?.value,
+          );
+          const baseStart = start || today;
+          const baseEnd = end || today;
+          const newStart = shiftDateValue(baseStart, -1);
+          const newEnd = shiftDateValue(baseEnd, -1);
+
+          if (latencyStartEl) latencyStartEl.value = newStart;
+          if (latencyEndEl) latencyEndEl.value = newEnd;
+          latencyStartDate = newStart;
+          latencyEndDate = newEnd;
+          fetchLatency(newStart, newEnd);
       });
   }
   
   if (dateNextBtn && latencyEndEl) {
       dateNextBtn.addEventListener("click", () => {
-          const curr = new Date(latencyEndEl.value);
-          curr.setDate(curr.getDate() + 1);
-          const newDate = curr.toISOString().split("T")[0];
-          // 不允许超过今天
-          if (newDate > today) return;
-          latencyEndEl.value = newDate;
-          latencyEndDate = newDate;
-          fetchLatency(null, newDate);
+          const { start, end } = normalizeRange(
+            latencyStartEl?.value,
+            latencyEndEl?.value,
+          );
+          const baseStart = start || today;
+          const baseEnd = end || today;
+          const newStart = shiftDateValue(baseStart, 1);
+          const newEnd = shiftDateValue(baseEnd, 1);
+          if (newEnd > today) return;
+
+          if (latencyStartEl) latencyStartEl.value = newStart;
+          if (latencyEndEl) latencyEndEl.value = newEnd;
+          latencyStartDate = newStart;
+          latencyEndDate = newEnd;
+          fetchLatency(newStart, newEnd);
       });
   }
   
@@ -679,11 +739,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // 重置按钮
   if (latencyResetBtn) {
     latencyResetBtn.addEventListener("click", () => {
-      if (latencyStartEl) latencyStartEl.value = "";
+      if (latencyStartEl) latencyStartEl.value = today;
       if (latencyEndEl) latencyEndEl.value = today;
-      latencyStartDate = null;
-      latencyEndDate = null;
-      fetchLatency();
+      latencyStartDate = today;
+      latencyEndDate = today;
+      timeRangeMinutes = 1440;
+      if (timeSlider) timeSlider.value = "1440";
+      if (timeDisplay) timeDisplay.textContent = "24h";
+      fetchLatency(today, today);
     });
   }
 

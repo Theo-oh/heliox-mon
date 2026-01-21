@@ -360,7 +360,8 @@ body {
   padding: 30px;
   border: 1px solid var(--card-border);
   position: relative;
-  height: 400px; /* Increased height for controls */
+  height: auto;
+  min-height: 320px;
 }
 
 .chart-header {
@@ -394,20 +395,34 @@ body {
 /* New Latency Controls */
 .latency-controls {
   display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 18px;
   background: var(--item-bg);
-  padding: 12px 16px;
+  padding: 14px 16px;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.latency-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.latency-row-top {
+  justify-content: flex-start;
+}
+
+.latency-row-mid {
+  justify-content: space-between;
 }
 
 .date-nav {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .btn-icon {
@@ -429,23 +444,41 @@ body {
   color: var(--text);
 }
 
-.date-picker-wrapper input {
-  background: var(--bg);
-  border: 1px solid var(--card-border);
-  color: var(--text);
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-family: inherit;
-  font-size: 13px;
-  outline: none;
-}
-
-.time-range-wrapper {
-  flex: 1;
+.date-range {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 200px;
+  background: rgba(10, 10, 10, 0.35);
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.date-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.date-sep {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.date-field input {
+  background: var(--bg);
+  border: 1px solid var(--card-border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
 }
 
 .time-slider {
@@ -481,8 +514,15 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 8px;
-  border-left: 1px solid rgba(255,255,255,0.1);
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  flex: 1 1 auto;
+}
+
+.display-options {
+  flex: 0 0 auto;
 }
 
 .opt-label {
@@ -522,6 +562,7 @@ body {
 .control-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
   margin-left: auto;
 }
 
@@ -531,7 +572,7 @@ body {
   padding: 4px 8px;
   background: var(--bg);
   border-radius: 4px;
-  margin-left: auto;
+  margin-left: 8px;
 }
 
 .btn {
@@ -569,14 +610,54 @@ body {
   font-size: 12px;
 }
 
-/* Latency Stats */
+/* Latency Card Layout */
+.latency-card {
+  padding-bottom: 22px;
+}
+
 .latency-stats {
   display: flex;
   gap: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
 }
 
+.latency-chart-wrap {
+  height: 260px;
+  position: relative;
+  margin-bottom: 14px;
+  background: linear-gradient(180deg, rgba(20, 20, 22, 0.2), rgba(10, 10, 10, 0));
+  border-radius: 12px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.latency-chart-wrap canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.time-range-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(18, 18, 20, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.time-range-label {
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 56px;
+}
+
+.time-range-bar .time-slider {
+  flex: 1 1 auto;
+}
+
+/* Latency Stats */
 .latency-stat-item {
   background: var(--item-bg);
   border-radius: var(--radius-sm);
@@ -665,11 +746,29 @@ body {
     flex-direction: column;
     gap: 12px;
   }
-  .time-range-wrapper {
-      order: 3;
-      width: 100%;
-  }
   .granularity-tag {
       display: none;
+  }
+  .date-nav {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .date-range {
+    flex: 1;
+    justify-content: center;
+  }
+  .latency-row-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .control-actions {
+    justify-content: flex-end;
+  }
+  .time-range-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #time-display {
+    text-align: left;
   }
 }
