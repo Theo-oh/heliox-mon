@@ -230,6 +230,12 @@ function formatDateValue(date) {
   return date.toISOString().split("T")[0];
 }
 
+function setLatencyRecentActive(active) {
+  const recentBtn = document.getElementById("latency-recent");
+  if (!recentBtn) return;
+  recentBtn.classList.toggle("is-active", active);
+}
+
 function getCssVar(name) {
   const root = document.body || document.documentElement;
   return getComputedStyle(root).getPropertyValue(name).trim();
@@ -289,6 +295,7 @@ async function fetchLatency(start = null, end = null) {
   try {
     let url = "/api/latency";
     const range = normalizeRange(start, end);
+    setLatencyRecentActive(!range.start && !range.end);
     if (range.start && range.end) {
       url += `?start=${range.start}&end=${range.end}`;
     }
@@ -384,6 +391,7 @@ function renderLatencyChart() {
   const gridLine = isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.06)";
   const zoomBg = isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(0, 0, 0, 0.2)";
   const zoomFill = isLight ? "rgba(10, 132, 255, 0.25)" : "rgba(10, 132, 255, 0.2)";
+  const labelBg = isLight ? "rgba(255, 255, 255, 0.85)" : "rgba(0, 0, 0, 0.35)";
 
   const series = latencyData.targets
     .filter((target) => activeTags.has(target.tag))
@@ -418,6 +426,9 @@ function renderLatencyChart() {
                 lineStyle: { type: "dashed", color: color.border, opacity: 0.65 },
                 label: {
                   color: textColor,
+                  backgroundColor: labelBg,
+                  borderRadius: 6,
+                  padding: [3, 6],
                   formatter: ({ value }) => `${value.toFixed(1)}ms`,
                   position: "insideEndTop",
                 },
@@ -432,6 +443,9 @@ function renderLatencyChart() {
               label: {
                 color: textColor,
                 fontSize: 11,
+                backgroundColor: labelBg,
+                borderRadius: 6,
+                padding: [2, 6],
                 formatter: (param) => {
                   const v = Array.isArray(param.value)
                     ? param.value[param.value.length - 1]
@@ -855,37 +869,37 @@ function renderTrendChart() {
       {
         label: "snell 下载",
         data: trendData.map((d) => d.snell_rx / 1024 / 1024 / 1024),
-        backgroundColor: "#64D2FF", // Cyan
+        backgroundColor: "#8DB4B9", // Muted teal
         borderRadius: { bottomLeft: 4, bottomRight: 4 },
         stack: "snell",
       },
       {
         label: "snell 上传",
         data: trendData.map((d) => d.snell_tx / 1024 / 1024 / 1024),
-        backgroundColor: "#0A84FF", // Blue
+        backgroundColor: "#5C7FA5", // Muted blue
         borderRadius: { topLeft: 4, topRight: 4 },
         stack: "snell",
       },
       {
         label: "vless 下载",
         data: trendData.map((d) => d.vless_rx / 1024 / 1024 / 1024),
-        backgroundColor: "#DA8FFF", // Light Purple
+        backgroundColor: "#C6B38A", // Muted sand
         borderRadius: { bottomLeft: 4, bottomRight: 4 },
         stack: "vless",
       },
       {
         label: "vless 上传",
         data: trendData.map((d) => d.vless_tx / 1024 / 1024 / 1024),
-        backgroundColor: "#BF5AF2", // Purple
+        backgroundColor: "#9A7FA8", // Muted purple
         borderRadius: { topLeft: 4, topRight: 4 },
         stack: "vless",
       },
     ];
     legendHtml = `
-      <span class="legend-item"><span class="dot" style="background:#0A84FF"></span>snell 上传</span>
-      <span class="legend-item"><span class="dot" style="background:#64D2FF"></span>snell 下载</span>
-      <span class="legend-item"><span class="dot" style="background:#BF5AF2"></span>vless 上传</span>
-      <span class="legend-item"><span class="dot" style="background:#DA8FFF"></span>vless 下载</span>
+      <span class="legend-item"><span class="dot" style="background:#5C7FA5"></span>snell 上传</span>
+      <span class="legend-item"><span class="dot" style="background:#8DB4B9"></span>snell 下载</span>
+      <span class="legend-item"><span class="dot" style="background:#9A7FA8"></span>vless 上传</span>
+      <span class="legend-item"><span class="dot" style="background:#C6B38A"></span>vless 下载</span>
     `;
   } else {
     // 总计视图：2根柱子（上传/下载）
@@ -893,19 +907,19 @@ function renderTrendChart() {
       {
         label: "上传",
         data: trendData.map((d) => d.total_tx / 1024 / 1024 / 1024),
-        backgroundColor: "#30D158", // Green
+        backgroundColor: "#7E9B89", // Muted green
         borderRadius: 4,
       },
       {
         label: "下载",
         data: trendData.map((d) => d.total_rx / 1024 / 1024 / 1024),
-        backgroundColor: "#89F3B1", // Light Green
+        backgroundColor: "#A8C7B2", // Soft mint
         borderRadius: 4,
       },
     ];
     legendHtml = `
-      <span class="legend-item"><span class="dot" style="background:#30D158"></span>上传</span>
-      <span class="legend-item"><span class="dot" style="background:#89F3B1"></span>下载</span>
+      <span class="legend-item"><span class="dot" style="background:#7E9B89"></span>上传</span>
+      <span class="legend-item"><span class="dot" style="background:#A8C7B2"></span>下载</span>
     `;
   }
 

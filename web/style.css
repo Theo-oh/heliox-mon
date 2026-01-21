@@ -641,6 +641,17 @@ body.theme-light .section-title {
   color: #fff;
 }
 
+.btn-secondary.is-active {
+  background: rgba(10, 132, 255, 0.18);
+  border-color: rgba(10, 132, 255, 0.35);
+  color: var(--text);
+}
+
+body.theme-light .btn-secondary.is-active {
+  background: rgba(10, 132, 255, 0.12);
+  border-color: rgba(10, 132, 255, 0.28);
+}
+
 .btn-sm {
   padding: 6px 12px;
   font-size: 12px;
