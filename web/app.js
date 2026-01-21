@@ -391,9 +391,9 @@ function renderLatencyChart() {
   const gridLine = isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.06)";
   const zoomBg = isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(0, 0, 0, 0.2)";
   const zoomFill = isLight ? "rgba(10, 132, 255, 0.25)" : "rgba(10, 132, 255, 0.2)";
-  const avgLabelBg = isLight ? "rgba(140, 140, 140, 0.18)" : "rgba(120, 120, 120, 0.2)";
-  const maxLabelBg = isLight ? "rgba(196, 142, 142, 0.18)" : "rgba(180, 120, 120, 0.22)";
-  const minLabelBg = isLight ? "rgba(136, 176, 150, 0.18)" : "rgba(110, 150, 125, 0.22)";
+  const avgLabelBg = isLight ? "rgba(100, 116, 139, 0.45)" : "rgba(100, 116, 139, 0.5)";      // 蓝灰色 - 平均值
+  const maxLabelBg = isLight ? "rgba(220, 104, 104, 0.45)" : "rgba(220, 104, 104, 0.5)";      // 柔和红 - 最高值
+  const minLabelBg = isLight ? "rgba(104, 180, 140, 0.45)" : "rgba(104, 180, 140, 0.5)";      // 柔和绿 - 最低值
 
   const series = latencyData.targets
     .filter((target) => activeTags.has(target.tag))
