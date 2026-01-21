@@ -107,7 +107,9 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		today,
 	)
 	var todayTx, todayRx int64
-	row.Scan(&todayTx, &todayRx)
+	if err := row.Scan(&todayTx, &todayRx); err != nil && err != sql.ErrNoRows {
+		log.Printf("查询今日流量失败: %v", err)
+	}
 	stats["today"] = map[string]int64{"tx": todayTx, "rx": todayRx}
 
 	// 昨日流量
@@ -116,7 +118,9 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		yesterday,
 	)
 	var yesterdayTx, yesterdayRx int64
-	row.Scan(&yesterdayTx, &yesterdayRx)
+	if err := row.Scan(&yesterdayTx, &yesterdayRx); err != nil && err != sql.ErrNoRows {
+		log.Printf("查询昨日流量失败: %v", err)
+	}
 	stats["yesterday"] = map[string]int64{"tx": yesterdayTx, "rx": yesterdayRx}
 
 	// 本月/当前周期流量（根据 ResetDay 计算）
@@ -125,7 +129,9 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		billingStart.Format("2006-01-02"),
 	)
 	var monthTx, monthRx int64
-	row.Scan(&monthTx, &monthRx)
+	if err := row.Scan(&monthTx, &monthRx); err != nil && err != sql.ErrNoRows {
+		log.Printf("查询本月流量失败: %v", err)
+	}
 	stats["this_month"] = map[string]int64{"tx": monthTx, "rx": monthRx}
 
 	// 上月流量（自然月）
@@ -135,7 +141,9 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		lastMonthEnd.Format("2006-01-02"),
 	)
 	var lastMonthTx, lastMonthRx int64
-	row.Scan(&lastMonthTx, &lastMonthRx)
+	if err := row.Scan(&lastMonthTx, &lastMonthRx); err != nil && err != sql.ErrNoRows {
+		log.Printf("查询上月流量失败: %v", err)
+	}
 	stats["last_month"] = map[string]int64{"tx": lastMonthTx, "rx": lastMonthRx}
 
 	// 根据 billing_mode 计算已用流量
