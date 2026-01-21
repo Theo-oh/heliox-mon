@@ -78,7 +78,8 @@ async function fetchPortTraffic() {
       console.log("无端口配置或数据");
       // 显示提示信息
       const todayEl = document.getElementById("port-traffic-today");
-      if (todayEl) todayEl.innerHTML = '<div class="port-no-data">暂无端口流量数据</div>';
+      if (todayEl)
+        todayEl.innerHTML = '<div class="port-no-data">暂无端口流量数据</div>';
       return;
     }
 
@@ -86,7 +87,8 @@ async function fetchPortTraffic() {
     if (data.iptables_ok === false) {
       const todayEl = document.getElementById("port-traffic-today");
       if (todayEl) {
-        todayEl.innerHTML = '<div class="port-warning">⚠️ iptables 规则未完整配置（TCP/UDP），请运行 setup-iptables.sh</div>';
+        todayEl.innerHTML =
+          '<div class="port-warning">⚠️ iptables 规则未完整配置（TCP/UDP），请运行 setup-iptables.sh</div>';
       }
       return;
     }
@@ -192,11 +194,11 @@ function connectRealtime() {
 let latencyChart = null;
 let latencyData = null;
 const latencyColors = [
-  { border: "#f9b920", bg: "rgba(249, 185, 32, 0.1)" },
-  { border: "#3fb950", bg: "rgba(63, 185, 80, 0.1)" },
-  { border: "#58a6ff", bg: "rgba(88, 166, 255, 0.1)" },
-  { border: "#a371f7", bg: "rgba(163, 113, 247, 0.1)" },
-  { border: "#f85149", bg: "rgba(248, 81, 73, 0.1)" },
+  { border: "#FFD60A", bg: "rgba(255, 214, 10, 0.1)" }, // Yellow
+  { border: "#30D158", bg: "rgba(48, 209, 88, 0.1)" }, // Green
+  { border: "#0A84FF", bg: "rgba(10, 132, 255, 0.1)" }, // Blue
+  { border: "#BF5AF2", bg: "rgba(191, 90, 242, 0.1)" }, // Purple
+  { border: "#FF453A", bg: "rgba(255, 69, 58, 0.1)" }, // Red
 ];
 
 // 延迟查询参数
@@ -301,7 +303,8 @@ function renderLatencyChart() {
             callbacks: {
               title: (items) =>
                 new Date(items[0].parsed.x).toLocaleString("zh-CN"),
-              label: (item) => `${item.dataset.label}: ${item.parsed.y?.toFixed(2) || "-"} ms`,
+              label: (item) =>
+                `${item.dataset.label}: ${item.parsed.y?.toFixed(2) || "-"} ms`,
             },
           },
           annotation: { annotations },
@@ -387,37 +390,37 @@ function renderTrendChart() {
       {
         label: "snell 下载",
         data: trendData.map((d) => d.snell_rx / 1024 / 1024 / 1024),
-        backgroundColor: "#60a5fa",
+        backgroundColor: "#64D2FF", // Cyan
         borderRadius: { bottomLeft: 4, bottomRight: 4 },
         stack: "snell",
       },
       {
         label: "snell 上传",
         data: trendData.map((d) => d.snell_tx / 1024 / 1024 / 1024),
-        backgroundColor: "#3b82f6",
+        backgroundColor: "#0A84FF", // Blue
         borderRadius: { topLeft: 4, topRight: 4 },
         stack: "snell",
       },
       {
         label: "vless 下载",
         data: trendData.map((d) => d.vless_rx / 1024 / 1024 / 1024),
-        backgroundColor: "#c084fc",
+        backgroundColor: "#DA8FFF", // Light Purple
         borderRadius: { bottomLeft: 4, bottomRight: 4 },
         stack: "vless",
       },
       {
         label: "vless 上传",
         data: trendData.map((d) => d.vless_tx / 1024 / 1024 / 1024),
-        backgroundColor: "#a855f7",
+        backgroundColor: "#BF5AF2", // Purple
         borderRadius: { topLeft: 4, topRight: 4 },
         stack: "vless",
       },
     ];
     legendHtml = `
-      <span class="legend-item"><span class="dot" style="background:#3b82f6"></span>snell 上传</span>
-      <span class="legend-item"><span class="dot" style="background:#60a5fa"></span>snell 下载</span>
-      <span class="legend-item"><span class="dot" style="background:#a855f7"></span>vless 上传</span>
-      <span class="legend-item"><span class="dot" style="background:#c084fc"></span>vless 下载</span>
+      <span class="legend-item"><span class="dot" style="background:#0A84FF"></span>snell 上传</span>
+      <span class="legend-item"><span class="dot" style="background:#64D2FF"></span>snell 下载</span>
+      <span class="legend-item"><span class="dot" style="background:#BF5AF2"></span>vless 上传</span>
+      <span class="legend-item"><span class="dot" style="background:#DA8FFF"></span>vless 下载</span>
     `;
   } else {
     // 总计视图：2根柱子（上传/下载）
@@ -425,19 +428,19 @@ function renderTrendChart() {
       {
         label: "上传",
         data: trendData.map((d) => d.total_tx / 1024 / 1024 / 1024),
-        backgroundColor: "#22c55e",
+        backgroundColor: "#30D158", // Green
         borderRadius: 4,
       },
       {
         label: "下载",
         data: trendData.map((d) => d.total_rx / 1024 / 1024 / 1024),
-        backgroundColor: "#86efac",
+        backgroundColor: "#89F3B1", // Light Green
         borderRadius: 4,
       },
     ];
     legendHtml = `
-      <span class="legend-item"><span class="dot" style="background:#22c55e"></span>上传</span>
-      <span class="legend-item"><span class="dot" style="background:#86efac"></span>下载</span>
+      <span class="legend-item"><span class="dot" style="background:#30D158"></span>上传</span>
+      <span class="legend-item"><span class="dot" style="background:#89F3B1"></span>下载</span>
     `;
   }
 
@@ -512,7 +515,6 @@ function setupTrendToggle() {
     });
   }
 }
-
 
 // 初始化
 document.addEventListener("DOMContentLoaded", () => {

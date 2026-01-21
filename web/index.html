@@ -7,189 +7,174 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div class="container">
+    <div class="wrapper">
       <!-- 顶部标题 -->
-      <header>
-        <div class="logo">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-            <circle
-              cx="16"
-              cy="16"
-              r="14"
-              stroke="var(--accent-blue)"
-              stroke-width="2"
-            />
-            <path
-              d="M10 16h12M16 10v12"
-              stroke="var(--accent-blue)"
-              stroke-width="2"
-              stroke-linecap="round"
-            />
-          </svg>
-          <h1><span id="server-name">Heliox</span> Monitor</h1>
-        </div>
-        <span id="current-time" class="time"></span>
-      </header>
+      <div class="hero">
+        <h1><span id="server-name">Heliox</span> Monitor</h1>
+        <p><span id="current-time">Loading...</span></p>
+      </div>
 
       <!-- 系统资源 -->
-      <section class="card system-card">
-        <h2>系统资源</h2>
-        <div class="system-grid">
-          <div class="system-item">
-            <span class="label">CPU</span>
-            <span id="cpu" class="value">--%</span>
+      <div class="section">
+        <div class="section-title">系统状态</div>
+        <div class="stats-grid">
+          <div class="stat">
+            <div class="stat-label">CPU 使用率</div>
+            <div id="cpu" class="stat-value">--%</div>
           </div>
-          <div class="system-item">
-            <span class="label">内存</span>
-            <span id="memory" class="value">-- / -- GB</span>
+          <div class="stat">
+            <div class="stat-label">内存使用</div>
+            <div id="memory" class="stat-value">-- / -- GB</div>
           </div>
-          <div class="system-item">
-            <span class="label">磁盘</span>
-            <span id="disk" class="value">-- / -- GB</span>
+          <div class="stat">
+            <div class="stat-label">磁盘使用</div>
+            <div id="disk" class="stat-value">-- / -- GB</div>
           </div>
-          <div class="system-item">
-            <span class="label">负载</span>
-            <span id="load" class="value">-- / -- / --</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- 实时网速 -->
-      <section class="card speed-card">
-        <h2>实时网速</h2>
-        <div class="speed-grid">
-          <div class="speed-item">
-            <span class="label">上行</span>
-            <span id="tx-speed" class="value speed-up">-- MB/s</span>
-          </div>
-          <div class="speed-item">
-            <span class="label">下行</span>
-            <span id="rx-speed" class="value speed-down">-- MB/s</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- 流量统计 -->
-      <section class="section-title">流量统计</section>
-
-      <!-- 今日/昨日流量 -->
-      <div class="traffic-row">
-        <div class="card traffic-card">
-          <h3 class="card-title">今日流量 <span id="today-date"></span></h3>
-          <div id="port-traffic-today" class="port-list">
-            <!-- 端口流量列表 -->
-          </div>
-          <div class="port-item total-item">
-            <span class="port-name">total</span>
-            <div class="port-stats">
-              <span class="stat-down" id="today-rx">↓ --</span>
-              <span class="stat-up" id="today-tx">↑ --</span>
-              <span class="stat-total" id="today-total">⇅ --</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="card traffic-card">
-          <h3 class="card-title">昨日流量 <span id="yesterday-date"></span></h3>
-          <div id="port-traffic-yesterday" class="port-list">
-            <!-- 端口流量列表 -->
-          </div>
-          <div class="port-item total-item">
-            <span class="port-name">total</span>
-            <div class="port-stats">
-              <span class="stat-down" id="yesterday-rx">↓ --</span>
-              <span class="stat-up" id="yesterday-tx">↑ --</span>
-              <span class="stat-total" id="yesterday-total">⇅ --</span>
+          <div class="stat">
+            <div class="stat-label">系统负载</div>
+            <div id="load" class="stat-value" style="font-size: 18px">
+              -- / -- / --
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 本月流量统计 -->
-      <section class="card month-card">
-        <h3 class="card-title">本月流量统计</h3>
-        <div id="port-traffic-month" class="month-grid">
-          <!-- 端口月流量 -->
-        </div>
-        <div class="month-divider"></div>
-        <div class="month-total">
-          <span class="label">本月总计</span>
-          <span id="month-total" class="value">-- GB</span>
-        </div>
-      </section>
-
-      <!-- 流量配额 -->
-      <section class="card quota-card">
-        <h3 class="card-title">流量配额</h3>
-        <div class="quota-bar">
-          <div id="quota-fill" class="quota-fill" style="width: 0%"></div>
-        </div>
-        <div class="quota-info">
-          <span class="quota-text">
-            <span id="quota-used">0</span> / <span id="quota-limit">0</span> GB
-            (<span id="quota-percent">0</span>%)
-          </span>
-          <span class="quota-reset"
-            >重置日: 每月 <span id="reset-day">1</span> 号</span
-          >
-        </div>
-      </section>
-
-      <!-- 历史趋势 -->
-      <section class="section-title">历史趋势</section>
-
-      <section class="card chart-card">
-        <div class="chart-header">
-          <h3 class="card-title">近6个月流量对比</h3>
-          <div class="view-toggle">
-            <button id="trend-detail" class="btn btn-sm active">详细</button>
-            <button id="trend-total" class="btn btn-sm btn-secondary">
-              总计
-            </button>
+      <!-- 实时网速 -->
+      <div class="section">
+        <div class="section-title">实时网速</div>
+        <div class="speed-cards">
+          <div class="speed-card-item">
+            <span class="label">上行速度</span>
+            <span id="tx-speed" class="value speed-up">-- MB/s</span>
+          </div>
+          <div class="speed-card-item">
+            <span class="label">下行速度</span>
+            <span id="rx-speed" class="value speed-down">-- MB/s</span>
           </div>
         </div>
-        <div id="trend-container">
-          <canvas id="trend-chart"></canvas>
+      </div>
+
+      <!-- 流量统计 -->
+      <div class="section">
+        <div class="section-title">流量统计</div>
+        <div class="cards">
+          <!-- 今日流量 -->
+          <div class="card">
+            <div class="card-title">今日流量 <span id="today-date"></span></div>
+            <div id="port-traffic-today" class="port-list">
+              <!-- JS 注入端口流量 -->
+            </div>
+            <div class="port-item total-item">
+              <span class="port-name">总计</span>
+              <div class="port-stats">
+                <span class="stat-down" id="today-rx">↓ --</span>
+                <span class="stat-up" id="today-tx">↑ --</span>
+                <span class="stat-total" id="today-total">⇅ --</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 昨日流量 -->
+          <div class="card">
+            <div class="card-title">
+              昨日流量 <span id="yesterday-date"></span>
+            </div>
+            <div id="port-traffic-yesterday" class="port-list">
+              <!-- JS 注入端口流量 -->
+            </div>
+            <div class="port-item total-item">
+              <span class="port-name">总计</span>
+              <div class="port-stats">
+                <span class="stat-down" id="yesterday-rx">↓ --</span>
+                <span class="stat-up" id="yesterday-tx">↑ --</span>
+                <span class="stat-total" id="yesterday-total">⇅ --</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 本月总计 -->
+          <div class="total-box">
+            <div class="card-title">本月流量统计</div>
+            <div class="total-box-inner">
+              <div id="port-traffic-month" class="month-grid">
+                <!-- JS 注入月度分布 -->
+              </div>
+              <div class="month-total-label">本月总流量</div>
+              <div id="month-total" class="month-total-value">-- GB</div>
+            </div>
+
+            <!-- 流量配额 -->
+            <div
+              class="quota-card"
+              style="
+                margin-top: 24px;
+                background: transparent;
+                border: none;
+                padding: 0;
+              "
+            >
+              <div class="quota-bar">
+                <div id="quota-fill" class="quota-fill" style="width: 0%"></div>
+              </div>
+              <div class="quota-info">
+                <span class="quota-text">
+                  已用 <span id="quota-used">0</span> /
+                  <span id="quota-limit">0</span> GB (<span id="quota-percent"
+                    >0</span
+                  >%)
+                </span>
+                <span class="quota-reset"
+                  >重置日: <span id="reset-day">1</span> 号</span
+                >
+              </div>
+            </div>
+          </div>
         </div>
-        <div id="trend-legend" class="chart-legend">
-          <span class="legend-item"
-            ><span class="dot" style="background: #3b82f6"></span>Snell
-            上传</span
-          >
-          <span class="legend-item"
-            ><span class="dot" style="background: #60a5fa"></span>Snell
-            下载</span
-          >
-          <span class="legend-item"
-            ><span class="dot" style="background: #a855f7"></span>VLESS
-            上传</span
-          >
-          <span class="legend-item"
-            ><span class="dot" style="background: #c084fc"></span>VLESS
-            下载</span
-          >
+      </div>
+
+      <!-- 历史趋势 -->
+      <div class="section">
+        <div class="section-title">历史趋势</div>
+        <div class="chart-container">
+          <div class="chart-header">
+            <h3 class="card-title" style="margin: 0">近6个月流量</h3>
+            <div class="view-toggle">
+              <button id="trend-detail" class="btn btn-sm active">详细</button>
+              <button id="trend-total" class="btn btn-sm btn-secondary">
+                总计
+              </button>
+            </div>
+          </div>
+          <div style="height: 250px; position: relative">
+            <canvas id="trend-chart"></canvas>
+          </div>
+          <div id="trend-legend" class="chart-legend"></div>
         </div>
-      </section>
+      </div>
 
       <!-- 延迟监控 -->
-      <section class="section-title">延迟监控</section>
-
-      <section class="card chart-card">
-        <div class="latency-controls">
-          <div class="date-range">
+      <div class="section">
+        <div class="section-title">延迟监控</div>
+        <div class="chart-container">
+          <div class="latency-controls">
             <input type="date" id="latency-start" />
-            <span class="range-sep">至</span>
+            <span style="color: var(--muted)">至</span>
             <input type="date" id="latency-end" />
             <button id="latency-query" class="btn">查询</button>
             <button id="latency-reset" class="btn btn-secondary">重置</button>
+            <span
+              id="latency-granularity"
+              style="font-size: 12px; color: var(--muted); margin-left: auto"
+            ></span>
           </div>
-          <span id="latency-granularity" class="granularity"></span>
+
+          <div id="latency-stats" class="latency-stats"></div>
+
+          <div style="height: 220px; position: relative">
+            <canvas id="latency-chart"></canvas>
+          </div>
         </div>
-        <div id="latency-stats" class="latency-stats"></div>
-        <div id="latency-container">
-          <canvas id="latency-chart"></canvas>
-        </div>
-      </section>
+      </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
