@@ -9,6 +9,7 @@ import (
 	"github.com/hh/heliox-mon/internal/api"
 	"github.com/hh/heliox-mon/internal/collector"
 	"github.com/hh/heliox-mon/internal/config"
+	"github.com/hh/heliox-mon/internal/notifier"
 	"github.com/hh/heliox-mon/internal/storage"
 )
 
@@ -26,8 +27,11 @@ func main() {
 	}
 	defer db.Close()
 
+	// 初始化通知器
+	ntf := notifier.New(cfg, db)
+
 	// 初始化采集器
-	col := collector.New(cfg, db)
+	col := collector.New(cfg, db, ntf)
 	col.Start()
 	defer col.Stop()
 

@@ -22,10 +22,24 @@ func (c *Collector) doCollectTraffic() {
 		return
 	}
 
-	// 保存快照
+	// 检测计数器重置（当前值 < 上次值表示重启或溢出）
+	if c.lastTotalTx > 0 && tx < c.lastTotalTx {
+		// 计数器重置，累加上次值到偏移量
+		c.totalTxOffset += c.lastTotalTx
+		log.Printf("检测到 TX 计数器重置，累加偏移量: %d", c.lastTotalTx)
+	}
+	if c.lastTotalRx > 0 && rx < c.lastTotalRx {
+		c.totalRxOffset += c.lastTotalRx
+		log.Printf("检测到 RX 计数器重置，累加偏移量: %d", c.lastTotalRx)
+	}
+
+	// 保存快照（加上偏移量）
+	adjustedTx := tx + c.totalTxOffset
+	adjustedRx := rx + c.totalRxOffset
+
 	_, err = c.db.Exec(
 		"INSERT INTO traffic_snapshots (ts, iface, tx_bytes, rx_bytes) VALUES (?, 'total', ?, ?)",
-		now, tx, rx,
+		now, adjustedTx, adjustedRx,
 	)
 	if err != nil {
 		log.Printf("保存流量快照失败: %v", err)
@@ -102,9 +116,25 @@ func (c *Collector) collectPortTraffic(now int64) {
 			continue
 		}
 
+		// 检测计数器重置
+		lastTx := c.lastPortTx[port]
+		lastRx := c.lastPortRx[port]
+		if lastTx > 0 && tx < lastTx {
+			c.portTxOffset[port] += lastTx
+			log.Printf("检测到端口 %d TX 计数器重置，累加偏移量: %d", port, lastTx)
+		}
+		if lastRx > 0 && rx < lastRx {
+			c.portRxOffset[port] += lastRx
+			log.Printf("检测到端口 %d RX 计数器重置，累加偏移量: %d", port, lastRx)
+		}
+
+		// 保存快照（加上偏移量）
+		adjustedTx := tx + c.portTxOffset[port]
+		adjustedRx := rx + c.portRxOffset[port]
+
 		_, err = c.db.Exec(
 			"INSERT INTO port_traffic_snapshots (ts, port, tx_bytes, rx_bytes) VALUES (?, ?, ?, ?)",
-			now, port, tx, rx,
+			now, port, adjustedTx, adjustedRx,
 		)
 		if err != nil {
 			log.Printf("保存端口 %d 流量快照失败: %v", port, err)

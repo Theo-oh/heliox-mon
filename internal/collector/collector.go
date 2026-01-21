@@ -12,10 +12,11 @@ import (
 
 // Collector 数据采集器
 type Collector struct {
-	cfg  *config.Config
-	db   *storage.DB
-	stop chan struct{}
-	wg   sync.WaitGroup
+	cfg      *config.Config
+	db       *storage.DB
+	notifier Notifier
+	stop     chan struct{}
+	wg       sync.WaitGroup
 
 	// 上次采集的流量数据（用于计算增量）
 	lastTotalTx uint64
@@ -23,19 +24,33 @@ type Collector struct {
 	lastPortTx  map[int]uint64
 	lastPortRx  map[int]uint64
 
+	// 计数器重置偏移量（用于处理重启/溢出）
+	totalTxOffset uint64
+	totalRxOffset uint64
+	portTxOffset  map[int]uint64
+	portRxOffset  map[int]uint64
+
 	// CPU 采样（用于计算实时使用率）
 	lastCPUTotal uint64
 	lastCPUIdle  uint64
 }
 
+// Notifier 通知器接口
+type Notifier interface {
+	SendTrafficAlert(usedGB, limitGB int, percent float64, resetDate string, daysLeft int) error
+}
+
 // New 创建采集器
-func New(cfg *config.Config, db *storage.DB) *Collector {
+func New(cfg *config.Config, db *storage.DB, notifier Notifier) *Collector {
 	return &Collector{
-		cfg:        cfg,
-		db:         db,
-		stop:       make(chan struct{}),
-		lastPortTx: make(map[int]uint64),
-		lastPortRx: make(map[int]uint64),
+		cfg:          cfg,
+		db:           db,
+		notifier:     notifier,
+		stop:         make(chan struct{}),
+		lastPortTx:   make(map[int]uint64),
+		lastPortRx:   make(map[int]uint64),
+		portTxOffset: make(map[int]uint64),
+		portRxOffset: make(map[int]uint64),
 	}
 }
 

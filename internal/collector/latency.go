@@ -96,6 +96,9 @@ func (c *Collector) doDailyAggregation() {
 
 	// 清理过期快照
 	c.cleanupOldSnapshots()
+
+	// 检查配额并发送通知
+	c.checkQuotaAndNotify(now)
 }
 
 // aggregateDailyTraffic 汇总每日整体流量
@@ -162,4 +165,67 @@ func (c *Collector) cleanupOldSnapshots() {
 	cutoff := time.Now().Add(-24 * time.Hour).Unix()
 	_, _ = c.db.Exec("DELETE FROM traffic_snapshots WHERE ts < ?", cutoff)
 	_, _ = c.db.Exec("DELETE FROM port_traffic_snapshots WHERE ts < ?", cutoff)
+}
+
+// checkQuotaAndNotify 检查流量配额并发送通知
+func (c *Collector) checkQuotaAndNotify(now time.Time) {
+	if c.notifier == nil || c.cfg.MonthlyLimitGB <= 0 {
+		return
+	}
+
+	// 获取计费周期
+	billingStart, billingEnd := c.getBillingCycleDates(now)
+
+	// 查询本月已用流量
+	var usedBytes int64
+	row := c.db.QueryRow(`
+		SELECT COALESCE(SUM(tx_bytes + rx_bytes), 0)
+		FROM traffic_daily
+		WHERE date >= ? AND iface = 'total'
+	`, billingStart.Format("2006-01-02"))
+	row.Scan(&usedBytes)
+
+	// 根据 billing_mode 计算
+	if c.cfg.BillingMode == "tx_only" || c.cfg.BillingMode == "rx_only" {
+		row = c.db.QueryRow(`
+			SELECT COALESCE(SUM(tx_bytes), 0), COALESCE(SUM(rx_bytes), 0)
+			FROM traffic_daily
+			WHERE date >= ? AND iface = 'total'
+		`, billingStart.Format("2006-01-02"))
+		var tx, rx int64
+		row.Scan(&tx, &rx)
+		if c.cfg.BillingMode == "tx_only" {
+			usedBytes = tx
+		} else {
+			usedBytes = rx
+		}
+	}
+
+	usedGB := int(usedBytes / 1024 / 1024 / 1024)
+	limitGB := c.cfg.MonthlyLimitGB
+	percent := float64(usedGB) / float64(limitGB) * 100
+	daysLeft := int(billingEnd.Sub(now).Hours() / 24)
+
+	// 80% 和 90% 阈值发送通知
+	if percent >= 80 {
+		resetDate := billingEnd.Format("2006-01-02")
+		if err := c.notifier.SendTrafficAlert(usedGB, limitGB, percent, resetDate, daysLeft); err != nil {
+			log.Printf("发送流量预警失败: %v", err)
+		}
+	}
+}
+
+// getBillingCycleDates 计算计费周期
+func (c *Collector) getBillingCycleDates(now time.Time) (start, end time.Time) {
+	day := c.cfg.ResetDay
+	tz := c.cfg.Timezone
+
+	if now.Day() >= day {
+		start = time.Date(now.Year(), now.Month(), day, 0, 0, 0, 0, tz)
+		end = time.Date(now.Year(), now.Month()+1, day, 0, 0, 0, 0, tz).Add(-time.Second)
+	} else {
+		start = time.Date(now.Year(), now.Month()-1, day, 0, 0, 0, 0, tz)
+		end = time.Date(now.Year(), now.Month(), day, 0, 0, 0, 0, tz).Add(-time.Second)
+	}
+	return
 }
