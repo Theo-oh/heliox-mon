@@ -46,17 +46,35 @@ body {
   max-width: 1100px;
   background: var(--wrapper-bg);
   border-radius: var(--radius-lg);
-  padding: 50px;
+  padding: 40px;
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--card-border);
   backdrop-filter: blur(40px);
   -webkit-backdrop-filter: blur(40px);
+  position: relative;
+}
+
+.top-bar {
+  position: absolute;
+  top: 30px;
+  right: 30px;
+}
+
+.server-pill {
+  background: var(--item-bg);
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  color: var(--muted);
+  border: 1px solid var(--card-border);
+  font-weight: 500;
 }
 
 /* Hero Header */
 .hero {
   text-align: center;
-  margin-bottom: 60px;
+  margin-bottom: 50px;
+  margin-top: 20px;
 }
 
 .hero h1 {
@@ -135,12 +153,13 @@ body {
 .speed-item {
   background: var(--item-bg);
   border-radius: var(--radius-sm);
-  padding: 18px;
-  margin-bottom: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
   border: 1px solid rgba(255, 255, 255, 0.04);
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
 }
 
 .user-row:last-child,
@@ -150,27 +169,41 @@ body {
 
 .port-name,
 .user-name {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--muted);
   font-weight: 500;
+  width: 100%;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .port-stats,
 .user-stats {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: 1.2fr 1.2fr 1.5fr;
+  width: 100%;
   font-size: 13px;
   color: var(--muted);
   font-family: monospace, sans-serif;
+  align-items: center;
+}
+
+/* Alignments */
+.stats-group-up {
+  text-align: left;
+}
+.stats-group-down {
+  text-align: center;
+}
+.stats-group-total {
+  text-align: right;
 }
 
 .port-stats strong,
 .stat-total {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text);
-  margin-left: 8px;
 }
 
 .stat-up {
@@ -249,16 +282,20 @@ body {
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 20px;
 }
 
 .stat {
   background: var(--card-bg);
   border-radius: var(--radius-md);
-  padding: 24px;
+  padding: 24px 20px;
   text-align: center;
   border: 1px solid var(--card-border);
   transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 110px;
 }
 
 .stat:hover {
@@ -267,18 +304,19 @@ body {
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
 }
 
 .stat-value {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 
 /* Speed Grid (Realtime) */

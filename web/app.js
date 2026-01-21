@@ -22,22 +22,23 @@ async function fetchStats() {
     const res = await fetch("/api/stats");
     const data = await res.json();
 
-    document.getElementById("server-name").textContent = data.server_name;
+    document.title = data.server_name;
+    const badge = document.getElementById("server-name"); 
+    if(badge) badge.textContent = data.server_name;
     document.getElementById("current-time").textContent = data.current_time;
 
     // 流量数据
-    document.getElementById("today-tx").textContent =
-      "↑ " + formatBytes(data.today.tx);
-    document.getElementById("today-rx").textContent =
-      "↓ " + formatBytes(data.today.rx);
-    document.getElementById("today-total").textContent =
-      "⇅ " + formatBytes(data.today.tx + data.today.rx);
-    document.getElementById("yesterday-tx").textContent =
-      "↑ " + formatBytes(data.yesterday.tx);
-    document.getElementById("yesterday-rx").textContent =
-      "↓ " + formatBytes(data.yesterday.rx);
-    document.getElementById("yesterday-total").textContent =
-      "⇅ " + formatBytes(data.yesterday.tx + data.yesterday.rx);
+    document.getElementById("today-total").parentElement.innerHTML = `
+        <div class="stats-group-up"><span class="stat-up">↑ ${formatBytes(data.today.tx)}</span></div>
+        <div class="stats-group-down"><span class="stat-down">↓ ${formatBytes(data.today.rx)}</span></div>
+        <div class="stats-group-total"><span class="stat-total">⇅ ${formatBytes(data.today.tx + data.today.rx)}</span></div>
+    `;
+
+    document.getElementById("yesterday-total").parentElement.innerHTML = `
+        <div class="stats-group-up"><span class="stat-up">↑ ${formatBytes(data.yesterday.tx)}</span></div>
+        <div class="stats-group-down"><span class="stat-down">↓ ${formatBytes(data.yesterday.rx)}</span></div>
+        <div class="stats-group-total"><span class="stat-total">⇅ ${formatBytes(data.yesterday.tx + data.yesterday.rx)}</span></div>
+    `;
 
     // 本月总计
     const monthTotalBytes = data.this_month.tx + data.this_month.rx;
@@ -113,13 +114,20 @@ function renderPortList(containerId, ports, period) {
     .map((p) => {
       const d = p[period];
       const cssClass = p.name.toLowerCase();
+      // 使用 Grid 布局：第一行名称，第二行三组数据
       return `
       <div class="port-item ${cssClass}">
-        <span class="port-name">${p.name}</span>
+        <span class="port-name">${p.name.toLowerCase()}</span>
         <div class="port-stats">
-          <span class="stat-down">↓ ${formatBytes(d.rx)}</span>
-          <span class="stat-up">↑ ${formatBytes(d.tx)}</span>
-          <span class="stat-total">⇅ ${formatBytes(d.total)}</span>
+          <div class="stats-group-up">
+            <span class="stat-up">↑ ${formatBytes(d.tx)}</span>
+          </div>
+          <div class="stats-group-down">
+            <span class="stat-down">↓ ${formatBytes(d.rx)}</span>
+          </div>
+          <div class="stats-group-total">
+            <span class="stat-total">⇅ ${formatBytes(d.total)}</span>
+          </div>
         </div>
       </div>
     `;
