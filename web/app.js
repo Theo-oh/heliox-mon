@@ -162,6 +162,24 @@ function renderPortMonthGrid(containerId, ports) {
 async function fetchSystem() {
   try {
     const res = await fetch("/api/system");
+    
+    // 检查 HTTP 状态
+    if (!res.ok) {
+      console.error(`API 请求失败: ${res.status} ${res.statusText}`);
+      if (res.status === 404) {
+        console.error("服务端 API 不存在，请检查 heliox-mon 服务是否正常运行");
+      }
+      return;
+    }
+    
+    // 检查 Content-Type
+    const contentType = res.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      const text = await res.text();
+      console.error("服务端返回非 JSON 数据:", text);
+      return;
+    }
+    
     const data = await res.json();
 
     document.getElementById("cpu").textContent =
