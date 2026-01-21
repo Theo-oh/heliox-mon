@@ -21,22 +21,20 @@ deps:
 dev:
 	go build -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/heliox-mon
 
-# 生产构建（Linux）
+# 生产构建（Linux AMD64）
 build:
 	@mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/heliox-mon
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/heliox-mon
 	@echo "构建完成: $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64"
 
-# 交叉编译（需要交叉编译工具链）
-build-all:
+# 发布构建（同时构建 AMD64 和 ARM64）
+release:
 	@mkdir -p $(BUILD_DIR)
-	@for platform in $(PLATFORMS); do \
-		os=$${platform%/*}; \
-		arch=$${platform#*/}; \
-		output=$(BUILD_DIR)/$(BINARY_NAME)-$$os-$$arch; \
-		echo "构建 $$os/$$arch..."; \
-		CGO_ENABLED=1 GOOS=$$os GOARCH=$$arch go build -ldflags "$(LDFLAGS)" -o $$output ./cmd/heliox-mon; \
-	done
+	@echo "正在构建 Linux/AMD64..."
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/heliox-mon
+	@echo "正在构建 Linux/ARM64..."
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 ./cmd/heliox-mon
+	@echo "发布构建完成: $(BUILD_DIR)"
 
 # 清理
 clean:

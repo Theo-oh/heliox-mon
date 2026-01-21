@@ -10,7 +10,15 @@ permissions:
 
 jobs:
   build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,20 +26,35 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.24"
 
-      - name: Build Linux AMD64
+      - name: Build
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o heliox-mon-linux-amd64 ./cmd/heliox-mon
+          go build -ldflags="-s -w" -o heliox-mon-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/heliox-mon
 
-      - name: Build Linux ARM64
-        run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o heliox-mon-linux-arm64 ./cmd/heliox-mon
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: heliox-mon-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: heliox-mon-${{ matrix.goos }}-${{ matrix.goarch }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: heliox-mon-*
+          merge-multiple: true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            heliox-mon-linux-amd64
-            heliox-mon-linux-arm64
+          files: artifacts/*
           generate_release_notes: true

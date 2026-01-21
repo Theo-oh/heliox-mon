@@ -28,17 +28,23 @@ async function fetchStats() {
     document.getElementById("current-time").textContent = data.current_time;
 
     // 流量数据
-    document.getElementById("today-total").parentElement.innerHTML = `
+    const todayTotalEl = document.getElementById("today-total");
+    if (todayTotalEl && todayTotalEl.parentElement) {
+      todayTotalEl.parentElement.innerHTML = `
         <div class="stats-group-up"><span class="stat-up">↑ ${formatBytes(data.today.tx)}</span></div>
         <div class="stats-group-down"><span class="stat-down">↓ ${formatBytes(data.today.rx)}</span></div>
         <div class="stats-group-total"><span class="stat-total">⇅ ${formatBytes(data.today.tx + data.today.rx)}</span></div>
     `;
+    }
 
-    document.getElementById("yesterday-total").parentElement.innerHTML = `
+    const yesterdayTotalEl = document.getElementById("yesterday-total");
+    if (yesterdayTotalEl && yesterdayTotalEl.parentElement) {
+      yesterdayTotalEl.parentElement.innerHTML = `
         <div class="stats-group-up"><span class="stat-up">↑ ${formatBytes(data.yesterday.tx)}</span></div>
         <div class="stats-group-down"><span class="stat-down">↓ ${formatBytes(data.yesterday.rx)}</span></div>
         <div class="stats-group-total"><span class="stat-total">⇅ ${formatBytes(data.yesterday.tx + data.yesterday.rx)}</span></div>
     `;
+    }
 
     // 本月总计
     const monthTotalBytes = data.this_month.tx + data.this_month.rx;
@@ -73,10 +79,8 @@ async function fetchPortTraffic() {
   try {
     const res = await fetch("/api/traffic/ports");
     const data = await res.json();
-    console.log("端口流量 API 返回:", data);
 
     if (!data.ports || data.ports.length === 0) {
-      console.log("无端口配置或数据");
       // 显示提示信息
       const todayEl = document.getElementById("port-traffic-today");
       if (todayEl)
@@ -203,6 +207,9 @@ let latencyChart = null;
 let latencyData = null;
 let latencyZoom = { start: 0, end: 100 };
 let latencyRange = null;
+let latencyStatsRaf = null;
+let latencyLossSeries = [];
+const latencyLossThreshold = 1.0;
 const latencyColors = [
   { border: "#8FB0B8", bg: "rgba(143, 176, 184, 0.16)" }, // Muted teal
   { border: "#9BB59B", bg: "rgba(155, 181, 155, 0.16)" }, // Muted green
@@ -210,6 +217,7 @@ const latencyColors = [
   { border: "#C1A3C8", bg: "rgba(193, 163, 200, 0.16)" }, // Muted purple
   { border: "#C4A098", bg: "rgba(196, 160, 152, 0.16)" }, // Muted red
 ];
+const latencyLossColor = { border: "#C7A3A0", bg: "rgba(199, 163, 160, 0.12)" };
 
 // 延迟查询参数
 let latencyStartDate = null;
@@ -305,7 +313,7 @@ async function fetchLatency(start = null, end = null) {
     }
 
     renderLatencyChart();
-    renderLatencyStats();
+    scheduleLatencyStatsRender();
   } catch (e) {
     console.error("获取延迟数据失败:", e);
   }
@@ -338,7 +346,7 @@ function renderFilterCheckboxes(targets) {
                 activeTags.delete(t.tag);
             }
             renderLatencyChart();
-            renderLatencyStats();
+            scheduleLatencyStatsRender();
         });
 
         label.appendChild(input);
@@ -353,12 +361,16 @@ function renderLatencyChart() {
 
   const showMax = document.getElementById("show-max")?.checked ?? false;
   const showAvg = document.getElementById("show-avg")?.checked ?? false;
+  const showLoss = document.getElementById("show-loss")?.checked ?? false;
 
   const chartEl = document.getElementById("latency-chart");
   if (!chartEl || typeof echarts === "undefined") return;
 
   if (!latencyChart) {
-    latencyChart = echarts.init(chartEl, null, { renderer: "canvas" });
+    latencyChart = echarts.init(chartEl, null, {
+      renderer: "canvas",
+      useDirtyRect: true,
+    });
     window.addEventListener("resize", () => {
       if (latencyChart) latencyChart.resize();
     });
@@ -399,53 +411,62 @@ function renderLatencyChart() {
           ]),
         },
         emphasis: { focus: "series" },
-        markLine: (() => {
-          const lines = [];
-          if (showAvg && avg > 0) {
-            lines.push({
-              yAxis: avg,
-              name: "平均",
-              lineStyle: { type: "dashed", color: color.border, opacity: 0.65 },
+        markLine:
+          showAvg && avg > 0
+            ? {
+                symbol: "none",
+                lineStyle: { type: "dashed", color: color.border, opacity: 0.65 },
+                label: {
+                  color: textColor,
+                  formatter: ({ value }) => `${value.toFixed(1)}ms`,
+                  position: "insideEndTop",
+                },
+                data: [{ yAxis: avg }],
+              }
+            : undefined,
+        markPoint: showMax
+          ? {
+              symbol: "circle",
+              symbolSize: 6,
+              itemStyle: { color: color.border, opacity: 0.85 },
               label: {
                 color: textColor,
-                formatter: ({ value }) => `平均 ${value.toFixed(1)}ms`,
-                position: "end",
+                fontSize: 11,
+                formatter: (param) => {
+                  const v = Array.isArray(param.value)
+                    ? param.value[param.value.length - 1]
+                    : param.value;
+                  if (v === null || v === undefined || Number.isNaN(v)) return "";
+                  return `${Number(v).toFixed(1)}ms`;
+                },
+                position: "top",
+                distance: 6,
               },
-            });
-          }
-          if (showMax && stats.max != null && stats.max > 0) {
-            lines.push({
-              yAxis: stats.max,
-              name: "最大",
-              lineStyle: { type: "solid", color: color.border, opacity: 0.55 },
-              label: {
-                color: textColor,
-                formatter: ({ value }) => `最大 ${value.toFixed(1)}ms`,
-                position: "end",
-              },
-            });
-          }
-          if (showMax && stats.min != null) {
-            lines.push({
-              yAxis: stats.min,
-              name: "最小",
-              lineStyle: { type: "solid", color: color.border, opacity: 0.45 },
-              label: {
-                color: textColor,
-                formatter: ({ value }) => `最小 ${value.toFixed(1)}ms`,
-                position: "end",
-              },
-            });
-          }
-          if (!lines.length) return undefined;
-          return {
-            symbol: "none",
-            label: { show: true },
-            data: lines,
-          };
-        })(),
+              data: [{ type: "max" }, { type: "min" }],
+            }
+          : undefined,
       };
     });
+
+  latencyLossSeries = buildLossSeries(latencyData.targets);
+  if (showLoss && latencyLossSeries.length) {
+    series.push({
+      name: "丢包率",
+      type: "line",
+      yAxisIndex: 1,
+      smooth: true,
+      showSymbol: false,
+      data: latencyLossSeries.map((p) => [p.ts, p.loss]),
+      lineStyle: { color: latencyLossColor.border, width: 1.5 },
+      areaStyle: { color: latencyLossColor.bg },
+      emphasis: { focus: "series" },
+      markArea: {
+        silent: true,
+        itemStyle: { color: "rgba(255, 99, 71, 0.08)" },
+        data: buildLossMarkAreas(latencyLossSeries, latencyLossThreshold),
+      },
+    });
+  }
 
   latencyRange = getLatencyRange(series);
   const zoomStart = latencyZoom.start ?? 0;
@@ -463,10 +484,16 @@ function renderLatencyChart() {
       formatter: (params) => {
         const time = new Date(params[0].value[0]).toLocaleString("zh-CN");
         const rows = params
-          .map(
-            (p) =>
-              `<span style=\"display:inline-block;margin-right:6px;width:8px;height:8px;border-radius:50%;background:${p.color}\"></span>${p.seriesName}: ${p.value[1].toFixed(1)} ms`,
-          )
+          .map((p) => {
+            const value = Array.isArray(p.value) ? p.value[1] : p.value;
+            const text =
+              value === null || value === undefined
+                ? "丢包"
+                : p.seriesName === "丢包率"
+                  ? `${Number(value).toFixed(1)}%`
+                  : `${Number(value).toFixed(1)} ms`;
+            return `<span style=\"display:inline-block;margin-right:6px;width:8px;height:8px;border-radius:50%;background:${p.color}\"></span>${p.seriesName}: ${text}`;
+          })
           .join("<br/>");
         return `${time}<br/>${rows}`;
       },
@@ -477,12 +504,22 @@ function renderLatencyChart() {
       axisLabel: { color: mutedColor },
       splitLine: { show: false },
     },
-    yAxis: {
-      type: "value",
-      axisLine: { lineStyle: { color: borderColor } },
-      axisLabel: { color: mutedColor, formatter: "{value} ms" },
-      splitLine: { lineStyle: { color: gridLine } },
-    },
+    yAxis: [
+      {
+        type: "value",
+        axisLine: { lineStyle: { color: borderColor } },
+        axisLabel: { color: mutedColor, formatter: "{value} ms" },
+        splitLine: { lineStyle: { color: gridLine } },
+      },
+      {
+        type: "value",
+        axisLine: { lineStyle: { color: borderColor } },
+        axisLabel: { color: mutedColor, formatter: "{value}%" },
+        splitLine: { show: false },
+        min: 0,
+        max: 100,
+      },
+    ],
     dataZoom: [
       {
         type: "inside",
@@ -524,7 +561,7 @@ function renderLatencyChart() {
 
   latencyChart.setOption(option, true);
   bindLatencyZoom();
-  renderLatencyStats();
+  scheduleLatencyStatsRender();
 }
 
 function renderLatencyStats() {
@@ -537,6 +574,12 @@ function renderLatencyStats() {
   let max = -Infinity;
   let totalSent = 0;
   let totalLost = 0;
+  const anomalyMinutes = computeLossAnomalyMinutes(
+    latencyLossSeries,
+    range,
+    latencyLossThreshold,
+    latencyData?.granularity,
+  );
 
   const targetCards = latencyData.targets
     .filter((t) => activeTags.has(t.tag))
@@ -593,9 +636,21 @@ function renderLatencyStats() {
         <span class="label">丢包率</span>
         <span class="value">${formatPercent(lossRate)}</span>
       </div>
+      <div class="latency-metric">
+        <span class="label">异常时长</span>
+        <span class="value">${formatDuration(anomalyMinutes)}</span>
+      </div>
     </div>
     <div class="latency-targets">${targetCards}</div>
   `;
+}
+
+function scheduleLatencyStatsRender() {
+  if (latencyStatsRaf) return;
+  latencyStatsRaf = requestAnimationFrame(() => {
+    latencyStatsRaf = null;
+    renderLatencyStats();
+  });
 }
 
 function formatNumber(value) {
@@ -606,6 +661,15 @@ function formatNumber(value) {
 function formatPercent(value) {
   if (value === null || value === undefined || Number.isNaN(value)) return "-";
   return `${value.toFixed(1)}%`;
+}
+
+function formatDuration(minutes) {
+  if (minutes === null || minutes === undefined || Number.isNaN(minutes)) return "-";
+  if (minutes < 1) return "<1m";
+  if (minutes < 60) return `${Math.round(minutes)}m`;
+  const hours = minutes / 60;
+  if (hours < 24) return `${hours.toFixed(1)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
 }
 
 function getLatencyRange(series) {
@@ -622,6 +686,54 @@ function getLatencyRange(series) {
   return { min, max };
 }
 
+function buildLossSeries(targets) {
+  const map = new Map();
+  targets
+    .filter((t) => activeTags.has(t.tag))
+    .forEach((t) => {
+      (t.points || []).forEach((p) => {
+        if (!map.has(p.ts)) {
+          map.set(p.ts, { sent: 0, lost: 0 });
+        }
+        const row = map.get(p.ts);
+        row.sent += p.sent || 0;
+        row.lost += p.lost || 0;
+      });
+    });
+
+  const points = Array.from(map.entries())
+    .map(([ts, v]) => ({
+      ts: ts * 1000,
+      loss: v.sent > 0 ? (v.lost / v.sent) * 100 : null,
+    }))
+    .sort((a, b) => a.ts - b.ts);
+
+  return points;
+}
+
+function buildLossMarkAreas(points, threshold) {
+  if (!points.length) return [];
+  const areas = [];
+  let start = null;
+
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const over = p.loss !== null && p.loss >= threshold;
+    if (over && start === null) {
+      start = p.ts;
+    }
+    const isLast = i === points.length - 1;
+    if ((start !== null && !over) || (start !== null && isLast)) {
+      const end = over && isLast ? p.ts : points[i - 1].ts;
+      if (end > start) {
+        areas.push([{ xAxis: start }, { xAxis: end }]);
+      }
+      start = null;
+    }
+  }
+  return areas;
+}
+
 function getZoomRange() {
   if (!latencyRange) return null;
   const span = latencyRange.max - latencyRange.min;
@@ -629,6 +741,29 @@ function getZoomRange() {
   const start = latencyRange.min + (span * latencyZoom.start) / 100;
   const end = latencyRange.min + (span * latencyZoom.end) / 100;
   return { start, end };
+}
+
+function computeLossAnomalyMinutes(points, range, threshold, granularity) {
+  if (!points || points.length === 0) return null;
+  const start = range?.start ?? null;
+  const end = range?.end ?? null;
+  let totalMs = 0;
+  const defaultStep = (granularity || 1) * 60 * 1000;
+
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const ts = p.ts;
+    if (start && ts < start) continue;
+    if (end && ts > end) continue;
+    const over = p.loss !== null && p.loss >= threshold;
+    if (!over) continue;
+
+    const next = points[i + 1];
+    const delta = next ? next.ts - ts : defaultStep;
+    totalMs += Math.max(0, delta);
+  }
+
+  return totalMs / 60000;
 }
 
 function computeTargetStats(points, range) {
@@ -674,7 +809,7 @@ function bindLatencyZoom() {
     const batch = evt?.batch?.[0];
     if (batch && typeof batch.start === "number" && typeof batch.end === "number") {
       latencyZoom = { start: batch.start, end: batch.end };
-      renderLatencyStats();
+      scheduleLatencyStatsRender();
     }
   });
   latencyChart.__zoomBound = true;
@@ -961,6 +1096,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // 显示选项事件监听
   document.getElementById("show-max")?.addEventListener("change", renderLatencyChart);
   document.getElementById("show-avg")?.addEventListener("change", renderLatencyChart);
+  document.getElementById("show-loss")?.addEventListener("change", renderLatencyChart);
 
   // 重置按钮
   if (latencyResetBtn) {

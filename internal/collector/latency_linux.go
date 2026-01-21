@@ -69,7 +69,6 @@ func (c *Collector) pingMulti(target string, count int, timeout time.Duration, g
 		return nil, count
 	}
 
-	identifier := os.Getpid() & 0xffff
 	rtts := make([]time.Duration, 0, count)
 	lost := 0
 
@@ -79,7 +78,7 @@ func (c *Collector) pingMulti(target string, count int, timeout time.Duration, g
 			Type: ipv4.ICMPTypeEcho,
 			Code: 0,
 			Body: &icmp.Echo{
-				ID:   identifier,
+				ID:   os.Getpid() & 0xffff,
 				Seq:  seq,
 				Data: []byte("HELIOX"),
 			},
@@ -103,9 +102,7 @@ func (c *Collector) pingMulti(target string, count int, timeout time.Duration, g
 			lost++
 		} else {
 			msg, err := icmp.ParseMessage(1, reply[:n])
-			if err != nil {
-				lost++
-			} else if echo, ok := msg.Body.(*icmp.Echo); !ok || echo.ID != identifier || echo.Seq != seq {
+			if err != nil || msg.Type != ipv4.ICMPTypeEchoReply {
 				lost++
 			} else {
 				rtts = append(rtts, time.Since(start))
