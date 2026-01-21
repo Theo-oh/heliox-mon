@@ -73,6 +73,7 @@ uninstall  # 卸载
 | -------------------- | -------------- | --------------------------------- |
 | `HELIOX_MON_PASS`    | 密码           | 自动生成                          |
 | `SERVER_NAME`        | 服务器标识     | 主机名                            |
+| `HELIOX_MON_TZ`      | 时区           | Asia/Shanghai                    |
 | `MONTHLY_LIMIT_GB`   | 月流量限额(GB) | 1000                              |
 | `BILLING_MODE`       | 计费模式       | bidirectional                     |
 | `RESET_DAY`          | 计费周期重置日 | 1 (每月1号)                       |
@@ -123,6 +124,7 @@ sudo ./deploy.sh monitor update
 
 - 创建 `HELIOX_STATS` 链统计进出流量
 - 按端口分别记录上行（TX）和下行（RX）
+- 同时统计 TCP/UDP
 - 每秒采集快照，每分钟汇总到日统计
 
 ### 启用步骤

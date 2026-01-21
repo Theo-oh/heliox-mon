@@ -24,13 +24,12 @@ func New(cfg *config.Config, db *storage.DB) *Notifier {
 }
 
 // SendTrafficAlert 发送流量报警
-func (n *Notifier) SendTrafficAlert(usedGB, limitGB int, percent float64, resetDate string, daysLeft int) error {
+func (n *Notifier) SendTrafficAlert(usedGB, limitGB int, percent float64, resetDate string, daysLeft int, threshold int) error {
 	if n.cfg.TelegramBotToken == "" || n.cfg.TelegramChatID == "" {
 		return nil
 	}
 
 	// 检查冷却期（同级别 24 小时内不重复发送）
-	threshold := int(percent / 10 * 10) // 向下取整到 10 的倍数
 	cutoff := time.Now().Add(-24 * time.Hour).Unix()
 	var count int
 	n.db.QueryRow("SELECT COUNT(*) FROM alert_records WHERE threshold = ? AND ts > ?", threshold, cutoff).Scan(&count)

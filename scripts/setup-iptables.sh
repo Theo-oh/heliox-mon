@@ -49,6 +49,8 @@ $IPTABLES -I OUTPUT -j HELIOX_STATS
 if [ "$SNELL_PORT" != "0" ]; then
     $IPTABLES -A HELIOX_STATS -p tcp --sport $SNELL_PORT  # TX (服务器发送)
     $IPTABLES -A HELIOX_STATS -p tcp --dport $SNELL_PORT  # RX (服务器接收)
+    $IPTABLES -A HELIOX_STATS -p udp --sport $SNELL_PORT  # TX (UDP)
+    $IPTABLES -A HELIOX_STATS -p udp --dport $SNELL_PORT  # RX (UDP)
     echo "✓ Snell ($SNELL_PORT) 规则已添加"
 fi
 
@@ -56,6 +58,8 @@ fi
 if [ "$VLESS_PORT" != "0" ]; then
     $IPTABLES -A HELIOX_STATS -p tcp --sport $VLESS_PORT  # TX
     $IPTABLES -A HELIOX_STATS -p tcp --dport $VLESS_PORT  # RX
+    $IPTABLES -A HELIOX_STATS -p udp --sport $VLESS_PORT  # TX (UDP)
+    $IPTABLES -A HELIOX_STATS -p udp --dport $VLESS_PORT  # RX (UDP)
     echo "✓ VLESS ($VLESS_PORT) 规则已添加"
 fi
 

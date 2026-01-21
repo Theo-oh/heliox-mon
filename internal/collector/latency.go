@@ -2,7 +2,9 @@ package collector
 
 import (
 	"log"
+	"math"
 	"net"
+	"sort"
 	"time"
 
 	"golang.org/x/net/icmp"
@@ -101,15 +103,29 @@ func (c *Collector) doDailyAggregation() {
 	c.checkQuotaAndNotify(now)
 }
 
+func (c *Collector) dayBounds(date string) (int64, int64, bool) {
+	start, err := time.ParseInLocation("2006-01-02", date, c.cfg.Timezone)
+	if err != nil {
+		return 0, 0, false
+	}
+	end := start.Add(24*time.Hour - time.Second)
+	return start.Unix(), end.Unix(), true
+}
+
 // aggregateDailyTraffic 汇总每日整体流量
 func (c *Collector) aggregateDailyTraffic(date string) {
+	startTs, endTs, ok := c.dayBounds(date)
+	if !ok {
+		return
+	}
+
 	// 获取当天的流量增量
 	row := c.db.QueryRow(`
 		SELECT MAX(tx_bytes) - MIN(tx_bytes), MAX(rx_bytes) - MIN(rx_bytes)
 		FROM traffic_snapshots
 		WHERE iface = 'total'
-		  AND date(ts, 'unixepoch', '+8 hours') = ?
-	`, date)
+		  AND ts >= ? AND ts <= ?
+	`, startTs, endTs)
 
 	var tx, rx int64
 	if err := row.Scan(&tx, &rx); err != nil || (tx <= 0 && rx <= 0) {
@@ -126,6 +142,11 @@ func (c *Collector) aggregateDailyTraffic(date string) {
 
 // aggregatePortDailyTraffic 汇总端口流量
 func (c *Collector) aggregatePortDailyTraffic(date string) {
+	startTs, endTs, ok := c.dayBounds(date)
+	if !ok {
+		return
+	}
+
 	ports := []int{c.cfg.SnellPort, c.cfg.VlessPort}
 	for _, port := range ports {
 		if port == 0 {
@@ -136,8 +157,8 @@ func (c *Collector) aggregatePortDailyTraffic(date string) {
 			SELECT MAX(tx_bytes) - MIN(tx_bytes), MAX(rx_bytes) - MIN(rx_bytes)
 			FROM port_traffic_snapshots
 			WHERE port = ?
-			  AND date(ts, 'unixepoch', '+8 hours') = ?
-		`, port, date)
+			  AND ts >= ? AND ts <= ?
+		`, port, startTs, endTs)
 
 		var tx, rx int64
 		if err := row.Scan(&tx, &rx); err != nil || (tx <= 0 && rx <= 0) {
@@ -176,41 +197,52 @@ func (c *Collector) checkQuotaAndNotify(now time.Time) {
 	// 获取计费周期
 	billingStart, billingEnd := c.getBillingCycleDates(now)
 
-	// 查询本月已用流量
-	var usedBytes int64
+	// 查询本月已用流量（按 tx/rx 分开计算）
+	var tx, rx int64
 	row := c.db.QueryRow(`
-		SELECT COALESCE(SUM(tx_bytes + rx_bytes), 0)
+		SELECT COALESCE(SUM(tx_bytes), 0), COALESCE(SUM(rx_bytes), 0)
 		FROM traffic_daily
 		WHERE date >= ? AND iface = 'total'
 	`, billingStart.Format("2006-01-02"))
-	row.Scan(&usedBytes)
+	row.Scan(&tx, &rx)
 
-	// 根据 billing_mode 计算
-	if c.cfg.BillingMode == "tx_only" || c.cfg.BillingMode == "rx_only" {
-		row = c.db.QueryRow(`
-			SELECT COALESCE(SUM(tx_bytes), 0), COALESCE(SUM(rx_bytes), 0)
-			FROM traffic_daily
-			WHERE date >= ? AND iface = 'total'
-		`, billingStart.Format("2006-01-02"))
-		var tx, rx int64
-		row.Scan(&tx, &rx)
-		if c.cfg.BillingMode == "tx_only" {
+	var usedBytes int64
+	switch c.cfg.BillingMode {
+	case "tx_only":
+		usedBytes = tx
+	case "rx_only":
+		usedBytes = rx
+	case "max_value":
+		if tx > rx {
 			usedBytes = tx
 		} else {
 			usedBytes = rx
 		}
+	default: // bidirectional
+		usedBytes = tx + rx
 	}
 
-	usedGB := int(usedBytes / 1024 / 1024 / 1024)
 	limitGB := c.cfg.MonthlyLimitGB
-	percent := float64(usedGB) / float64(limitGB) * 100
+	limitBytes := int64(limitGB) * 1024 * 1024 * 1024
+	if limitBytes <= 0 {
+		return
+	}
+
+	percent := float64(usedBytes) / float64(limitBytes) * 100
+	usedGB := int(math.Round(float64(usedBytes) / float64(1024*1024*1024)))
 	daysLeft := int(billingEnd.Sub(now).Hours() / 24)
 
-	// 80% 和 90% 阈值发送通知
-	if percent >= 80 {
-		resetDate := billingEnd.Format("2006-01-02")
-		if err := c.notifier.SendTrafficAlert(usedGB, limitGB, percent, resetDate, daysLeft); err != nil {
-			log.Printf("发送流量预警失败: %v", err)
+	thresholds := append([]int(nil), c.cfg.AlertThresholds...)
+	sort.Ints(thresholds)
+	for _, threshold := range thresholds {
+		if threshold <= 0 {
+			continue
+		}
+		if percent >= float64(threshold) {
+			resetDate := billingEnd.Format("2006-01-02")
+			if err := c.notifier.SendTrafficAlert(usedGB, limitGB, percent, resetDate, daysLeft, threshold); err != nil {
+				log.Printf("发送流量预警失败: %v", err)
+			}
 		}
 	}
 }

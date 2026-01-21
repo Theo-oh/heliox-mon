@@ -54,6 +54,59 @@ func (c *Collector) doCollectTraffic() {
 	}
 }
 
+// initTrafficOffsets 初始化计数器偏移量（用于服务重启后的连续性）
+func (c *Collector) initTrafficOffsets() {
+	// 总流量偏移
+	rawTx, rawRx, err := c.readProcNetDev()
+	if err == nil {
+		c.lastTotalTx = rawTx
+		c.lastTotalRx = rawRx
+
+		var lastTx, lastRx int64
+		row := c.db.QueryRow(
+			"SELECT tx_bytes, rx_bytes FROM traffic_snapshots WHERE iface = 'total' ORDER BY ts DESC LIMIT 1",
+		)
+		if err := row.Scan(&lastTx, &lastRx); err == nil {
+			if lastTx > 0 && uint64(lastTx) > rawTx {
+				c.totalTxOffset = uint64(lastTx) - rawTx
+			}
+			if lastRx > 0 && uint64(lastRx) > rawRx {
+				c.totalRxOffset = uint64(lastRx) - rawRx
+			}
+		}
+	}
+
+	// 端口流量偏移
+	ports := []int{c.cfg.SnellPort, c.cfg.VlessPort}
+	for _, port := range ports {
+		if port == 0 {
+			continue
+		}
+
+		rawPortTx, rawPortRx, err := c.readIptablesPortTraffic(port)
+		if err != nil {
+			continue
+		}
+
+		c.lastPortTx[port] = rawPortTx
+		c.lastPortRx[port] = rawPortRx
+
+		var lastTx, lastRx int64
+		row := c.db.QueryRow(
+			"SELECT tx_bytes, rx_bytes FROM port_traffic_snapshots WHERE port = ? ORDER BY ts DESC LIMIT 1",
+			port,
+		)
+		if err := row.Scan(&lastTx, &lastRx); err == nil {
+			if lastTx > 0 && uint64(lastTx) > rawPortTx {
+				c.portTxOffset[port] = uint64(lastTx) - rawPortTx
+			}
+			if lastRx > 0 && uint64(lastRx) > rawPortRx {
+				c.portRxOffset[port] = uint64(lastRx) - rawPortRx
+			}
+		}
+	}
+}
+
 // readProcNetDev 从 /proc/net/dev 读取网络流量
 func (c *Collector) readProcNetDev() (tx, rx uint64, err error) {
 	file, err := os.Open("/proc/net/dev")
@@ -109,12 +162,23 @@ func (c *Collector) collectPortTraffic(now int64) {
 		ports = append(ports, c.cfg.VlessPort)
 	}
 
+	if len(ports) == 0 {
+		return
+	}
+
+	counters, err := c.readIptablesPortsTraffic(ports)
+	if err != nil {
+		// iptables 规则可能不存在，静默失败
+		return
+	}
+
 	for _, port := range ports {
-		tx, rx, err := c.readIptablesPortTraffic(port)
-		if err != nil {
-			// iptables 规则可能不存在，静默失败
+		stats, ok := counters[port]
+		if !ok || !stats.txOK || !stats.rxOK {
 			continue
 		}
+		tx := stats.tx
+		rx := stats.rx
 
 		// 检测计数器重置
 		lastTx := c.lastPortTx[port]
@@ -145,6 +209,70 @@ func (c *Collector) collectPortTraffic(now int64) {
 	}
 }
 
+type portCounters struct {
+	tx   uint64
+	rx   uint64
+	txOK bool
+	rxOK bool
+}
+
+func (c *Collector) readIptablesPortsTraffic(ports []int) (map[int]portCounters, error) {
+	cmd := exec.Command("iptables", "-L", "HELIOX_STATS", "-n", "-v", "-x")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("iptables 命令执行失败: %w", err)
+	}
+
+	counters := make(map[int]portCounters, len(ports))
+	targets := make(map[int]struct{}, len(ports))
+	for _, port := range ports {
+		if port <= 0 {
+			continue
+		}
+		targets[port] = struct{}{}
+		counters[port] = portCounters{}
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
+		}
+		proto := fields[3]
+		if proto != "tcp" && proto != "udp" {
+			continue
+		}
+		if !strings.Contains(line, "dpt:") && !strings.Contains(line, "spt:") {
+			continue
+		}
+		bytes, err := strconv.ParseUint(fields[1], 10, 64)
+		if err != nil {
+			continue
+		}
+		for port := range targets {
+			if strings.Contains(line, fmt.Sprintf("dpt:%d", port)) {
+				entry := counters[port]
+				entry.rx += bytes
+				entry.rxOK = true
+				counters[port] = entry
+			}
+			if strings.Contains(line, fmt.Sprintf("spt:%d", port)) {
+				entry := counters[port]
+				entry.tx += bytes
+				entry.txOK = true
+				counters[port] = entry
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return counters, nil
+}
+
 // readIptablesPortTraffic 从 iptables 读取端口流量
 // 需要预先设置 iptables 规则：
 // iptables -N HELIOX_STATS
@@ -153,11 +281,15 @@ func (c *Collector) collectPortTraffic(now int64) {
 // iptables -A HELIOX_STATS -p tcp --sport <port>  # TX
 // iptables -A HELIOX_STATS -p tcp --dport <port>  # RX
 func (c *Collector) readIptablesPortTraffic(port int) (tx, rx uint64, err error) {
-	// 读取 INPUT 链（RX = dport）
-	rx, _ = c.getIptablesBytes("HELIOX_STATS", "dpt", port)
-	// 读取 OUTPUT 链（TX = sport）
-	tx, _ = c.getIptablesBytes("HELIOX_STATS", "spt", port)
-	return tx, rx, nil
+	counters, err := c.readIptablesPortsTraffic([]int{port})
+	if err != nil {
+		return 0, 0, err
+	}
+	stats, ok := counters[port]
+	if !ok || !stats.txOK || !stats.rxOK {
+		return 0, 0, fmt.Errorf("iptables 规则不存在: port %d", port)
+	}
+	return stats.tx, stats.rx, nil
 }
 
 // getIptablesBytes 解析 iptables 输出获取字节数

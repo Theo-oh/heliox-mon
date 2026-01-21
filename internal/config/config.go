@@ -97,7 +97,8 @@ func Load() (*Config, error) {
 	}
 
 	// 设置时区
-	tz, err := time.LoadLocation("Asia/Shanghai")
+	tzName := getEnv("HELIOX_MON_TZ", "Asia/Shanghai")
+	tz, err := time.LoadLocation(tzName)
 	if err != nil {
 		tz = time.FixedZone("CST", 8*3600)
 	}

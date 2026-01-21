@@ -86,8 +86,9 @@ async function fetchPortTraffic() {
     if (data.iptables_ok === false) {
       const todayEl = document.getElementById("port-traffic-today");
       if (todayEl) {
-        todayEl.innerHTML = '<div class="port-warning">⚠️ iptables 规则未配置，请运行 setup-iptables.sh</div>';
+        todayEl.innerHTML = '<div class="port-warning">⚠️ iptables 规则未完整配置（TCP/UDP），请运行 setup-iptables.sh</div>';
       }
+      return;
     }
 
     // 渲染今日端口流量

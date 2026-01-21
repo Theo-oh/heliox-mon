@@ -502,6 +502,8 @@ func (s *Server) handlePortTraffic(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().In(tz)
 	today := now.Format("2006-01-02")
 	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, tz)
+	todayEnd := todayStart.Add(24*time.Hour - time.Second)
 
 	// 计算计费周期
 	billingStart, _ := s.getBillingCycleDates(now)
@@ -527,7 +529,11 @@ func (s *Server) handlePortTraffic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 检测 iptables 规则是否存在
-	iptablesOK := s.checkIptablesRules()
+	portNums := make([]int, 0, len(ports))
+	for _, p := range ports {
+		portNums = append(portNums, p.Port)
+	}
+	iptablesOK := s.checkIptablesRules(portNums)
 
 	result := map[string]interface{}{
 		"ports":       []map[string]interface{}{},
@@ -545,8 +551,8 @@ func (s *Server) handlePortTraffic(w http.ResponseWriter, r *http.Request) {
 			SELECT COALESCE(MAX(tx_bytes) - MIN(tx_bytes), 0),
 			       COALESCE(MAX(rx_bytes) - MIN(rx_bytes), 0)
 			FROM port_traffic_snapshots
-			WHERE port = ? AND date(ts, 'unixepoch', '+8 hours') = ?
-		`, p.Port, today)
+			WHERE port = ? AND ts >= ? AND ts <= ?
+		`, p.Port, todayStart.Unix(), todayEnd.Unix())
 		var todayTx, todayRx int64
 		row.Scan(&todayTx, &todayRx)
 		portData["today"] = map[string]int64{"tx": todayTx, "rx": todayRx, "total": todayTx + todayRx}
@@ -639,8 +645,80 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 }
 
 // checkIptablesRules 检测 iptables 规则是否存在
-func (s *Server) checkIptablesRules() bool {
-	cmd := exec.Command("iptables", "-L", "HELIOX_STATS", "-n")
-	err := cmd.Run()
-	return err == nil
+func (s *Server) checkIptablesRules(ports []int) bool {
+	if len(ports) == 0 {
+		return true
+	}
+
+	cmd := exec.Command("iptables", "-S")
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+
+	rules := strings.Split(string(output), "\n")
+	hasInputJump := false
+	hasOutputJump := false
+	dptTCP := make(map[int]bool)
+	sptTCP := make(map[int]bool)
+	dptUDP := make(map[int]bool)
+	sptUDP := make(map[int]bool)
+
+	for _, line := range rules {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if line == "-A INPUT -j HELIOX_STATS" {
+			hasInputJump = true
+			continue
+		}
+		if line == "-A OUTPUT -j HELIOX_STATS" {
+			hasOutputJump = true
+			continue
+		}
+		if !strings.HasPrefix(line, "-A HELIOX_STATS ") {
+			continue
+		}
+		proto := ""
+		if strings.Contains(line, "-p tcp") {
+			proto = "tcp"
+		} else if strings.Contains(line, "-p udp") {
+			proto = "udp"
+		} else {
+			continue
+		}
+		for _, port := range ports {
+			if port <= 0 {
+				continue
+			}
+			if strings.Contains(line, fmt.Sprintf("--dport %d", port)) {
+				if proto == "tcp" {
+					dptTCP[port] = true
+				} else {
+					dptUDP[port] = true
+				}
+			}
+			if strings.Contains(line, fmt.Sprintf("--sport %d", port)) {
+				if proto == "tcp" {
+					sptTCP[port] = true
+				} else {
+					sptUDP[port] = true
+				}
+			}
+		}
+	}
+
+	if !hasInputJump || !hasOutputJump {
+		return false
+	}
+	for _, port := range ports {
+		if port <= 0 {
+			continue
+		}
+		if !dptTCP[port] || !sptTCP[port] || !dptUDP[port] || !sptUDP[port] {
+			return false
+		}
+	}
+	return true
 }

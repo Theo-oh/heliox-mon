@@ -37,7 +37,7 @@ type Collector struct {
 
 // Notifier 通知器接口
 type Notifier interface {
-	SendTrafficAlert(usedGB, limitGB int, percent float64, resetDate string, daysLeft int) error
+	SendTrafficAlert(usedGB, limitGB int, percent float64, resetDate string, daysLeft int, threshold int) error
 }
 
 // New 创建采集器
@@ -56,6 +56,9 @@ func New(cfg *config.Config, db *storage.DB, notifier Notifier) *Collector {
 
 // Start 启动采集器
 func (c *Collector) Start() {
+	// 初始化计数器偏移量，避免重启导致统计跳变
+	c.initTrafficOffsets()
+
 	// 系统资源采集（每 5 秒）
 	c.wg.Add(1)
 	go c.collectSystemMetrics()
