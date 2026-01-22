@@ -23,8 +23,8 @@ async function fetchStats() {
     const data = await res.json();
 
     document.title = data.server_name;
-    const badge = document.getElementById("server-name"); 
-    if(badge) badge.textContent = data.server_name;
+    const badge = document.getElementById("server-name");
+    if (badge) badge.textContent = data.server_name;
     document.getElementById("current-time").textContent = data.current_time;
 
     // 流量数据
@@ -162,7 +162,7 @@ function renderPortMonthGrid(containerId, ports) {
 async function fetchSystem() {
   try {
     const res = await fetch("/api/system");
-    
+
     // 检查 HTTP 状态
     if (!res.ok) {
       console.error(`API 请求失败: ${res.status} ${res.statusText}`);
@@ -171,7 +171,7 @@ async function fetchSystem() {
       }
       return;
     }
-    
+
     // 检查 Content-Type
     const contentType = res.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
@@ -179,7 +179,7 @@ async function fetchSystem() {
       console.error("服务端返回非 JSON 数据:", text);
       return;
     }
-    
+
     const data = await res.json();
 
     document.getElementById("cpu").textContent =
@@ -277,7 +277,9 @@ function initThemeToggle() {
   const toggleBtn = document.getElementById("theme-toggle");
   if (!toggleBtn) return;
   toggleBtn.addEventListener("click", () => {
-    const next = document.body.classList.contains("theme-light") ? "dark" : "light";
+    const next = document.body.classList.contains("theme-light")
+      ? "dark"
+      : "light";
     localStorage.setItem(themeStorageKey, next);
     applyTheme(next);
   });
@@ -333,8 +335,8 @@ async function fetchLatency(start = null, end = null) {
 
     // 初始化过滤器 (仅一次)
     if (!filtersInitialized && latencyData.targets) {
-        renderFilterCheckboxes(latencyData.targets);
-        filtersInitialized = true;
+      renderFilterCheckboxes(latencyData.targets);
+      filtersInitialized = true;
     }
 
     renderLatencyChart();
@@ -345,40 +347,40 @@ async function fetchLatency(start = null, end = null) {
 }
 
 function renderFilterCheckboxes(targets) {
-    const container = document.getElementById("target-filters");
-    if (!container) return;
-    
-    container.innerHTML = "";
-    targets.forEach((t, idx) => {
-        // 默认全选
+  const container = document.getElementById("target-filters");
+  if (!container) return;
+
+  container.innerHTML = "";
+  targets.forEach((t, idx) => {
+    // 默认全选
+    activeTags.add(t.tag);
+
+    const label = document.createElement("label");
+    label.className = "filter-pill";
+    const dot = document.createElement("span");
+    dot.className = "latency-target-dot";
+    dot.style.background = latencyColors[idx % latencyColors.length].border;
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = true;
+    input.dataset.tag = t.tag;
+
+    input.addEventListener("change", (e) => {
+      if (e.target.checked) {
         activeTags.add(t.tag);
-
-        const label = document.createElement("label");
-        label.className = "filter-pill";
-        const dot = document.createElement("span");
-        dot.className = "latency-target-dot";
-        dot.style.background = latencyColors[idx % latencyColors.length].border;
-        
-        const input = document.createElement("input");
-        input.type = "checkbox";
-        input.checked = true;
-        input.dataset.tag = t.tag;
-        
-        input.addEventListener("change", (e) => {
-            if (e.target.checked) {
-                activeTags.add(t.tag);
-            } else {
-                activeTags.delete(t.tag);
-            }
-            renderLatencyChart();
-            scheduleLatencyStatsRender();
-        });
-
-        label.appendChild(input);
-        label.appendChild(dot);
-        label.appendChild(document.createTextNode(" " + t.tag));
-        container.appendChild(label);
+      } else {
+        activeTags.delete(t.tag);
+      }
+      renderLatencyChart();
+      scheduleLatencyStatsRender();
     });
+
+    label.appendChild(input);
+    label.appendChild(dot);
+    label.appendChild(document.createTextNode(" " + t.tag));
+    container.appendChild(label);
+  });
 }
 
 function renderLatencyChart() {
@@ -406,12 +408,22 @@ function renderLatencyChart() {
   const borderColor = getCssVar("--card-border");
   const tooltipBg = getCssVar("--card-bg");
   const isLight = document.body.classList.contains("theme-light");
-  const gridLine = isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.06)";
+  const gridLine = isLight
+    ? "rgba(0, 0, 0, 0.08)"
+    : "rgba(255, 255, 255, 0.06)";
   const zoomBg = isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(0, 0, 0, 0.2)";
-  const zoomFill = isLight ? "rgba(10, 132, 255, 0.25)" : "rgba(10, 132, 255, 0.2)";
-  const avgLabelBg = isLight ? "rgba(100, 116, 139, 0.45)" : "rgba(100, 116, 139, 0.5)";      // 蓝灰色 - 平均值
-  const maxLabelBg = isLight ? "rgba(220, 104, 104, 0.45)" : "rgba(220, 104, 104, 0.5)";      // 柔和红 - 最高值
-  const minLabelBg = isLight ? "rgba(104, 180, 140, 0.45)" : "rgba(104, 180, 140, 0.5)";      // 柔和绿 - 最低值
+  const zoomFill = isLight
+    ? "rgba(10, 132, 255, 0.25)"
+    : "rgba(10, 132, 255, 0.2)";
+  const avgLabelBg = isLight
+    ? "rgba(100, 116, 139, 0.45)"
+    : "rgba(100, 116, 139, 0.5)"; // 蓝灰色 - 平均值
+  const maxLabelBg = isLight
+    ? "rgba(220, 104, 104, 0.45)"
+    : "rgba(220, 104, 104, 0.5)"; // 柔和红 - 最高值
+  const minLabelBg = isLight
+    ? "rgba(104, 180, 140, 0.45)"
+    : "rgba(104, 180, 140, 0.5)"; // 柔和绿 - 最低值
 
   const series = latencyData.targets
     .filter((target) => activeTags.has(target.tag))
@@ -443,7 +455,11 @@ function renderLatencyChart() {
           showAvg && avg > 0
             ? {
                 symbol: "none",
-                lineStyle: { type: "dashed", color: color.border, opacity: 0.65 },
+                lineStyle: {
+                  type: "dashed",
+                  color: color.border,
+                  opacity: 0.65,
+                },
                 label: {
                   color: textColor,
                   backgroundColor: avgLabelBg,
@@ -469,7 +485,8 @@ function renderLatencyChart() {
                   const v = Array.isArray(param.value)
                     ? param.value[param.value.length - 1]
                     : param.value;
-                  if (v === null || v === undefined || Number.isNaN(v)) return "";
+                  if (v === null || v === undefined || Number.isNaN(v))
+                    return "";
                   return `${Number(v).toFixed(1)}ms`;
                 },
                 position: "top",
@@ -700,7 +717,8 @@ function formatPercent(value) {
 }
 
 function formatDuration(minutes) {
-  if (minutes === null || minutes === undefined || Number.isNaN(minutes)) return "-";
+  if (minutes === null || minutes === undefined || Number.isNaN(minutes))
+    return "-";
   if (minutes < 1) return "<1m";
   if (minutes < 60) return `${Math.round(minutes)}m`;
   const hours = minutes / 60;
@@ -843,7 +861,11 @@ function bindLatencyZoom() {
   if (!latencyChart || latencyChart.__zoomBound) return;
   latencyChart.on("dataZoom", (evt) => {
     const batch = evt?.batch?.[0];
-    if (batch && typeof batch.start === "number" && typeof batch.end === "number") {
+    if (
+      batch &&
+      typeof batch.start === "number" &&
+      typeof batch.end === "number"
+    ) {
       latencyZoom = { start: batch.start, end: batch.end };
       scheduleLatencyStatsRender();
     }
@@ -1078,61 +1100,67 @@ document.addEventListener("DOMContentLoaded", () => {
       fetchLatency();
     });
   }
-  
+
   // 前一天/后一天
   if (datePrevBtn && latencyEndEl) {
-      datePrevBtn.addEventListener("click", () => {
-          const { start, end } = normalizeRange(
-            latencyStartEl?.value,
-            latencyEndEl?.value,
-          );
-          const baseStart = start || today;
-          const baseEnd = end || today;
-          const newStart = shiftDateValue(baseStart, -1);
-          const newEnd = shiftDateValue(baseEnd, -1);
+    datePrevBtn.addEventListener("click", () => {
+      const { start, end } = normalizeRange(
+        latencyStartEl?.value,
+        latencyEndEl?.value,
+      );
+      const baseStart = start || today;
+      const baseEnd = end || today;
+      const newStart = shiftDateValue(baseStart, -1);
+      const newEnd = shiftDateValue(baseEnd, -1);
 
-          if (latencyStartEl) latencyStartEl.value = newStart;
-          if (latencyEndEl) latencyEndEl.value = newEnd;
-          latencyStartDate = newStart;
-          latencyEndDate = newEnd;
-          latencyZoom = { start: 0, end: 100 };
-          fetchLatency(newStart, newEnd);
-      });
+      if (latencyStartEl) latencyStartEl.value = newStart;
+      if (latencyEndEl) latencyEndEl.value = newEnd;
+      latencyStartDate = newStart;
+      latencyEndDate = newEnd;
+      latencyZoom = { start: 0, end: 100 };
+      fetchLatency(newStart, newEnd);
+    });
   }
-  
+
   if (dateNextBtn && latencyEndEl) {
-      dateNextBtn.addEventListener("click", () => {
-          const { start, end } = normalizeRange(
-            latencyStartEl?.value,
-            latencyEndEl?.value,
-          );
-          const baseStart = start || today;
-          const baseEnd = end || today;
-          const newStart = shiftDateValue(baseStart, 1);
-          const newEnd = shiftDateValue(baseEnd, 1);
-          if (newEnd > today) {
-            if (latencyStartEl) latencyStartEl.value = "";
-            if (latencyEndEl) latencyEndEl.value = "";
-            latencyStartDate = null;
-            latencyEndDate = null;
-            latencyZoom = { start: 0, end: 100 };
-            fetchLatency();
-            return;
-          }
+    dateNextBtn.addEventListener("click", () => {
+      const { start, end } = normalizeRange(
+        latencyStartEl?.value,
+        latencyEndEl?.value,
+      );
+      const baseStart = start || today;
+      const baseEnd = end || today;
+      const newStart = shiftDateValue(baseStart, 1);
+      const newEnd = shiftDateValue(baseEnd, 1);
+      if (newEnd > today) {
+        if (latencyStartEl) latencyStartEl.value = "";
+        if (latencyEndEl) latencyEndEl.value = "";
+        latencyStartDate = null;
+        latencyEndDate = null;
+        latencyZoom = { start: 0, end: 100 };
+        fetchLatency();
+        return;
+      }
 
-          if (latencyStartEl) latencyStartEl.value = newStart;
-          if (latencyEndEl) latencyEndEl.value = newEnd;
-          latencyStartDate = newStart;
-          latencyEndDate = newEnd;
-          latencyZoom = { start: 0, end: 100 };
-          fetchLatency(newStart, newEnd);
-      });
+      if (latencyStartEl) latencyStartEl.value = newStart;
+      if (latencyEndEl) latencyEndEl.value = newEnd;
+      latencyStartDate = newStart;
+      latencyEndDate = newEnd;
+      latencyZoom = { start: 0, end: 100 };
+      fetchLatency(newStart, newEnd);
+    });
   }
-  
+
   // 显示选项事件监听
-  document.getElementById("show-max")?.addEventListener("change", renderLatencyChart);
-  document.getElementById("show-avg")?.addEventListener("change", renderLatencyChart);
-  document.getElementById("show-loss")?.addEventListener("change", renderLatencyChart);
+  document
+    .getElementById("show-max")
+    ?.addEventListener("change", renderLatencyChart);
+  document
+    .getElementById("show-avg")
+    ?.addEventListener("change", renderLatencyChart);
+  document
+    .getElementById("show-loss")
+    ?.addEventListener("change", renderLatencyChart);
 
   // 重置按钮
   if (latencyResetBtn) {
@@ -1158,4 +1186,31 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }, 60000); // 1 分钟
   setInterval(fetchMonthlyTrend, 3600000); // 1 小时
+
+  // 页面休眠恢复机制（Chrome 后台标签页休眠后恢复刷新）
+  let lastActiveTime = Date.now();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      const now = Date.now();
+      const elapsed = now - lastActiveTime;
+      // 如果离开超过 30 秒，立即刷新所有数据
+      if (elapsed > 30000) {
+        console.log(
+          `页面恢复，已休眠 ${Math.round(elapsed / 1000)} 秒，刷新数据...`,
+        );
+        fetchStats();
+        fetchSystem();
+        fetchMonthlyTrend();
+        if (latencyStartDate && latencyEndDate) {
+          fetchLatency(latencyStartDate, latencyEndDate);
+        } else {
+          fetchLatency();
+        }
+        // SSE 会自动重连，无需手动处理
+      }
+      lastActiveTime = now;
+    } else {
+      lastActiveTime = Date.now();
+    }
+  });
 });

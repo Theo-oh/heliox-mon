@@ -86,7 +86,6 @@ func (s *Server) basicAuth(next http.HandlerFunc) http.HandlerFunc {
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	tz := s.cfg.Timezone
 	now := time.Now().In(tz)
-	today := now.Format("2006-01-02")
 	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
 
 	// 计算计费周期（支持 ResetDay）
