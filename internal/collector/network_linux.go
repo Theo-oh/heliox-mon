@@ -237,8 +237,9 @@ func (c *Collector) readIptablesPortsTraffic(ports []int) (map[int]portCounters,
 		counters[port] = portCounters{}
 	}
 
-	// 正则匹配：[pkts:bytes] -A HELIOX_STATS ... --(dport|sport) 443
-	re := regexp.MustCompile(`\[(\d+):(\d+)\] -A HELIOX_STATS .+ -p (tcp|udp) .+ --(dport|sport) (\d+)`)
+	// 正则匹配：[pkts:bytes] -A HELIOX_STATS -p tcp -m tcp --(dport|sport) 443
+	// 注意：HELIOX_STATS 和 -p 之间可能没有额外内容，使用 .* 而非 .+
+	re := regexp.MustCompile(`\[(\d+):(\d+)\] -A HELIOX_STATS\s+-p\s+(tcp|udp)\s+.*--(dport|sport)\s+(\d+)`)
 
 	scanner := bufio.NewScanner(strings.NewReader(string(output)))
 	for scanner.Scan() {
