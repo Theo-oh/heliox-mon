@@ -880,7 +880,7 @@ function bindLatencyZoom() {
 // 月度趋势图表
 let trendChart = null;
 let trendData = null;
-let trendView = "detail"; // detail | total
+let trendView = "total"; // detail | total
 
 async function fetchMonthlyTrend() {
   try {
@@ -917,37 +917,37 @@ function renderTrendChart() {
       {
         label: "snell 下载",
         data: trendData.map((d) => d.snell_rx / 1024 / 1024 / 1024),
-        backgroundColor: "#8DB4B9", // Muted teal
+        backgroundColor: "#4DD4FF", // Neon cyan
         borderRadius: { bottomLeft: 4, bottomRight: 4 },
         stack: "snell",
       },
       {
         label: "snell 上传",
         data: trendData.map((d) => d.snell_tx / 1024 / 1024 / 1024),
-        backgroundColor: "#5C7FA5", // Muted blue
+        backgroundColor: "#3B82F6", // Electric blue
         borderRadius: { topLeft: 4, topRight: 4 },
         stack: "snell",
       },
       {
         label: "vless 下载",
         data: trendData.map((d) => d.vless_rx / 1024 / 1024 / 1024),
-        backgroundColor: "#C6B38A", // Muted sand
+        backgroundColor: "#9B8CFF", // Neon lavender
         borderRadius: { bottomLeft: 4, bottomRight: 4 },
         stack: "vless",
       },
       {
         label: "vless 上传",
         data: trendData.map((d) => d.vless_tx / 1024 / 1024 / 1024),
-        backgroundColor: "#9A7FA8", // Muted purple
+        backgroundColor: "#6D28D9", // Deep violet
         borderRadius: { topLeft: 4, topRight: 4 },
         stack: "vless",
       },
     ];
     legendHtml = `
-      <span class="legend-item"><span class="dot" style="background:#5C7FA5"></span>snell 上传</span>
-      <span class="legend-item"><span class="dot" style="background:#8DB4B9"></span>snell 下载</span>
-      <span class="legend-item"><span class="dot" style="background:#9A7FA8"></span>vless 上传</span>
-      <span class="legend-item"><span class="dot" style="background:#C6B38A"></span>vless 下载</span>
+      <span class="legend-item"><span class="dot" style="background:#3B82F6"></span>snell 上传</span>
+      <span class="legend-item"><span class="dot" style="background:#4DD4FF"></span>snell 下载</span>
+      <span class="legend-item"><span class="dot" style="background:#6D28D9"></span>vless 上传</span>
+      <span class="legend-item"><span class="dot" style="background:#9B8CFF"></span>vless 下载</span>
     `;
   } else {
     // 总计视图：2根柱子（上传/下载）
@@ -955,19 +955,19 @@ function renderTrendChart() {
       {
         label: "上传",
         data: trendData.map((d) => d.total_tx / 1024 / 1024 / 1024),
-        backgroundColor: "#7E9B89", // Muted green
+        backgroundColor: "#4F7DF7", // Cobalt blue
         borderRadius: 4,
       },
       {
         label: "下载",
         data: trendData.map((d) => d.total_rx / 1024 / 1024 / 1024),
-        backgroundColor: "#A8C7B2", // Soft mint
+        backgroundColor: "#39D0C3", // Tech teal
         borderRadius: 4,
       },
     ];
     legendHtml = `
-      <span class="legend-item"><span class="dot" style="background:#7E9B89"></span>上传</span>
-      <span class="legend-item"><span class="dot" style="background:#A8C7B2"></span>下载</span>
+      <span class="legend-item"><span class="dot" style="background:#4F7DF7"></span>上传</span>
+      <span class="legend-item"><span class="dot" style="background:#39D0C3"></span>下载</span>
     `;
   }
 
@@ -1001,7 +1001,7 @@ function renderTrendChart() {
             ticks: {
               color: "#6e6e80",
               callback: function (value, index) {
-                return [totalLabels[index], labels[index]];
+                return [totalLabels[index], "", labels[index]];
               },
             },
           },
