@@ -188,8 +188,12 @@
 
               <div class="control-actions">
                 <button id="latency-query" class="btn">查询</button>
-                <button id="latency-recent" class="btn btn-secondary">最近24h</button>
-                <button id="latency-reset" class="btn btn-secondary">重置</button>
+                <button id="latency-recent" class="btn btn-secondary">
+                  最近24h
+                </button>
+                <button id="latency-reset" class="btn btn-secondary">
+                  重置
+                </button>
               </div>
               <span id="latency-granularity" class="granularity-tag"></span>
             </div>
@@ -202,10 +206,10 @@
               <div class="display-options">
                 <span class="opt-label">显示</span>
                 <label class="opt-pill"
-                  ><input type="checkbox" id="show-max" /> 极值</label
+                  ><input type="checkbox" id="show-loss" checked /> 丢包</label
                 >
                 <label class="opt-pill"
-                  ><input type="checkbox" id="show-loss" /> 丢包</label
+                  ><input type="checkbox" id="show-max" /> 极值</label
                 >
                 <label class="opt-pill"
                   ><input type="checkbox" id="show-avg" /> 平均线</label
