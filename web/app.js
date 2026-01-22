@@ -73,6 +73,10 @@ async function fetchStats() {
 
     // 获取端口流量
     fetchPortTraffic();
+
+    if (trendRange === "30d" || trendRange === "cycle") {
+      fetchDailyTrend(trendRange);
+    }
   } catch (e) {
     console.error("获取统计数据失败:", e);
   }
@@ -879,16 +883,55 @@ function bindLatencyZoom() {
 
 // 月度趋势图表
 let trendChart = null;
-let trendData = null;
+let trendChartType = "bar";
+let trendMonthlyData = null;
+let trendDailyData = null;
+let trendCycleData = null;
+let trendRange = "monthly"; // monthly | 30d | cycle
 let trendView = "total"; // detail | total
+
+function setTrendTitle(text) {
+  const titleEl = document.getElementById("trend-title");
+  if (titleEl) titleEl.textContent = text;
+}
+
+function setToggleState(el, active) {
+  if (!el) return;
+  if (active) {
+    el.classList.add("active");
+    el.classList.remove("btn-secondary");
+  } else {
+    el.classList.remove("active");
+    el.classList.add("btn-secondary");
+  }
+}
+
+function updateTrendToggleState() {
+  const detailBtn = document.getElementById("trend-detail");
+  const totalBtn = document.getElementById("trend-total");
+  const rangeMonthBtn = document.getElementById("trend-range-month");
+  const range30Btn = document.getElementById("trend-range-30d");
+  const rangeCycleBtn = document.getElementById("trend-range-cycle");
+  const viewToggle = document.getElementById("trend-view-toggle");
+
+  setToggleState(rangeMonthBtn, trendRange === "monthly");
+  setToggleState(range30Btn, trendRange === "30d");
+  setToggleState(rangeCycleBtn, trendRange === "cycle");
+  setToggleState(totalBtn, trendView === "total");
+  setToggleState(detailBtn, trendView === "detail");
+
+  if (viewToggle) {
+    viewToggle.style.display = trendRange === "monthly" ? "inline-flex" : "none";
+  }
+}
 
 async function fetchMonthlyTrend() {
   try {
     const res = await fetch("/api/traffic/monthly");
-    trendData = await res.json();
+    trendMonthlyData = await res.json();
 
     // 空数据保护
-    if (!trendData || !Array.isArray(trendData)) {
+    if (!trendMonthlyData || !Array.isArray(trendMonthlyData)) {
       console.warn("月度趋势数据为空");
       return;
     }
@@ -899,118 +942,208 @@ async function fetchMonthlyTrend() {
   }
 }
 
+async function fetchDailyTrend(rangeType) {
+  const range = rangeType === "cycle" ? "cycle" : "30d";
+  try {
+    const res = await fetch(`/api/traffic/daily?range=${range}`);
+    const data = await res.json();
+
+    if (!data || !Array.isArray(data)) {
+      console.warn("每日趋势数据为空");
+      return;
+    }
+
+    const sorted = data
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    if (range === "cycle") {
+      trendCycleData = sorted;
+    } else {
+      trendDailyData = sorted;
+    }
+
+    renderTrendChart();
+  } catch (e) {
+    console.error("获取每日趋势失败:", e);
+  }
+}
+
 function renderTrendChart() {
-  if (!trendData) return;
-
-  const labels = trendData.map((d) => {
-    const parts = d.month.split("-");
-    return parts[1] + "月";
-  });
-  const totalLabels = trendData.map((d) => d.total_gb);
-
+  let labels = [];
   let datasets = [];
   let legendHtml = "";
+  let chartType = "bar";
+  let tooltipCallbacks = {
+    label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(2)} GB`,
+  };
+  let tickCallback = null;
 
-  if (trendView === "detail") {
-    // 详细视图：2根柱子（snell/vless），每根柱子堆叠上传下载
-    datasets = [
-      {
-        label: "snell 下载",
-        data: trendData.map((d) => d.snell_rx / 1024 / 1024 / 1024),
-        backgroundColor: "#4DD4FF", // Neon cyan
-        borderRadius: { bottomLeft: 4, bottomRight: 4 },
-        stack: "snell",
-      },
-      {
-        label: "snell 上传",
-        data: trendData.map((d) => d.snell_tx / 1024 / 1024 / 1024),
-        backgroundColor: "#3B82F6", // Electric blue
-        borderRadius: { topLeft: 4, topRight: 4 },
-        stack: "snell",
-      },
-      {
-        label: "vless 下载",
-        data: trendData.map((d) => d.vless_rx / 1024 / 1024 / 1024),
-        backgroundColor: "#9B8CFF", // Neon lavender
-        borderRadius: { bottomLeft: 4, bottomRight: 4 },
-        stack: "vless",
-      },
-      {
-        label: "vless 上传",
-        data: trendData.map((d) => d.vless_tx / 1024 / 1024 / 1024),
-        backgroundColor: "#6D28D9", // Deep violet
-        borderRadius: { topLeft: 4, topRight: 4 },
-        stack: "vless",
-      },
-    ];
-    legendHtml = `
-      <span class="legend-item"><span class="dot" style="background:#3B82F6"></span>snell 上传</span>
-      <span class="legend-item"><span class="dot" style="background:#4DD4FF"></span>snell 下载</span>
-      <span class="legend-item"><span class="dot" style="background:#6D28D9"></span>vless 上传</span>
-      <span class="legend-item"><span class="dot" style="background:#9B8CFF"></span>vless 下载</span>
-    `;
+  if (trendRange === "monthly") {
+    if (!trendMonthlyData) return;
+
+    setTrendTitle("近6个月流量");
+    updateTrendToggleState();
+
+    labels = trendMonthlyData.map((d) => {
+      const parts = d.month.split("-");
+      return parts[1] + "月";
+    });
+    const totalLabels = trendMonthlyData.map((d) => d.total_gb);
+
+    if (trendView === "detail") {
+      // 详细视图：2根柱子（snell/vless），每根柱子堆叠上传下载
+      datasets = [
+        {
+          label: "snell 下载",
+          data: trendMonthlyData.map((d) => d.snell_rx / 1024 / 1024 / 1024),
+          backgroundColor: "#4DD4FF", // Neon cyan
+          borderRadius: { bottomLeft: 4, bottomRight: 4 },
+          stack: "snell",
+        },
+        {
+          label: "snell 上传",
+          data: trendMonthlyData.map((d) => d.snell_tx / 1024 / 1024 / 1024),
+          backgroundColor: "#3B82F6", // Electric blue
+          borderRadius: { topLeft: 4, topRight: 4 },
+          stack: "snell",
+        },
+        {
+          label: "vless 下载",
+          data: trendMonthlyData.map((d) => d.vless_rx / 1024 / 1024 / 1024),
+          backgroundColor: "#9B8CFF", // Neon lavender
+          borderRadius: { bottomLeft: 4, bottomRight: 4 },
+          stack: "vless",
+        },
+        {
+          label: "vless 上传",
+          data: trendMonthlyData.map((d) => d.vless_tx / 1024 / 1024 / 1024),
+          backgroundColor: "#6D28D9", // Deep violet
+          borderRadius: { topLeft: 4, topRight: 4 },
+          stack: "vless",
+        },
+      ];
+      legendHtml = `
+        <span class="legend-item"><span class="dot" style="background:#3B82F6"></span>snell 上传</span>
+        <span class="legend-item"><span class="dot" style="background:#4DD4FF"></span>snell 下载</span>
+        <span class="legend-item"><span class="dot" style="background:#6D28D9"></span>vless 上传</span>
+        <span class="legend-item"><span class="dot" style="background:#9B8CFF"></span>vless 下载</span>
+      `;
+    } else {
+      // 总计视图：2根柱子（上传/下载）
+      datasets = [
+        {
+          label: "上传",
+          data: trendMonthlyData.map((d) => d.total_tx / 1024 / 1024 / 1024),
+          backgroundColor: "#4F7DF7", // Cobalt blue
+          borderRadius: 4,
+        },
+        {
+          label: "下载",
+          data: trendMonthlyData.map((d) => d.total_rx / 1024 / 1024 / 1024),
+          backgroundColor: "#39D0C3", // Tech teal
+          borderRadius: 4,
+        },
+      ];
+      legendHtml = `
+        <span class="legend-item"><span class="dot" style="background:#4F7DF7"></span>上传</span>
+        <span class="legend-item"><span class="dot" style="background:#39D0C3"></span>下载</span>
+      `;
+    }
+
+    tickCallback = function (value, index) {
+      return [totalLabels[index], "", labels[index]];
+    };
   } else {
-    // 总计视图：2根柱子（上传/下载）
+    const source =
+      trendRange === "cycle" ? trendCycleData : trendDailyData;
+    if (!source) return;
+
+    setTrendTitle(trendRange === "cycle" ? "本计费周期流量" : "近30天流量");
+    updateTrendToggleState();
+
+    labels = source.map((d) => d.date.slice(5));
+    const totals = source.map(
+      (d) => (d.tx + d.rx) / 1024 / 1024 / 1024,
+    );
+
     datasets = [
       {
-        label: "上传",
-        data: trendData.map((d) => d.total_tx / 1024 / 1024 / 1024),
-        backgroundColor: "#4F7DF7", // Cobalt blue
-        borderRadius: 4,
-      },
-      {
-        label: "下载",
-        data: trendData.map((d) => d.total_rx / 1024 / 1024 / 1024),
-        backgroundColor: "#39D0C3", // Tech teal
-        borderRadius: 4,
+        label: "总流量",
+        data: totals,
+        borderColor: "#4F7DF7",
+        backgroundColor: "rgba(79, 125, 247, 0.24)",
+        borderWidth: 2,
+        pointRadius: 2,
+        pointHoverRadius: 3,
+        tension: 0.35,
+        fill: true,
       },
     ];
     legendHtml = `
-      <span class="legend-item"><span class="dot" style="background:#4F7DF7"></span>上传</span>
-      <span class="legend-item"><span class="dot" style="background:#39D0C3"></span>下载</span>
+      <span class="legend-item"><span class="dot" style="background:#4F7DF7"></span>总流量</span>
     `;
+    chartType = "line";
+    tooltipCallbacks = {
+      label: (ctx) => {
+        const d = source[ctx.dataIndex];
+        if (!d) {
+          return `总量: ${ctx.raw.toFixed(2)} GB`;
+        }
+        const total = (d.tx + d.rx) / 1024 / 1024 / 1024;
+        const up = d.tx / 1024 / 1024 / 1024;
+        const down = d.rx / 1024 / 1024 / 1024;
+        return `总量: ${total.toFixed(2)} GB (↑${up.toFixed(
+          2,
+        )}, ↓${down.toFixed(2)})`;
+      },
+    };
   }
 
   // 更新图例
-  document.getElementById("trend-legend").innerHTML = legendHtml;
+  const legendEl = document.getElementById("trend-legend");
+  if (legendEl) legendEl.innerHTML = legendHtml;
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: tooltipCallbacks },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: {
+          color: "#6e6e80",
+          callback: tickCallback || undefined,
+        },
+      },
+      y: {
+        display: false,
+        beginAtZero: true,
+      },
+    },
+  };
+
+  const ctx = document.getElementById("trend-chart").getContext("2d");
+  if (trendChart && trendChartType !== chartType) {
+    trendChart.destroy();
+    trendChart = null;
+  }
+  trendChartType = chartType;
 
   if (trendChart) {
     trendChart.data.labels = labels;
     trendChart.data.datasets = datasets;
+    trendChart.options = options;
     trendChart.update("none");
   } else {
-    const ctx = document.getElementById("trend-chart").getContext("2d");
     trendChart = new Chart(ctx, {
-      type: "bar",
+      type: chartType,
       data: { labels, datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(2)} GB`,
-            },
-          },
-        },
-        scales: {
-          x: {
-            grid: { display: false },
-            ticks: {
-              color: "#6e6e80",
-              callback: function (value, index) {
-                return [totalLabels[index], "", labels[index]];
-              },
-            },
-          },
-          y: {
-            display: false,
-            beginAtZero: true,
-          },
-        },
-      },
+      options,
     });
   }
 }
@@ -1019,28 +1152,63 @@ function renderTrendChart() {
 function setupTrendToggle() {
   const detailBtn = document.getElementById("trend-detail");
   const totalBtn = document.getElementById("trend-total");
+  const rangeMonthBtn = document.getElementById("trend-range-month");
+  const range30Btn = document.getElementById("trend-range-30d");
+  const rangeCycleBtn = document.getElementById("trend-range-cycle");
 
   if (detailBtn) {
     detailBtn.addEventListener("click", () => {
       trendView = "detail";
-      detailBtn.classList.add("active");
-      detailBtn.classList.remove("btn-secondary");
-      totalBtn.classList.remove("active");
-      totalBtn.classList.add("btn-secondary");
-      renderTrendChart();
+      updateTrendToggleState();
+      if (trendRange === "monthly") {
+        renderTrendChart();
+      }
     });
   }
 
   if (totalBtn) {
     totalBtn.addEventListener("click", () => {
       trendView = "total";
-      totalBtn.classList.add("active");
-      totalBtn.classList.remove("btn-secondary");
-      detailBtn.classList.remove("active");
-      detailBtn.classList.add("btn-secondary");
+      updateTrendToggleState();
+      if (trendRange === "monthly") {
+        renderTrendChart();
+      }
+    });
+  }
+
+  if (rangeMonthBtn) {
+    rangeMonthBtn.addEventListener("click", () => {
+      trendRange = "monthly";
+      updateTrendToggleState();
       renderTrendChart();
     });
   }
+
+  if (range30Btn) {
+    range30Btn.addEventListener("click", () => {
+      trendRange = "30d";
+      updateTrendToggleState();
+      if (trendDailyData) {
+        renderTrendChart();
+        return;
+      }
+      fetchDailyTrend("30d");
+    });
+  }
+
+  if (rangeCycleBtn) {
+    rangeCycleBtn.addEventListener("click", () => {
+      trendRange = "cycle";
+      updateTrendToggleState();
+      if (trendCycleData) {
+        renderTrendChart();
+        return;
+      }
+      fetchDailyTrend("cycle");
+    });
+  }
+
+  updateTrendToggleState();
 }
 
 // 初始化

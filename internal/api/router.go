@@ -225,9 +225,30 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 
 // handleTrafficDaily 每日流量
 func (s *Server) handleTrafficDaily(w http.ResponseWriter, r *http.Request) {
-	// 返回最近 30 天
+	tz := s.cfg.Timezone
+	now := time.Now().In(tz)
+	rangeType := r.URL.Query().Get("range")
+
+	var startDate time.Time
+	var endDate time.Time
+
+	switch rangeType {
+	case "cycle":
+		startDate, _ = s.getBillingCycleDates(now)
+		endDate = now
+	default:
+		// 默认最近 30 天
+		endDate = now
+		startDate = now.AddDate(0, 0, -29)
+	}
+
 	rows, err := s.db.Query(
-		"SELECT date, tx_bytes, rx_bytes FROM traffic_daily WHERE iface = 'total' ORDER BY date DESC LIMIT 30",
+		`SELECT date, tx_bytes, rx_bytes
+		 FROM traffic_daily
+		 WHERE iface = 'total' AND date >= ? AND date <= ?
+		 ORDER BY date ASC`,
+		startDate.Format("2006-01-02"),
+		endDate.Format("2006-01-02"),
 	)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
