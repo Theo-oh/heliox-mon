@@ -101,11 +101,15 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		"current_time": now.Format("2006-01-02 15:04:05"),
 	}
 
-	// 今日流量（从日汇总表读取，日汇总任务会实时更新）
-	row := s.db.QueryRow(
-		"SELECT COALESCE(tx_bytes, 0), COALESCE(rx_bytes, 0) FROM traffic_daily WHERE date = ? AND iface = 'total'",
-		today,
-	)
+	// 今日流量（直接从快照表实时计算，与端口流量保持一致）
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, tz)
+	todayEnd := todayStart.Add(24*time.Hour - time.Second)
+	row := s.db.QueryRow(`
+		SELECT COALESCE(MAX(tx_bytes) - MIN(tx_bytes), 0),
+		       COALESCE(MAX(rx_bytes) - MIN(rx_bytes), 0)
+		FROM traffic_snapshots
+		WHERE iface = 'total' AND ts >= ? AND ts <= ?
+	`, todayStart.Unix(), todayEnd.Unix())
 	var todayTx, todayRx int64
 	if err := row.Scan(&todayTx, &todayRx); err != nil && err != sql.ErrNoRows {
 		log.Printf("查询今日流量失败: %v", err)
