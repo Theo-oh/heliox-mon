@@ -28,23 +28,27 @@ async function fetchStats() {
     document.getElementById("current-time").textContent = data.current_time;
 
     // 流量数据
+    const todayTxEl = document.getElementById("today-tx");
+    const todayRxEl = document.getElementById("today-rx");
     const todayTotalEl = document.getElementById("today-total");
-    if (todayTotalEl && todayTotalEl.parentElement) {
-      todayTotalEl.parentElement.innerHTML = `
-        <div class="stats-group-up"><span class="stat-up">↑ ${formatBytes(data.today.tx)}</span></div>
-        <div class="stats-group-down"><span class="stat-down">↓ ${formatBytes(data.today.rx)}</span></div>
-        <div class="stats-group-total"><span class="stat-total">⇅ ${formatBytes(data.today.tx + data.today.rx)}</span></div>
-    `;
-    }
+    if (todayTxEl) todayTxEl.textContent = `↑ ${formatBytes(data.today.tx)}`;
+    if (todayRxEl) todayRxEl.textContent = `↓ ${formatBytes(data.today.rx)}`;
+    if (todayTotalEl)
+      todayTotalEl.textContent = `⇅ ${formatBytes(
+        data.today.tx + data.today.rx,
+      )}`;
 
+    const yesterdayTxEl = document.getElementById("yesterday-tx");
+    const yesterdayRxEl = document.getElementById("yesterday-rx");
     const yesterdayTotalEl = document.getElementById("yesterday-total");
-    if (yesterdayTotalEl && yesterdayTotalEl.parentElement) {
-      yesterdayTotalEl.parentElement.innerHTML = `
-        <div class="stats-group-up"><span class="stat-up">↑ ${formatBytes(data.yesterday.tx)}</span></div>
-        <div class="stats-group-down"><span class="stat-down">↓ ${formatBytes(data.yesterday.rx)}</span></div>
-        <div class="stats-group-total"><span class="stat-total">⇅ ${formatBytes(data.yesterday.tx + data.yesterday.rx)}</span></div>
-    `;
-    }
+    if (yesterdayTxEl)
+      yesterdayTxEl.textContent = `↑ ${formatBytes(data.yesterday.tx)}`;
+    if (yesterdayRxEl)
+      yesterdayRxEl.textContent = `↓ ${formatBytes(data.yesterday.rx)}`;
+    if (yesterdayTotalEl)
+      yesterdayTotalEl.textContent = `⇅ ${formatBytes(
+        data.yesterday.tx + data.yesterday.rx,
+      )}`;
 
     // 本月总计
     const monthTotalBytes = data.this_month.tx + data.this_month.rx;
