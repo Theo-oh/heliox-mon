@@ -169,7 +169,7 @@ function renderPortMonthGrid(containerId, ports) {
 // 获取系统资源
 async function fetchSystem() {
   try {
-    const res = await fetch("/api/system");
+    const res = await fetch("/api/system", { cache: "no-store" });
 
     // 检查 HTTP 状态
     if (!res.ok) {
