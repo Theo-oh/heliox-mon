@@ -8,10 +8,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"strings"
 	"time"
@@ -149,12 +151,25 @@ func (s *Server) handleLoginAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
+		Username       string `json:"username"`
+		Password       string `json:"password"`
+		TurnstileToken string `json:"turnstile_token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
+	}
+
+	// Turnstile 验证
+	if s.cfg.TurnstileSecretKey != "" {
+		if req.TurnstileToken == "" {
+			http.Error(w, "Missing captcha token", http.StatusForbidden)
+			return
+		}
+		if !s.verifyTurnstile(req.TurnstileToken, r.RemoteAddr) {
+			http.Error(w, "Captcha validation failed", http.StatusForbidden)
+			return
+		}
 	}
 
 	if req.Username != s.cfg.Username || req.Password != s.cfg.Password {
@@ -182,6 +197,44 @@ func (s *Server) generateToken() string {
 
 func (s *Server) validateToken(token string) bool {
 	return token == s.generateToken()
+}
+
+// verifyTurnstile 验证 Turnstile Token
+func (s *Server) verifyTurnstile(token string, remoteIP string) bool {
+	// 去除端口号 (IPv4/IPv6 compatibility)
+	if idx := strings.LastIndex(remoteIP, ":"); idx != -1 {
+		// 简单的判断，如果有点，可能是ipv4:port，或者ipv6 [::]:port
+		// 这里简化处理，直接透传或不传ip给cloudflare也行
+		// Cloudflare 文档说 remoteip 是可选的
+	}
+
+	formData := url.Values{}
+	formData.Set("secret", s.cfg.TurnstileSecretKey)
+	formData.Set("response", token)
+	formData.Set("remoteip", remoteIP)
+
+	resp, err := http.PostForm("https://challenges.cloudflare.com/turnstile/v0/siteverify", formData)
+	if err != nil {
+		log.Printf("Turnstile verification error: %v", err)
+		return false // Fail secure
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false
+	}
+
+	var result struct {
+		Success bool `json:"success"`
+		// ErrorCodes []string `json:"error-codes"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		log.Printf("Turnstile response parse error: %v", err)
+		return false
+	}
+
+	return result.Success
 }
 
 // handleStats 仪表盘汇总数据

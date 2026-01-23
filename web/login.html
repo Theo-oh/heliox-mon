@@ -206,6 +206,11 @@
         letter-spacing: 0.5px;
       }
     </style>
+    <script
+      src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+      async
+      defer
+    ></script>
   </head>
   <body>
     <!-- Background Decor (Orbs) -->
@@ -298,6 +303,13 @@
             placeholder=" "
           />
         </div>
+        <!-- Cloudflare Turnstile -->
+        <div
+          class="cf-turnstile"
+          data-sitekey="0x4AAAAAACOhRkua9joDOJiB"
+          data-theme="dark"
+          style="margin: 0 auto"
+        ></div>
         <button type="submit" class="btn-login">登录</button>
         <div id="error-msg" class="login-error"></div>
       </form>
@@ -317,11 +329,19 @@
           btn.disabled = true;
           btn.style.opacity = "0.7";
 
+          const turnstileToken = document.querySelector(
+            '[name="cf-turnstile-response"]',
+          )?.value;
+
           try {
             const res = await fetch("/api/login", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ username: user, password: pass }),
+              body: JSON.stringify({
+                username: user,
+                password: pass,
+                turnstile_token: turnstileToken,
+              }),
             });
 
             if (res.ok) {

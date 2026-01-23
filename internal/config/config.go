@@ -62,25 +62,29 @@ type Config struct {
 
 	// 服务器标识
 	ServerName string
+
+	// 安全
+	TurnstileSecretKey string
 }
 
 // Load 加载配置
 func Load() (*Config, error) {
 	cfg := &Config{
-		DataDir:          getEnv("HELIOX_MON_DATA_DIR", "/var/lib/heliox-mon"),
-		ListenAddr:       getEnv("HELIOX_MON_LISTEN", "127.0.0.1:9100"),
-		Username:         getEnv("HELIOX_MON_USER", "admin"),
-		Password:         getEnv("HELIOX_MON_PASS", ""),
-		HelioxEnvPath:    getEnv("HELIOX_ENV_PATH", "../heliox/.env"),
-		TelegramBotToken: getEnv("TELEGRAM_BOT_TOKEN", ""),
-		TelegramChatID:   getEnv("TELEGRAM_CHAT_ID", ""),
-		MonthlyLimitGB:   getEnvInt("MONTHLY_LIMIT_GB", 1000),
-		BillingMode:      getEnv("BILLING_MODE", "bidirectional"),
-		ResetDay:         getEnvInt("RESET_DAY", 1),
-		ServerName:       getEnv("SERVER_NAME", "Heliox"),
-		PingCount:        getEnvInt("PING_COUNT", 5),
-		PingTimeout:      time.Duration(getEnvInt("PING_TIMEOUT_MS", 1000)) * time.Millisecond,
-		PingGap:          time.Duration(getEnvInt("PING_GAP_MS", 200)) * time.Millisecond,
+		DataDir:            getEnv("HELIOX_MON_DATA_DIR", "/var/lib/heliox-mon"),
+		ListenAddr:         getEnv("HELIOX_MON_LISTEN", "127.0.0.1:9100"),
+		Username:           getEnv("HELIOX_MON_USER", "admin"),
+		Password:           getEnv("HELIOX_MON_PASS", ""),
+		HelioxEnvPath:      getEnv("HELIOX_ENV_PATH", "../heliox/.env"),
+		TelegramBotToken:   getEnv("TELEGRAM_BOT_TOKEN", ""),
+		TelegramChatID:     getEnv("TELEGRAM_CHAT_ID", ""),
+		MonthlyLimitGB:     getEnvInt("MONTHLY_LIMIT_GB", 1000),
+		BillingMode:        getEnv("BILLING_MODE", "bidirectional"),
+		ResetDay:           getEnvInt("RESET_DAY", 1),
+		ServerName:         getEnv("SERVER_NAME", "Heliox"),
+		PingCount:          getEnvInt("PING_COUNT", 5),
+		PingTimeout:        time.Duration(getEnvInt("PING_TIMEOUT_MS", 1000)) * time.Millisecond,
+		PingGap:            time.Duration(getEnvInt("PING_GAP_MS", 200)) * time.Millisecond,
+		TurnstileSecretKey: getEnv("HELIOX_TURNSTILE_SECRET", ""),
 	}
 
 	// 解析报警阈值
