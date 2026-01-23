@@ -3,7 +3,9 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -36,17 +38,22 @@ func NewServer(cfg *config.Config, db *storage.DB) *Server {
 	mux := http.NewServeMux()
 
 	// API 路由
-	mux.HandleFunc("/api/stats", s.basicAuth(s.handleStats))
-	mux.HandleFunc("/api/system", s.basicAuth(s.handleSystem))
-	mux.HandleFunc("/api/traffic/daily", s.basicAuth(s.handleTrafficDaily))
-	mux.HandleFunc("/api/traffic/monthly", s.basicAuth(s.handleTrafficMonthly))
-	mux.HandleFunc("/api/traffic/realtime", s.basicAuth(s.handleTrafficRealtime))
-	mux.HandleFunc("/api/traffic/ports", s.basicAuth(s.handlePortTraffic))
-	mux.HandleFunc("/api/latency", s.basicAuth(s.handleLatency))
-	mux.HandleFunc("/api/config", s.basicAuth(s.handleConfig))
+	// Public
+	mux.HandleFunc("/login", s.handleLoginView)
+	mux.HandleFunc("/api/login", s.handleLoginAPI)
 
-	// 静态文件
-	mux.HandleFunc("/", s.basicAuth(s.handleStatic))
+	// API 路由 (Auth)
+	mux.HandleFunc("/api/stats", s.auth(s.handleStats))
+	mux.HandleFunc("/api/system", s.auth(s.handleSystem))
+	mux.HandleFunc("/api/traffic/daily", s.auth(s.handleTrafficDaily))
+	mux.HandleFunc("/api/traffic/monthly", s.auth(s.handleTrafficMonthly))
+	mux.HandleFunc("/api/traffic/realtime", s.auth(s.handleTrafficRealtime))
+	mux.HandleFunc("/api/traffic/ports", s.auth(s.handlePortTraffic))
+	mux.HandleFunc("/api/latency", s.auth(s.handleLatency))
+	mux.HandleFunc("/api/config", s.auth(s.handleConfig))
+
+	// 静态文件 (Auth with exceptions)
+	mux.HandleFunc("/", s.auth(s.handleStatic))
 
 	s.server = &http.Server{
 		Addr:    cfg.ListenAddr,
@@ -69,17 +76,112 @@ func (s *Server) Stop() {
 	s.server.Shutdown(ctx)
 }
 
-// basicAuth Basic 认证中间件
-func (s *Server) basicAuth(next http.HandlerFunc) http.HandlerFunc {
+const (
+	authCookieName = "heliox_auth"
+	authSalt       = "heliox_static_salt_v1"
+)
+
+// auth 认证中间件 (Cookie + Basic Fallback)
+func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// 1. 公开资源 (CSS/JS/Favicon)
+		// 注意: /login 由单独 handler 处理，实际上不会经过这里(除非 mux 匹配逻辑特殊)，
+		// 但为了保险起见，style.css 等静态资源如果是通过 "/" handleStatic 服务的，
+		// 必须在这里放行。
+		if r.URL.Path == "/style.css" || r.URL.Path == "/favicon.svg" {
+			next(w, r)
+			return
+		}
+
+		// 2. Cookie 验证
+		cookie, err := r.Cookie(authCookieName)
+		if err == nil && s.validateToken(cookie.Value) {
+			next(w, r)
+			return
+		}
+
+		// 3. Basic Auth 验证 (API兼容性/旧脚本)
 		user, pass, ok := r.BasicAuth()
-		if !ok || user != s.cfg.Username || pass != s.cfg.Password {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Heliox Monitor"`)
+		if ok && user == s.cfg.Username && pass == s.cfg.Password {
+			next(w, r)
+			return
+		}
+
+		// 4. 未授权
+		if strings.HasPrefix(r.URL.Path, "/api") {
+			// API 请求返回 401
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		next(w, r)
+
+		// 浏览器请求重定向到 /login
+		http.Redirect(w, r, "/login", http.StatusFound)
 	}
+}
+
+// handleLoginView 登录页面
+func (s *Server) handleLoginView(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 如果已登录，跳转首页
+	if cookie, err := r.Cookie(authCookieName); err == nil && s.validateToken(cookie.Value) {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+
+	data, err := fs.ReadFile(web.Assets, "login.html")
+	if err != nil {
+		http.Error(w, "Login page not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(data)
+}
+
+// handleLoginAPI 登录接口
+func (s *Server) handleLoginAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if req.Username != s.cfg.Username || req.Password != s.cfg.Password {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
+	token := s.generateToken()
+	http.SetCookie(w, &http.Cookie{
+		Name:     authCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   86400 * 30, // 30天
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) generateToken() string {
+	hash := sha256.Sum256([]byte(s.cfg.Username + ":" + s.cfg.Password + ":" + authSalt))
+	return hex.EncodeToString(hash[:])
+}
+
+func (s *Server) validateToken(token string) bool {
+	return token == s.generateToken()
 }
 
 // handleStats 仪表盘汇总数据

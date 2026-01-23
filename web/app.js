@@ -20,6 +20,7 @@ function formatSpeed(bytesPerSec) {
 async function fetchStats() {
   try {
     const res = await fetch("/api/stats");
+    if (res.status === 401) { window.location.href = "/login"; return; }
     const data = await res.json();
 
     document.title = data.server_name;
@@ -170,6 +171,7 @@ function renderPortMonthGrid(containerId, ports) {
 async function fetchSystem() {
   try {
     const res = await fetch("/api/system", { cache: "no-store" });
+    if (res.status === 401) { window.location.href = "/login"; return; }
 
     // 检查 HTTP 状态
     if (!res.ok) {
@@ -329,6 +331,7 @@ async function fetchLatency(start = null, end = null) {
     }
 
     const res = await fetch(url);
+    if (res.status === 401) { window.location.href = "/login"; return; }
     latencyData = await res.json();
 
     // 显示粒度信息
