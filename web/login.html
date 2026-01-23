@@ -10,122 +10,297 @@
       body {
         align-items: center;
         padding-top: 0;
+        /* Animated gradient background */
+        background:
+          radial-gradient(
+            circle at 10% 20%,
+            rgba(10, 132, 255, 0.15) 0%,
+            transparent 40%
+          ),
+          radial-gradient(
+            circle at 90% 80%,
+            rgba(191, 90, 242, 0.15) 0%,
+            transparent 40%
+          ),
+          var(--bg);
+        background-size: 150% 150%;
+        animation: gradientBG 15s ease infinite alternate;
       }
+      @keyframes gradientBG {
+        0% {
+          background-position: 0% 0%;
+        }
+        100% {
+          background-position: 100% 100%;
+        }
+      }
+
       .login-wrapper {
-        max-width: 400px;
+        max-width: 380px;
         width: 100%;
         padding: 40px;
+        background: rgba(28, 28, 30, 0.4);
+        backdrop-filter: blur(25px);
+        -webkit-backdrop-filter: blur(25px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 24px;
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
+        animation: fadeIn 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+        position: relative;
+        overflow: hidden;
       }
+
+      /* Subtle spotlight effect */
+      .login-wrapper::before {
+        content: "";
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(
+          circle,
+          rgba(255, 255, 255, 0.03) 0%,
+          transparent 60%
+        );
+        pointer-events: none;
+        transform: rotate(30deg);
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px) scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
       .login-form {
         display: flex;
         flex-direction: column;
-        gap: 20px;
-        margin-top: 20px;
+        gap: 24px;
+        margin-top: 30px;
       }
+
       .form-group {
         display: flex;
         flex-direction: column;
         gap: 8px;
         text-align: left;
+        position: relative;
       }
+
       .form-label {
         font-size: 13px;
         color: var(--muted);
         font-weight: 500;
         margin-left: 4px;
+        transition: color 0.2s;
       }
+
       .form-input {
-        background: var(--item-bg);
-        border: 1px solid var(--card-border);
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.08);
         color: var(--text);
-        padding: 12px 16px;
-        border-radius: var(--radius-sm);
-        font-size: 16px; /* Avoid auto-zoom on mobile */
+        padding: 14px 16px;
+        border-radius: 14px;
+        font-size: 16px;
         outline: none;
-        transition: all 0.2s;
+        transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
         width: 100%;
-        box-sizing: border-box; /* Fix for 100% width causing overflow */
+        box-sizing: border-box;
       }
+
       .form-input:focus {
         border-color: var(--accent-blue);
-        background: rgba(10, 132, 255, 0.05);
+        background: rgba(10, 132, 255, 0.08);
+        box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.15);
       }
+
+      .form-input:focus + .form-label,
+      .form-group:focus-within .form-label {
+        color: var(--accent-blue);
+      }
+
       .btn-login {
-        margin-top: 10px;
-        background: linear-gradient(135deg, var(--accent-blue), #0062cc);
+        margin-top: 15px;
+        background: linear-gradient(
+          135deg,
+          var(--accent-blue) 0%,
+          #0062cc 100%
+        );
         color: white;
-        padding: 12px;
-        border-radius: var(--radius-sm);
+        padding: 14px;
+        border-radius: 14px;
         font-weight: 600;
-        font-size: 14px;
+        font-size: 15px;
         border: none;
         cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(10, 132, 255, 0.3);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .btn-login::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(rgba(255, 255, 255, 0.1), transparent);
+        opacity: 0;
         transition: opacity 0.2s;
       }
+
       .btn-login:hover {
-        opacity: 0.9;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(10, 132, 255, 0.4);
       }
+
+      .btn-login:hover::after {
+        opacity: 1;
+      }
+
+      .btn-login:active {
+        transform: translateY(1px);
+        box-shadow: 0 2px 8px rgba(10, 132, 255, 0.2);
+      }
+
       .login-error {
         color: var(--accent-red);
         font-size: 13px;
         text-align: center;
         min-height: 20px;
         margin-top: 5px;
+        font-weight: 500;
+        opacity: 0;
+        transform: translateY(-5px);
+        transition: all 0.3s;
       }
-      /* Center hero content for login */
+
+      .login-error.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
       .hero-login {
-        margin-bottom: 30px;
+        margin-bottom: 20px;
+        position: relative;
       }
+
       .hero-login h1 {
-        font-size: 36px;
+        font-size: 42px;
         margin-bottom: 8px;
+        background: linear-gradient(135deg, #fff 0%, #a1a1a6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      }
+
+      .hero-login p {
+        letter-spacing: 0.5px;
       }
     </style>
   </head>
   <body>
-    <div class="wrapper login-wrapper">
+    <!-- Background Decor (Orbs) -->
+    <div
+      style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        pointer-events: none;
+        z-index: -1;
+      "
+    >
+      <div
+        style="
+          position: absolute;
+          top: -10%;
+          left: -10%;
+          width: 50%;
+          height: 50%;
+          background: radial-gradient(
+            circle,
+            rgba(10, 132, 255, 0.12),
+            transparent 70%
+          );
+          border-radius: 50%;
+          animation: float 10s ease-in-out infinite;
+        "
+      ></div>
+      <div
+        style="
+          position: absolute;
+          bottom: -10%;
+          right: -10%;
+          width: 60%;
+          height: 60%;
+          background: radial-gradient(
+            circle,
+            rgba(191, 90, 242, 0.08),
+            transparent 70%
+          );
+          border-radius: 50%;
+          animation: float 12s ease-in-out infinite reverse;
+        "
+      ></div>
+    </div>
+    <style>
+      @keyframes float {
+        0%,
+        100% {
+          transform: translate(0, 0);
+        }
+        50% {
+          transform: translate(30px, 20px);
+        }
+      }
+    </style>
+
+    <div class="login-wrapper">
       <div class="hero hero-login">
         <h1>Heliox</h1>
         <p>Monitor Login</p>
       </div>
 
-      <div
-        class="card"
-        style="
-          border: none;
-          background: transparent;
-          padding: 0;
-          box-shadow: none;
-        "
-      >
-        <form id="login-form" class="login-form">
-          <div class="form-group">
-            <label class="form-label" for="username">用户名</label>
-            <input
-              type="text"
-              id="username"
-              name="username"
-              class="form-input"
-              required
-              autofocus
-              autocomplete="username"
-            />
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="password">密码</label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              class="form-input"
-              required
-              autocomplete="current-password"
-            />
-          </div>
-          <button type="submit" class="btn-login">登录</button>
-          <div id="error-msg" class="login-error"></div>
-        </form>
-      </div>
+      <form id="login-form" class="login-form">
+        <div class="form-group">
+          <label class="form-label" for="username">用户名</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            class="form-input"
+            required
+            autofocus
+            autocomplete="username"
+            placeholder=" "
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="password">密码</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            class="form-input"
+            required
+            autocomplete="current-password"
+            placeholder=" "
+          />
+        </div>
+        <button type="submit" class="btn-login">登录</button>
+        <div id="error-msg" class="login-error"></div>
+      </form>
     </div>
 
     <script>
@@ -150,11 +325,24 @@
             });
 
             if (res.ok) {
-              window.location.href = "/";
+              // 成功动画
+              btn.textContent = "Welcome!";
+              btn.style.background = "var(--accent-green)";
+              setTimeout(() => {
+                window.location.href = "/";
+              }, 500);
             } else {
               errorMsg.textContent = "用户名或密码错误";
+              errorMsg.classList.add("show");
               btn.disabled = false;
               btn.style.opacity = "1";
+
+              // 震动动画
+              const wrapper = document.querySelector(".login-wrapper");
+              wrapper.style.animation = "shake 0.4s ease-in-out";
+              setTimeout(() => {
+                wrapper.style.animation = "";
+              }, 400);
             }
           } catch (err) {
             errorMsg.textContent = "登录请求失败";
