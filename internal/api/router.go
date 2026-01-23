@@ -322,10 +322,10 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 	stats["used_bytes"] = usedBytes
 
-	// 流量限额
 	stats["monthly_limit_gb"] = s.cfg.MonthlyLimitGB
 	stats["billing_mode"] = s.cfg.BillingMode
 	stats["reset_day"] = s.cfg.ResetDay
+	stats["alert_thresholds"] = s.cfg.AlertThresholds
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)

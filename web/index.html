@@ -124,28 +124,28 @@
             </div>
 
             <!-- 流量配额 -->
-            <div
-              class="quota-card"
-              style="
-                margin-top: 24px;
-                background: transparent;
-                border: none;
-                padding: 0;
-              "
-            >
-              <div class="quota-bar">
-                <div id="quota-fill" class="quota-fill" style="width: 0%"></div>
-              </div>
-              <div class="quota-info">
-                <span class="quota-text">
+            <!-- 流量配额 -->
+            <div class="quota-card">
+              <div class="quota-header">
+                <div class="quota-text">
                   已用 <span id="quota-used">0</span> /
-                  <span id="quota-limit">0</span> GB (<span id="quota-percent"
-                    >0</span
-                  >%)
-                </span>
-                <span class="quota-reset"
-                  >重置日: <span id="reset-day">1</span> 号</span
-                >
+                  <span id="quota-limit">0</span> GB
+                  <span
+                    id="billing-mode-badge"
+                    class="billing-mode-badge"
+                  ></span>
+                </div>
+                <div class="quota-reset">
+                  重置日: <span id="reset-day">1</span> 号
+                </div>
+              </div>
+
+              <div id="progress-track" class="progress-track">
+                <!-- JS 注入进度条和刻度 -->
+              </div>
+
+              <div class="quota-footer">
+                <span id="quota-percent-text">0%</span>
               </div>
             </div>
           </div>

@@ -56,32 +56,107 @@ async function fetchStats() {
     const monthTotalGB = (monthTotalBytes / 1024 / 1024 / 1024).toFixed(2);
     document.getElementById("month-total").textContent = monthTotalGB + " GB";
 
-    // 配额（使用后端根据 billing_mode 计算的 used_bytes）
-    const usedGB = Math.round(data.used_bytes / 1024 / 1024 / 1024);
-    const limitGB = data.monthly_limit_gb;
-    const percent = limitGB > 0 ? Math.round((usedGB / limitGB) * 100) : 0;
-
-    document.getElementById("quota-used").textContent = usedGB;
-    document.getElementById("quota-limit").textContent = limitGB;
-    document.getElementById("quota-percent").textContent = percent;
-    document.getElementById("reset-day").textContent = data.reset_day;
-
-    const quotaFill = document.getElementById("quota-fill");
-    quotaFill.style.width = Math.min(percent, 100) + "%";
-    quotaFill.classList.remove("warning", "danger");
-    if (percent >= 90) quotaFill.classList.add("danger");
-    else if (percent >= 80) quotaFill.classList.add("warning");
-
     // 获取端口流量
     fetchPortTraffic();
 
     if (trendRange === "30d" || trendRange === "cycle") {
       fetchDailyTrend(trendRange);
     }
+
+    // 渲染高级流量进度条
+    renderTrafficProgress(data);
   } catch (e) {
     console.error("获取统计数据失败:", e);
   }
 }
+
+// 渲染流量进度条（支持双向/单向/刻度）
+function renderTrafficProgress(data) {
+  const limitGB = data.monthly_limit_gb;
+  if (limitGB <= 0) return;
+
+  const usedBytes = data.used_bytes;
+  const usedGB = Math.round(usedBytes / 1024 / 1024 / 1024);
+  const totalPercent = (usedBytes / (limitGB * 1024 * 1024 * 1024)) * 100;
+
+  // 更新文本
+  const usedEl = document.getElementById("quota-used");
+  const limitEl = document.getElementById("quota-limit");
+  const percentTextEl = document.getElementById("quota-percent-text");
+  const badgeEl = document.getElementById("billing-mode-badge");
+
+  if (usedEl) usedEl.textContent = usedGB;
+  if (limitEl) limitEl.textContent = limitGB;
+  if (percentTextEl) percentTextEl.textContent = `${totalPercent.toFixed(1)}%`;
+  
+  // 更新 Badge
+  if (badgeEl) {
+    let modeText = data.billing_mode;
+    if (modeText === "bidirectional") modeText = "双向计费";
+    else if (modeText === "tx_only") modeText = "仅出站 (TX)";
+    else if (modeText === "rx_only") modeText = "仅入站 (RX)";
+    else if (modeText === "max_value") modeText = "取最大值 (Max)";
+    badgeEl.textContent = modeText;
+  }
+
+  // 渲染进度条轨道
+  const track = document.getElementById("progress-track");
+  if (!track) return;
+  track.innerHTML = ""; // 清空
+
+  // 1. 添加刻度 (Threshold Markers)
+  const thresholds = data.alert_thresholds || [80, 90, 95];
+  thresholds.forEach((t) => {
+    if (t > 0 && t < 100) {
+      const marker = document.createElement("div");
+      marker.className = "threshold-marker";
+      marker.style.left = `${t}%`;
+      marker.title = `预警阈值: ${t}%`;
+      track.appendChild(marker);
+    }
+  });
+
+  // 2. 计算分段
+  const limitBytes = limitGB * 1024 * 1024 * 1024;
+  let segments = [];
+  let isDanger = false;
+
+  // 检查是否超过最小阈值 (通常是第一个)
+  const sortedThresholds = [...thresholds].sort((a, b) => a - b);
+  if (sortedThresholds.length > 0 && totalPercent >= sortedThresholds[0]) {
+    isDanger = true;
+  }
+
+  // 根据模式决定渲染段
+  if (data.billing_mode === "bidirectional") {
+    // 双向：分开显示 TX 和 RX
+    const txPercent = (data.this_month.tx / limitBytes) * 100;
+    const rxPercent = (data.this_month.rx / limitBytes) * 100;
+    segments.push({ type: "tx", width: txPercent });
+    segments.push({ type: "rx", width: rxPercent });
+  } else {
+    // 单向或其他：显示总计 (tx_only, rx_only, max_value)
+    // 注意：max_value 模式下 used_bytes 已是 max(tx, rx)
+    segments.push({ type: "total", width: totalPercent });
+  }
+
+  // 3. 渲染分段
+  segments.forEach((seg) => {
+    const div = document.createElement("div");
+    div.className = `progress-bar-segment segment-${seg.type}`;
+    div.style.width = `${Math.min(seg.width, 100).toFixed(2)}%`; // 防止溢出视觉
+    track.appendChild(div);
+  });
+
+  // 4. 变红逻辑
+  if (isDanger) {
+    track.classList.add("danger");
+  } else {
+    track.classList.remove("danger");
+  }
+}
+
+
 
 // 获取端口流量
 async function fetchPortTraffic() {
