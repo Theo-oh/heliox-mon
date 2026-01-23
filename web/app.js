@@ -105,7 +105,7 @@ function renderTrafficProgress(data) {
   track.innerHTML = ""; // 清空
 
   // 1. 添加刻度 (Threshold Markers)
-  const thresholds = data.alert_thresholds || [80, 90, 95];
+  const thresholds = (data.alert_thresholds && data.alert_thresholds.length > 0) ? data.alert_thresholds : [80, 90, 95];
   thresholds.forEach((t) => {
     if (t > 0 && t < 100) {
       const marker = document.createElement("div");
