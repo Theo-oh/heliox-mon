@@ -20,7 +20,10 @@ function formatSpeed(bytesPerSec) {
 async function fetchStats() {
   try {
     const res = await fetch("/api/stats");
-    if (res.status === 401) { window.location.href = "/login"; return; }
+    if (res.status === 401) {
+      window.location.href = "/login";
+      return;
+    }
     const data = await res.json();
 
     document.title = data.server_name;
@@ -84,11 +87,13 @@ function renderTrafficProgress(data) {
   const limitEl = document.getElementById("quota-limit");
   const percentTextEl = document.getElementById("quota-percent-text");
   const badgeEl = document.getElementById("billing-mode-badge");
+  const resetDayEl = document.getElementById("reset-day");
 
   if (usedEl) usedEl.textContent = usedGB;
   if (limitEl) limitEl.textContent = limitGB;
   if (percentTextEl) percentTextEl.textContent = `${totalPercent.toFixed(1)}%`;
-  
+  if (resetDayEl) resetDayEl.textContent = data.reset_day;
+
   // 更新 Badge
   if (badgeEl) {
     let modeText = data.billing_mode;
@@ -105,7 +110,10 @@ function renderTrafficProgress(data) {
   track.innerHTML = ""; // 清空
 
   // 1. 添加刻度 (Threshold Markers)
-  const thresholds = (data.alert_thresholds && data.alert_thresholds.length > 0) ? data.alert_thresholds : [80, 90, 95];
+  const thresholds =
+    data.alert_thresholds && data.alert_thresholds.length > 0
+      ? data.alert_thresholds
+      : [80, 90, 95];
   thresholds.forEach((t) => {
     if (t > 0 && t < 100) {
       const marker = document.createElement("div");
@@ -155,8 +163,6 @@ function renderTrafficProgress(data) {
     track.classList.remove("danger");
   }
 }
-
-
 
 // 获取端口流量
 async function fetchPortTraffic() {
@@ -246,7 +252,10 @@ function renderPortMonthGrid(containerId, ports) {
 async function fetchSystem() {
   try {
     const res = await fetch("/api/system", { cache: "no-store" });
-    if (res.status === 401) { window.location.href = "/login"; return; }
+    if (res.status === 401) {
+      window.location.href = "/login";
+      return;
+    }
 
     // 检查 HTTP 状态
     if (!res.ok) {
@@ -406,7 +415,10 @@ async function fetchLatency(start = null, end = null) {
     }
 
     const res = await fetch(url);
-    if (res.status === 401) { window.location.href = "/login"; return; }
+    if (res.status === 401) {
+      window.location.href = "/login";
+      return;
+    }
     latencyData = await res.json();
 
     // 显示粒度信息
@@ -999,7 +1011,8 @@ function updateTrendToggleState() {
   setToggleState(detailBtn, trendView === "detail");
 
   if (viewToggle) {
-    viewToggle.style.display = trendRange === "monthly" ? "inline-flex" : "none";
+    viewToggle.style.display =
+      trendRange === "monthly" ? "inline-flex" : "none";
   }
 }
 
@@ -1031,9 +1044,7 @@ async function fetchDailyTrend(rangeType) {
       return;
     }
 
-    const sorted = data
-      .slice()
-      .sort((a, b) => a.date.localeCompare(b.date));
+    const sorted = data.slice().sort((a, b) => a.date.localeCompare(b.date));
 
     if (range === "cycle") {
       trendCycleData = sorted;
@@ -1133,17 +1144,14 @@ function renderTrendChart() {
       return [totalLabels[index], "", labels[index]];
     };
   } else {
-    const source =
-      trendRange === "cycle" ? trendCycleData : trendDailyData;
+    const source = trendRange === "cycle" ? trendCycleData : trendDailyData;
     if (!source) return;
 
     setTrendTitle(trendRange === "cycle" ? "本计费周期流量" : "近30天流量");
     updateTrendToggleState();
 
     labels = source.map((d) => d.date.slice(5));
-    const totals = source.map(
-      (d) => (d.tx + d.rx) / 1024 / 1024 / 1024,
-    );
+    const totals = source.map((d) => (d.tx + d.rx) / 1024 / 1024 / 1024);
 
     datasets = [
       {
