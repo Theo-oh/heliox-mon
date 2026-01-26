@@ -448,6 +448,9 @@ body.theme-light .section-title {
 }
 
 .legend-pill {
+  appearance: none;
+  border: none;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -461,8 +464,8 @@ body.theme-light .section-title {
 
 .legend-pill::before {
   content: "";
-  width: 8px;
-  height: 8px;
+  width: 18px;
+  height: 2px;
   border-radius: 999px;
   background: currentColor;
 }
@@ -473,6 +476,10 @@ body.theme-light .section-title {
 
 .legend-pill.is-up {
   color: var(--speed-up);
+}
+
+.legend-pill.is-inactive {
+  opacity: 0.4;
 }
 
 .realtime-metrics {

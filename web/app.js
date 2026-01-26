@@ -344,9 +344,10 @@ async function fetchSystem() {
 const realtimeWindowSize = 60;
 let realtimeChart = null;
 let realtimeScale = { ...getSpeedScale(1), maxBytes: 1024 };
-const realtimeLabels = [];
-const realtimeTxSeries = [];
-const realtimeRxSeries = [];
+const realtimeLabels = Array.from({ length: realtimeWindowSize }, () => "");
+const realtimeTxSeries = Array.from({ length: realtimeWindowSize }, () => null);
+const realtimeRxSeries = Array.from({ length: realtimeWindowSize }, () => null);
+let realtimeCount = 0;
 
 function getRealtimePalette() {
   return {
@@ -464,6 +465,8 @@ function initRealtimeChart() {
       },
     },
   });
+
+  bindRealtimeLegend();
 }
 
 function applyRealtimeTheme() {
@@ -487,10 +490,10 @@ function applyRealtimeTheme() {
 function updateRealtimeScale() {
   let maxVal = 0;
   for (const v of realtimeTxSeries) {
-    if (v > maxVal) maxVal = v;
+    if (typeof v === "number" && v > maxVal) maxVal = v;
   }
   for (const v of realtimeRxSeries) {
-    if (v > maxVal) maxVal = v;
+    if (typeof v === "number" && v > maxVal) maxVal = v;
   }
   const scale = getSpeedScale(maxVal);
   const scaledMax = maxVal / scale.scale;
@@ -507,28 +510,39 @@ function updateRealtimeScale() {
 function updateRealtimeAverage() {
   const avgEl = document.getElementById("avg-speed");
   if (!avgEl) return;
-  if (!realtimeTxSeries.length) {
+  let count = 0;
+  let sum = 0;
+  for (let i = 0; i < realtimeTxSeries.length; i++) {
+    const tx = realtimeTxSeries[i];
+    const rx = realtimeRxSeries[i];
+    if (typeof tx === "number" && typeof rx === "number") {
+      sum += tx + rx;
+      count++;
+    }
+  }
+  if (!count) {
     avgEl.textContent = "--";
     return;
   }
-  let sum = 0;
-  for (let i = 0; i < realtimeTxSeries.length; i++) {
-    sum += realtimeTxSeries[i] + realtimeRxSeries[i];
-  }
-  const avg = sum / realtimeTxSeries.length;
+  const avg = sum / count;
   avgEl.textContent = formatSpeed(avg);
 }
 
 function pushRealtimePoint(txSpeed, rxSpeed) {
   const label = formatTimeLabel(new Date());
-  realtimeLabels.push(label);
-  realtimeTxSeries.push(txSpeed);
-  realtimeRxSeries.push(rxSpeed);
-
-  if (realtimeLabels.length > realtimeWindowSize) {
+  if (realtimeCount < realtimeWindowSize) {
+    const idx = realtimeCount;
+    realtimeLabels[idx] = label;
+    realtimeTxSeries[idx] = txSpeed;
+    realtimeRxSeries[idx] = rxSpeed;
+    realtimeCount++;
+  } else {
     realtimeLabels.shift();
     realtimeTxSeries.shift();
     realtimeRxSeries.shift();
+    realtimeLabels.push(label);
+    realtimeTxSeries.push(txSpeed);
+    realtimeRxSeries.push(rxSpeed);
   }
 
   updateRealtimeAverage();
@@ -555,6 +569,22 @@ function connectRealtime() {
     eventSource.close();
     setTimeout(connectRealtime, 5000);
   };
+}
+
+function bindRealtimeLegend() {
+  const legend = document.querySelector(".realtime-legend");
+  if (!legend || !realtimeChart) return;
+  legend.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-dataset]");
+    if (!btn) return;
+    const index = Number(btn.dataset.dataset);
+    if (Number.isNaN(index)) return;
+    const visible = realtimeChart.isDatasetVisible(index);
+    realtimeChart.setDatasetVisibility(index, !visible);
+    btn.classList.toggle("is-inactive", visible);
+    btn.setAttribute("aria-pressed", String(!visible));
+    realtimeChart.update("none");
+  });
 }
 
 // 延迟图表

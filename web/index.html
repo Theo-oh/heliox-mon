@@ -54,9 +54,23 @@
           <div class="realtime-chart">
             <canvas id="realtime-chart"></canvas>
           </div>
-          <div class="realtime-legend">
-            <span class="legend-pill is-down">下载</span>
-            <span class="legend-pill is-up">上传</span>
+          <div class="realtime-legend" role="group" aria-label="实时网速图例">
+            <button
+              class="legend-pill is-down"
+              type="button"
+              data-dataset="0"
+              aria-pressed="true"
+            >
+              下载
+            </button>
+            <button
+              class="legend-pill is-up"
+              type="button"
+              data-dataset="1"
+              aria-pressed="true"
+            >
+              上传
+            </button>
           </div>
           <div class="realtime-metrics">
             <div class="realtime-metric is-up">
@@ -269,6 +283,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
-    <script src="app.js?v=0.10.3"></script>
+    <script src="app.js?v=0.10.5"></script>
   </body>
 </html>
