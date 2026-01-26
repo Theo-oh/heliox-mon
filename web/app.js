@@ -383,9 +383,11 @@ function buildRealtimeDatasets(palette) {
       borderColor: palette.down,
       backgroundColor: makeSpeedFill(palette.down),
       borderWidth: 2,
+      borderJoinStyle: "round",
+      borderCapStyle: "round",
       pointRadius: 0,
       pointHitRadius: 8,
-      tension: 0.35,
+      tension: 0.45,
       cubicInterpolationMode: "monotone",
       fill: true,
     },
@@ -395,9 +397,11 @@ function buildRealtimeDatasets(palette) {
       borderColor: palette.up,
       backgroundColor: makeSpeedFill(palette.up),
       borderWidth: 2,
+      borderJoinStyle: "round",
+      borderCapStyle: "round",
       pointRadius: 0,
       pointHitRadius: 8,
-      tension: 0.35,
+      tension: 0.45,
       cubicInterpolationMode: "monotone",
       fill: true,
     },
@@ -507,7 +511,7 @@ function updateRealtimeAverage() {
   if (!avgEl) return;
   let sum = 0;
   for (let i = 0; i < realtimeTxSeries.length; i++) {
-    sum += realtimeTxSeries[i] + realtimeRxSeries[i];
+    sum += realtimeTxSeries[i];
   }
   const avg = sum / realtimeTxSeries.length;
   avgEl.textContent = formatSpeed(avg);
