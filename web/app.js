@@ -12,10 +12,14 @@ function formatBytes(bytes) {
 function formatSpeed(bytesPerSec) {
   if (bytesPerSec < 1024) return Math.round(bytesPerSec) + " B/s";
   if (bytesPerSec < 1024 * 1024)
-    return (bytesPerSec / 1024).toFixed(2) + " KB/s";
+    return (bytesPerSec / 1024).toFixed(3) + " KB/s";
   if (bytesPerSec < 1024 * 1024 * 1024)
-    return (bytesPerSec / 1024 / 1024).toFixed(3) + " MB/s";
-  return (bytesPerSec / 1024 / 1024 / 1024).toFixed(3) + " GB/s";
+    return (bytesPerSec / 1024 / 1024).toFixed(4) + " MB/s";
+  return (bytesPerSec / 1024 / 1024 / 1024).toFixed(4) + " GB/s";
+}
+
+function formatSpeedRaw(bytesPerSec) {
+  return `${bytesPerSec.toFixed(3)} B/s`;
 }
 
 function formatTimeLabel(date) {
@@ -35,10 +39,9 @@ function hexToRgba(hex, alpha) {
 
 function getSpeedScale(maxBytesPerSec) {
   if (maxBytesPerSec >= 1024 * 1024) {
-    return { unit: "MB/s", scale: 1024 * 1024, decimals: 1 };
+    return { unit: "MB/s", scale: 1024 * 1024, decimals: 3 };
   }
-  const decimals = maxBytesPerSec < 10 * 1024 ? 1 : 0;
-  return { unit: "KB/s", scale: 1024, decimals };
+  return { unit: "KB/s", scale: 1024, decimals: 2 };
 }
 
 function niceCeil(value) {
@@ -548,8 +551,8 @@ function connectRealtime() {
     const rxSpeed = Math.max(0, Number(data.rx_speed) || 0);
     const txEl = document.getElementById("tx-speed");
     const rxEl = document.getElementById("rx-speed");
-    if (txEl) txEl.textContent = formatSpeed(txSpeed);
-    if (rxEl) rxEl.textContent = formatSpeed(rxSpeed);
+    if (txEl) txEl.textContent = formatSpeedRaw(txSpeed);
+    if (rxEl) rxEl.textContent = formatSpeedRaw(rxSpeed);
     pushRealtimePoint(txSpeed, rxSpeed);
   };
 
