@@ -441,6 +441,40 @@ body.theme-light .section-title {
   height: 220px;
 }
 
+.realtime-legend {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.legend-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--item-bg);
+  border: 1px solid var(--card-border);
+}
+
+.legend-pill::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.legend-pill.is-down {
+  color: var(--speed-down);
+}
+
+.legend-pill.is-up {
+  color: var(--speed-up);
+}
+
 .realtime-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

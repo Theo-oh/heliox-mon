@@ -426,19 +426,10 @@ function initRealtimeChart() {
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
+      layout: { padding: { right: 12 } },
       interaction: { mode: "index", intersect: false },
       plugins: {
-        legend: {
-          display: true,
-          position: "top",
-          align: "end",
-          labels: {
-            color: palette.muted,
-            usePointStyle: true,
-            pointStyle: "line",
-            boxWidth: 24,
-          },
-        },
+        legend: { display: false },
         tooltip: {
           callbacks: {
             label: (ctx) => `${ctx.dataset.label}: ${formatSpeed(ctx.raw)}`,
@@ -447,12 +438,9 @@ function initRealtimeChart() {
       },
       scales: {
         x: {
+          display: false,
           grid: { display: false },
-          ticks: {
-            color: palette.muted,
-            maxTicksLimit: 6,
-            autoSkip: true,
-          },
+          ticks: { display: false },
           border: { display: false },
         },
         y: {
@@ -464,14 +452,12 @@ function initRealtimeChart() {
           grid: { color: palette.grid },
           ticks: {
             color: palette.muted,
+            padding: 12,
             callback: (value) => formatAxisSpeed(value, realtimeScale),
           },
           afterBuildTicks: applyRealtimeTicks,
           title: {
-            display: true,
-            text: realtimeScale.unit,
-            color: palette.muted,
-            font: { size: 11, weight: "600" },
+            display: false,
           },
           border: { display: false },
         },
@@ -495,8 +481,6 @@ function applyRealtimeTheme() {
   realtimeChart.options.scales.x.ticks.color = palette.muted;
   realtimeChart.options.scales.y.ticks.color = palette.muted;
   realtimeChart.options.scales.y.grid.color = palette.grid;
-  realtimeChart.options.scales.y.title.color = palette.muted;
-  realtimeChart.options.plugins.legend.labels.color = palette.muted;
   realtimeChart.update("none");
 }
 
