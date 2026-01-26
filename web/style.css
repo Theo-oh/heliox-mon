@@ -431,6 +431,9 @@ body.theme-light .section-title {
   padding: 24px;
   border: 1px solid var(--card-border);
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 
 .realtime-chart {
@@ -439,18 +442,22 @@ body.theme-light .section-title {
 }
 
 .realtime-metrics {
-  margin-top: 18px;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .realtime-metric {
   background: var(--item-bg);
   border-radius: var(--radius-sm);
-  padding: 12px 16px;
+  padding: 16px 18px;
   border: 1px solid var(--card-border);
   text-align: center;
+  min-height: 86px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
 }
 
 .realtime-metric .label {
@@ -463,7 +470,7 @@ body.theme-light .section-title {
 }
 
 .realtime-metric .value {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text);
