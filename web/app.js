@@ -428,7 +428,7 @@ function buildRealtimeDatasets(palette) {
 
 function applyRealtimeTicks(scale) {
   const maxVal = realtimeScale.maxBytes || scale.max || 1;
-  const ticks = [0, maxVal / 3, (maxVal * 2) / 3, maxVal].map((value) => ({
+  const ticks = [0, maxVal / 2, maxVal].map((value) => ({
     value: Math.round(value),
   }));
   scale.ticks = ticks;
