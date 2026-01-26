@@ -10,12 +10,12 @@ function formatBytes(bytes) {
 }
 
 function formatSpeed(bytesPerSec) {
-  if (bytesPerSec < 1024) return bytesPerSec.toFixed(1) + " B/s";
+  if (bytesPerSec < 1024) return Math.round(bytesPerSec) + " B/s";
   if (bytesPerSec < 1024 * 1024)
-    return (bytesPerSec / 1024).toFixed(1) + " KB/s";
+    return (bytesPerSec / 1024).toFixed(2) + " KB/s";
   if (bytesPerSec < 1024 * 1024 * 1024)
-    return (bytesPerSec / 1024 / 1024).toFixed(2) + " MB/s";
-  return (bytesPerSec / 1024 / 1024 / 1024).toFixed(2) + " GB/s";
+    return (bytesPerSec / 1024 / 1024).toFixed(3) + " MB/s";
+  return (bytesPerSec / 1024 / 1024 / 1024).toFixed(3) + " GB/s";
 }
 
 function formatTimeLabel(date) {
@@ -387,8 +387,7 @@ function buildRealtimeDatasets(palette) {
       borderCapStyle: "round",
       pointRadius: 0,
       pointHitRadius: 8,
-      tension: 0.45,
-      cubicInterpolationMode: "monotone",
+      tension: 0,
       fill: true,
     },
     {
@@ -401,8 +400,7 @@ function buildRealtimeDatasets(palette) {
       borderCapStyle: "round",
       pointRadius: 0,
       pointHitRadius: 8,
-      tension: 0.45,
-      cubicInterpolationMode: "monotone",
+      tension: 0,
       fill: true,
     },
   ];
@@ -429,7 +427,7 @@ function initRealtimeChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 260, easing: "linear" },
+      animation: false,
       layout: { padding: { right: 12 } },
       interaction: { mode: "index", intersect: false },
       plugins: {
@@ -507,9 +505,7 @@ function updateRealtimeScale() {
     if (v > maxVal) maxVal = v;
   }
   const scale = getSpeedScale(maxVal);
-  const scaledMax = maxVal / scale.scale;
-  const niceMax = niceCeil(scaledMax);
-  const maxBytes = Math.max(1, niceMax * scale.scale);
+  const maxBytes = Math.max(1, maxVal);
   realtimeScale = { ...scale, maxBytes };
   if (!realtimeChart) return;
   realtimeChart.options.scales.y.ticks.callback = (value) =>
