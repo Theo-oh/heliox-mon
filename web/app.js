@@ -378,10 +378,10 @@ function makeSpeedFill(color) {
 function buildRealtimeDatasets(palette) {
   return [
     {
-      label: "下载",
-      data: realtimeRxSeries,
-      borderColor: palette.down,
-      backgroundColor: makeSpeedFill(palette.down),
+      label: "上传",
+      data: realtimeTxSeries,
+      borderColor: palette.up,
+      backgroundColor: makeSpeedFill(palette.up),
       borderWidth: 2,
       borderJoinStyle: "round",
       borderCapStyle: "round",
@@ -392,10 +392,10 @@ function buildRealtimeDatasets(palette) {
       fill: true,
     },
     {
-      label: "上传",
-      data: realtimeTxSeries,
-      borderColor: palette.up,
-      backgroundColor: makeSpeedFill(palette.up),
+      label: "下载",
+      data: realtimeRxSeries,
+      borderColor: palette.down,
+      backgroundColor: makeSpeedFill(palette.down),
       borderWidth: 2,
       borderJoinStyle: "round",
       borderCapStyle: "round",
@@ -433,7 +433,17 @@ function initRealtimeChart() {
       layout: { padding: { right: 12 } },
       interaction: { mode: "index", intersect: false },
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: true,
+          position: "bottom",
+          align: "center",
+          labels: {
+            color: palette.muted,
+            usePointStyle: true,
+            pointStyle: "line",
+            boxWidth: 28,
+          },
+        },
         tooltip: { enabled: false },
       },
       scales: {
@@ -465,7 +475,6 @@ function initRealtimeChart() {
     },
   });
 
-  bindRealtimeLegend();
 }
 
 function applyRealtimeTheme() {
@@ -473,16 +482,19 @@ function applyRealtimeTheme() {
   const palette = getRealtimePalette();
   const datasets = realtimeChart.data.datasets;
   if (datasets[0]) {
-    datasets[0].borderColor = palette.down;
-    datasets[0].backgroundColor = makeSpeedFill(palette.down);
+    datasets[0].borderColor = palette.up;
+    datasets[0].backgroundColor = makeSpeedFill(palette.up);
   }
   if (datasets[1]) {
-    datasets[1].borderColor = palette.up;
-    datasets[1].backgroundColor = makeSpeedFill(palette.up);
+    datasets[1].borderColor = palette.down;
+    datasets[1].backgroundColor = makeSpeedFill(palette.down);
   }
   realtimeChart.options.scales.x.ticks.color = palette.muted;
   realtimeChart.options.scales.y.ticks.color = palette.muted;
   realtimeChart.options.scales.y.grid.color = palette.grid;
+  if (realtimeChart.options.plugins?.legend?.labels) {
+    realtimeChart.options.plugins.legend.labels.color = palette.muted;
+  }
   realtimeChart.update("none");
 }
 
@@ -497,7 +509,7 @@ function updateRealtimeScale() {
   const scale = getSpeedScale(maxVal);
   const scaledMax = maxVal / scale.scale;
   const niceMax = niceCeil(scaledMax);
-  const maxBytes = Math.max(scale.scale, niceMax * scale.scale);
+  const maxBytes = Math.max(1, niceMax * scale.scale);
   realtimeScale = { ...scale, maxBytes };
   if (!realtimeChart) return;
   realtimeChart.options.scales.y.ticks.callback = (value) =>
@@ -550,22 +562,6 @@ function connectRealtime() {
     eventSource.close();
     setTimeout(connectRealtime, 5000);
   };
-}
-
-function bindRealtimeLegend() {
-  const legend = document.querySelector(".realtime-legend");
-  if (!legend || !realtimeChart) return;
-  legend.addEventListener("click", (event) => {
-    const btn = event.target.closest("[data-dataset]");
-    if (!btn) return;
-    const index = Number(btn.dataset.dataset);
-    if (Number.isNaN(index)) return;
-    const visible = realtimeChart.isDatasetVisible(index);
-    realtimeChart.setDatasetVisibility(index, !visible);
-    btn.classList.toggle("is-inactive", visible);
-    btn.setAttribute("aria-pressed", String(!visible));
-    realtimeChart.update("none");
-  });
 }
 
 // 延迟图表
