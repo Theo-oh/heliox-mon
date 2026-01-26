@@ -10,12 +10,12 @@ function formatBytes(bytes) {
 }
 
 function formatSpeed(bytesPerSec) {
-  if (bytesPerSec < 1024) return Math.round(bytesPerSec) + " B/s";
+  if (bytesPerSec < 1024) return bytesPerSec.toFixed(1) + " B/s";
   if (bytesPerSec < 1024 * 1024)
-    return (bytesPerSec / 1024).toFixed(3) + " KB/s";
+    return (bytesPerSec / 1024).toFixed(1) + " KB/s";
   if (bytesPerSec < 1024 * 1024 * 1024)
-    return (bytesPerSec / 1024 / 1024).toFixed(4) + " MB/s";
-  return (bytesPerSec / 1024 / 1024 / 1024).toFixed(4) + " GB/s";
+    return (bytesPerSec / 1024 / 1024).toFixed(2) + " MB/s";
+  return (bytesPerSec / 1024 / 1024 / 1024).toFixed(2) + " GB/s";
 }
 
 
