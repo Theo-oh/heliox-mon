@@ -34,16 +34,33 @@ function hexToRgba(hex, alpha) {
 }
 
 function getSpeedScale(maxBytesPerSec) {
-  if (maxBytesPerSec >= 1024 * 1024 * 1024) {
-    return { unit: "GB/s", scale: 1024 * 1024 * 1024, decimals: 2 };
-  }
   if (maxBytesPerSec >= 1024 * 1024) {
-    return { unit: "MB/s", scale: 1024 * 1024, decimals: 2 };
+    return { unit: "MB/s", scale: 1024 * 1024, decimals: 1 };
   }
-  if (maxBytesPerSec >= 1024) {
-    return { unit: "KB/s", scale: 1024, decimals: 1 };
+  const decimals = maxBytesPerSec < 10 * 1024 ? 1 : 0;
+  return { unit: "KB/s", scale: 1024, decimals };
+}
+
+function niceCeil(value) {
+  if (!value || value <= 0) return 1;
+  const exp = Math.floor(Math.log10(value));
+  const base = Math.pow(10, exp);
+  const f = value / base;
+  let nf = 10;
+  if (f <= 1) nf = 1;
+  else if (f <= 2) nf = 2;
+  else if (f <= 5) nf = 5;
+  return nf * base;
+}
+
+function formatAxisSpeed(value, scale) {
+  if (value === 0) return "0B/s";
+  const scaled = value / scale.scale;
+  let text = scaled.toFixed(scale.decimals);
+  if (scale.decimals > 0) {
+    text = text.replace(/\.0+$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
   }
-  return { unit: "B/s", scale: 1, decimals: 0 };
+  return `${text}${scale.unit}`;
 }
 
 // 获取仪表盘数据
@@ -326,7 +343,7 @@ async function fetchSystem() {
 // SSE 实时网速
 const realtimeWindowSize = 60;
 let realtimeChart = null;
-let realtimeScale = getSpeedScale(1);
+let realtimeScale = { ...getSpeedScale(1), maxBytes: 1024 };
 const realtimeLabels = [];
 const realtimeTxSeries = [];
 const realtimeRxSeries = [];
@@ -387,6 +404,12 @@ function buildRealtimeDatasets(palette) {
   ];
 }
 
+function applyRealtimeTicks(scale) {
+  const maxVal = realtimeScale.maxBytes || scale.max || 1;
+  const step = maxVal / 3;
+  scale.ticks = [0, step, step * 2, maxVal].map((value) => ({ value }));
+}
+
 function initRealtimeChart() {
   const canvas = document.getElementById("realtime-chart");
   if (!canvas) return;
@@ -434,13 +457,16 @@ function initRealtimeChart() {
         },
         y: {
           beginAtZero: true,
-          grace: "15%",
+          min: 0,
+          max: realtimeScale.maxBytes,
+          position: "right",
+          grace: "5%",
           grid: { color: palette.grid },
           ticks: {
             color: palette.muted,
-            callback: (value) =>
-              (value / realtimeScale.scale).toFixed(realtimeScale.decimals),
+            callback: (value) => formatAxisSpeed(value, realtimeScale),
           },
+          afterBuildTicks: applyRealtimeTicks,
           title: {
             display: true,
             text: realtimeScale.unit,
@@ -482,10 +508,15 @@ function updateRealtimeScale() {
   for (const v of realtimeRxSeries) {
     if (v > maxVal) maxVal = v;
   }
-  realtimeScale = getSpeedScale(maxVal);
+  const scale = getSpeedScale(maxVal);
+  const scaledMax = maxVal / scale.scale;
+  const niceMax = niceCeil(scaledMax);
+  const maxBytes = Math.max(scale.scale, niceMax * scale.scale);
+  realtimeScale = { ...scale, maxBytes };
   if (!realtimeChart) return;
   realtimeChart.options.scales.y.ticks.callback = (value) =>
-    (value / realtimeScale.scale).toFixed(realtimeScale.decimals);
+    formatAxisSpeed(value, realtimeScale);
+  realtimeChart.options.scales.y.max = realtimeScale.maxBytes;
   realtimeChart.options.scales.y.title.text = realtimeScale.unit;
 }
 
