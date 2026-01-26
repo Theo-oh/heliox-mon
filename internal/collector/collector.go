@@ -261,8 +261,10 @@ func (c *Collector) aggregateLatencyData() {
 
 // cleanupOldSnapshots 清理过期快照
 func (c *Collector) cleanupOldSnapshots() {
-	// 保留最近 24 小时的流量快照（足够日汇总计算）
-	cutoff := time.Now().Add(-24 * time.Hour).Unix()
+	// 保留从“昨日零点”开始的流量快照，确保昨日统计完整且不随时间变小
+	now := time.Now().In(c.cfg.Timezone)
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, c.cfg.Timezone)
+	cutoff := todayStart.AddDate(0, 0, -1).Unix()
 	_, _ = c.db.Exec("DELETE FROM traffic_snapshots WHERE ts < ?", cutoff)
 	_, _ = c.db.Exec("DELETE FROM port_traffic_snapshots WHERE ts < ?", cutoff)
 }
