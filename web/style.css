@@ -14,6 +14,9 @@
   --accent-purple: #bf5af2;
   --accent-orange: #ff9f0a;
   --accent-red: #ff453a;
+  --speed-down: #4dd4ff;
+  --speed-up: #b66cff;
+  --speed-grid: rgba(255, 255, 255, 0.08);
 
   --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
   --radius-lg: 24px;
@@ -31,6 +34,7 @@ body.theme-light {
   --wrapper-bg: rgba(255, 255, 255, 0.94);
   --item-bg: rgba(240, 240, 244, 0.9);
   --shadow-lg: 0 20px 60px rgba(20, 20, 30, 0.12);
+  --speed-grid: rgba(0, 0, 0, 0.08);
 }
 
 * {
@@ -418,6 +422,59 @@ body.theme-light .section-title {
   font-size: 32px;
   font-weight: 700;
   color: var(--text);
+}
+
+/* Realtime Traffic Panel */
+.realtime-panel {
+  background: var(--card-bg);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  border: 1px solid var(--card-border);
+  position: relative;
+}
+
+.realtime-chart {
+  position: relative;
+  height: 220px;
+}
+
+.realtime-metrics {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.realtime-metric {
+  background: var(--item-bg);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  border: 1px solid var(--card-border);
+  text-align: center;
+}
+
+.realtime-metric .label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.realtime-metric .value {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.realtime-metric.is-up .value {
+  color: var(--speed-up);
+}
+
+.realtime-metric.is-down .value {
+  color: var(--speed-down);
 }
 
 /* Chart Container */
@@ -915,6 +972,9 @@ body.theme-light .threshold-marker {
   .cards,
   .stats-grid,
   .speed-cards {
+    grid-template-columns: 1fr;
+  }
+  .realtime-metrics {
     grid-template-columns: 1fr;
   }
   .month-grid {

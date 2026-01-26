@@ -13,7 +13,37 @@ function formatSpeed(bytesPerSec) {
   if (bytesPerSec < 1024) return bytesPerSec.toFixed(1) + " B/s";
   if (bytesPerSec < 1024 * 1024)
     return (bytesPerSec / 1024).toFixed(1) + " KB/s";
-  return (bytesPerSec / 1024 / 1024).toFixed(2) + " MB/s";
+  if (bytesPerSec < 1024 * 1024 * 1024)
+    return (bytesPerSec / 1024 / 1024).toFixed(2) + " MB/s";
+  return (bytesPerSec / 1024 / 1024 / 1024).toFixed(2) + " GB/s";
+}
+
+function formatTimeLabel(date) {
+  const m = String(date.getMinutes()).padStart(2, "0");
+  const s = String(date.getSeconds()).padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+function hexToRgba(hex, alpha) {
+  const clean = hex.replace("#", "").trim();
+  if (clean.length !== 6) return `rgba(0, 0, 0, ${alpha})`;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function getSpeedScale(maxBytesPerSec) {
+  if (maxBytesPerSec >= 1024 * 1024 * 1024) {
+    return { unit: "GB/s", scale: 1024 * 1024 * 1024, decimals: 2 };
+  }
+  if (maxBytesPerSec >= 1024 * 1024) {
+    return { unit: "MB/s", scale: 1024 * 1024, decimals: 2 };
+  }
+  if (maxBytesPerSec >= 1024) {
+    return { unit: "KB/s", scale: 1024, decimals: 1 };
+  }
+  return { unit: "B/s", scale: 1, decimals: 0 };
 }
 
 // 获取仪表盘数据
@@ -294,17 +324,215 @@ async function fetchSystem() {
 }
 
 // SSE 实时网速
+const realtimeWindowSize = 60;
+let realtimeChart = null;
+let realtimeScale = getSpeedScale(1);
+const realtimeLabels = [];
+const realtimeTxSeries = [];
+const realtimeRxSeries = [];
+
+function getRealtimePalette() {
+  return {
+    down: getCssVar("--speed-down") || "#4dd4ff",
+    up: getCssVar("--speed-up") || "#b66cff",
+    grid: getCssVar("--speed-grid") || "rgba(255, 255, 255, 0.08)",
+    muted: getCssVar("--muted") || "#6e6e80",
+    text: getCssVar("--text") || "#f5f5f7",
+  };
+}
+
+function makeSpeedFill(color) {
+  return (context) => {
+    const chart = context.chart;
+    const { chartArea } = chart;
+    if (!chartArea) return hexToRgba(color, 0.2);
+    const gradient = chart.ctx.createLinearGradient(
+      0,
+      chartArea.top,
+      0,
+      chartArea.bottom,
+    );
+    gradient.addColorStop(0, hexToRgba(color, 0.28));
+    gradient.addColorStop(1, hexToRgba(color, 0.02));
+    return gradient;
+  };
+}
+
+function buildRealtimeDatasets(palette) {
+  return [
+    {
+      label: "下载",
+      data: realtimeRxSeries,
+      borderColor: palette.down,
+      backgroundColor: makeSpeedFill(palette.down),
+      borderWidth: 2,
+      pointRadius: 0,
+      pointHitRadius: 8,
+      tension: 0.35,
+      cubicInterpolationMode: "monotone",
+      fill: true,
+    },
+    {
+      label: "上传",
+      data: realtimeTxSeries,
+      borderColor: palette.up,
+      backgroundColor: makeSpeedFill(palette.up),
+      borderWidth: 2,
+      pointRadius: 0,
+      pointHitRadius: 8,
+      tension: 0.35,
+      cubicInterpolationMode: "monotone",
+      fill: true,
+    },
+  ];
+}
+
+function initRealtimeChart() {
+  const canvas = document.getElementById("realtime-chart");
+  if (!canvas) return;
+  const palette = getRealtimePalette();
+  const ctx = canvas.getContext("2d");
+
+  realtimeChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: realtimeLabels,
+      datasets: buildRealtimeDatasets(palette),
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: "top",
+          align: "end",
+          labels: {
+            color: palette.muted,
+            usePointStyle: true,
+            pointStyle: "line",
+            boxWidth: 24,
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${formatSpeed(ctx.raw)}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: {
+            color: palette.muted,
+            maxTicksLimit: 6,
+            autoSkip: true,
+          },
+          border: { display: false },
+        },
+        y: {
+          beginAtZero: true,
+          grace: "15%",
+          grid: { color: palette.grid },
+          ticks: {
+            color: palette.muted,
+            callback: (value) =>
+              (value / realtimeScale.scale).toFixed(realtimeScale.decimals),
+          },
+          title: {
+            display: true,
+            text: realtimeScale.unit,
+            color: palette.muted,
+            font: { size: 11, weight: "600" },
+          },
+          border: { display: false },
+        },
+      },
+    },
+  });
+}
+
+function applyRealtimeTheme() {
+  if (!realtimeChart) return;
+  const palette = getRealtimePalette();
+  const datasets = realtimeChart.data.datasets;
+  if (datasets[0]) {
+    datasets[0].borderColor = palette.down;
+    datasets[0].backgroundColor = makeSpeedFill(palette.down);
+  }
+  if (datasets[1]) {
+    datasets[1].borderColor = palette.up;
+    datasets[1].backgroundColor = makeSpeedFill(palette.up);
+  }
+  realtimeChart.options.scales.x.ticks.color = palette.muted;
+  realtimeChart.options.scales.y.ticks.color = palette.muted;
+  realtimeChart.options.scales.y.grid.color = palette.grid;
+  realtimeChart.options.scales.y.title.color = palette.muted;
+  realtimeChart.options.plugins.legend.labels.color = palette.muted;
+  realtimeChart.update("none");
+}
+
+function updateRealtimeScale() {
+  let maxVal = 0;
+  for (const v of realtimeTxSeries) {
+    if (v > maxVal) maxVal = v;
+  }
+  for (const v of realtimeRxSeries) {
+    if (v > maxVal) maxVal = v;
+  }
+  realtimeScale = getSpeedScale(maxVal);
+  if (!realtimeChart) return;
+  realtimeChart.options.scales.y.ticks.callback = (value) =>
+    (value / realtimeScale.scale).toFixed(realtimeScale.decimals);
+  realtimeChart.options.scales.y.title.text = realtimeScale.unit;
+}
+
+function updateRealtimeAverage() {
+  const avgEl = document.getElementById("avg-speed");
+  if (!avgEl) return;
+  if (!realtimeTxSeries.length) {
+    avgEl.textContent = "--";
+    return;
+  }
+  let sum = 0;
+  for (let i = 0; i < realtimeTxSeries.length; i++) {
+    sum += realtimeTxSeries[i] + realtimeRxSeries[i];
+  }
+  const avg = sum / realtimeTxSeries.length;
+  avgEl.textContent = formatSpeed(avg);
+}
+
+function pushRealtimePoint(txSpeed, rxSpeed) {
+  const label = formatTimeLabel(new Date());
+  realtimeLabels.push(label);
+  realtimeTxSeries.push(txSpeed);
+  realtimeRxSeries.push(rxSpeed);
+
+  if (realtimeLabels.length > realtimeWindowSize) {
+    realtimeLabels.shift();
+    realtimeTxSeries.shift();
+    realtimeRxSeries.shift();
+  }
+
+  updateRealtimeAverage();
+  updateRealtimeScale();
+  if (realtimeChart) realtimeChart.update("none");
+}
+
 function connectRealtime() {
   const eventSource = new EventSource("/api/traffic/realtime");
 
   eventSource.onmessage = (event) => {
     const data = JSON.parse(event.data);
-    document.getElementById("tx-speed").textContent = formatSpeed(
-      data.tx_speed,
-    );
-    document.getElementById("rx-speed").textContent = formatSpeed(
-      data.rx_speed,
-    );
+    const txSpeed = Math.max(0, Number(data.tx_speed) || 0);
+    const rxSpeed = Math.max(0, Number(data.rx_speed) || 0);
+    const txEl = document.getElementById("tx-speed");
+    const rxEl = document.getElementById("rx-speed");
+    if (txEl) txEl.textContent = formatSpeed(txSpeed);
+    if (rxEl) rxEl.textContent = formatSpeed(rxSpeed);
+    pushRealtimePoint(txSpeed, rxSpeed);
   };
 
   eventSource.onerror = () => {
@@ -361,6 +589,7 @@ function applyTheme(theme) {
     themeText.textContent = isLight ? "浅色" : "深色";
   }
   renderLatencyChart();
+  applyRealtimeTheme();
 }
 
 function initThemeToggle() {
@@ -1302,6 +1531,7 @@ document.addEventListener("DOMContentLoaded", () => {
   fetchStats();
   fetchSystem();
   fetchMonthlyTrend();
+  initRealtimeChart();
   connectRealtime();
   setupTrendToggle();
   initThemeToggle();

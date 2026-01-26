@@ -51,14 +51,23 @@
       <!-- 实时网速 -->
       <div class="section">
         <div class="section-title">实时网速</div>
-        <div class="speed-cards">
-          <div class="speed-card-item">
-            <span class="label">上行速度</span>
-            <span id="tx-speed" class="value speed-up">-- MB/s</span>
+        <div class="realtime-panel">
+          <div class="realtime-chart">
+            <canvas id="realtime-chart"></canvas>
           </div>
-          <div class="speed-card-item">
-            <span class="label">下行速度</span>
-            <span id="rx-speed" class="value speed-down">-- MB/s</span>
+          <div class="realtime-metrics">
+            <div class="realtime-metric is-up">
+              <span class="label">当前上行</span>
+              <span id="tx-speed" class="value">-- MB/s</span>
+            </div>
+            <div class="realtime-metric is-down">
+              <span class="label">当前下行</span>
+              <span id="rx-speed" class="value">-- MB/s</span>
+            </div>
+            <div class="realtime-metric is-avg">
+              <span class="label">平均速率</span>
+              <span id="avg-speed" class="value">-- MB/s</span>
+            </div>
           </div>
         </div>
       </div>
@@ -257,6 +266,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
-    <script src="app.js?v=0.9.3"></script>
+    <script src="app.js?v=0.10.0"></script>
   </body>
 </html>
