@@ -426,7 +426,7 @@ function initRealtimeChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: false,
+      animation: { duration: 260, easing: "linear" },
       layout: { padding: { right: 12 } },
       interaction: { mode: "index", intersect: false },
       plugins: {
@@ -547,7 +547,7 @@ function pushRealtimePoint(txSpeed, rxSpeed) {
 
   updateRealtimeAverage();
   updateRealtimeScale();
-  if (realtimeChart) realtimeChart.update("none");
+  if (realtimeChart) realtimeChart.update();
 }
 
 function connectRealtime() {
