@@ -18,9 +18,6 @@ function formatSpeed(bytesPerSec) {
   return (bytesPerSec / 1024 / 1024 / 1024).toFixed(4) + " GB/s";
 }
 
-function formatSpeedRaw(bytesPerSec) {
-  return `${bytesPerSec.toFixed(3)} B/s`;
-}
 
 function formatTimeLabel(date) {
   const m = String(date.getMinutes()).padStart(2, "0");
@@ -551,8 +548,8 @@ function connectRealtime() {
     const rxSpeed = Math.max(0, Number(data.rx_speed) || 0);
     const txEl = document.getElementById("tx-speed");
     const rxEl = document.getElementById("rx-speed");
-    if (txEl) txEl.textContent = formatSpeedRaw(txSpeed);
-    if (rxEl) rxEl.textContent = formatSpeedRaw(rxSpeed);
+    if (txEl) txEl.textContent = formatSpeed(txSpeed);
+    if (rxEl) rxEl.textContent = formatSpeed(rxSpeed);
     pushRealtimePoint(txSpeed, rxSpeed);
   };
 
