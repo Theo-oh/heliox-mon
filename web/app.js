@@ -345,9 +345,8 @@ const realtimeWindowSize = 60;
 let realtimeChart = null;
 let realtimeScale = { ...getSpeedScale(1), maxBytes: 1024 };
 const realtimeLabels = Array.from({ length: realtimeWindowSize }, () => "");
-const realtimeTxSeries = Array.from({ length: realtimeWindowSize }, () => null);
-const realtimeRxSeries = Array.from({ length: realtimeWindowSize }, () => null);
-let realtimeCount = 0;
+const realtimeTxSeries = Array.from({ length: realtimeWindowSize }, () => 0);
+const realtimeRxSeries = Array.from({ length: realtimeWindowSize }, () => 0);
 
 function getRealtimePalette() {
   return {
@@ -431,11 +430,7 @@ function initRealtimeChart() {
       interaction: { mode: "index", intersect: false },
       plugins: {
         legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => `${ctx.dataset.label}: ${formatSpeed(ctx.raw)}`,
-          },
-        },
+        tooltip: { enabled: false },
       },
       scales: {
         x: {
@@ -490,10 +485,10 @@ function applyRealtimeTheme() {
 function updateRealtimeScale() {
   let maxVal = 0;
   for (const v of realtimeTxSeries) {
-    if (typeof v === "number" && v > maxVal) maxVal = v;
+    if (v > maxVal) maxVal = v;
   }
   for (const v of realtimeRxSeries) {
-    if (typeof v === "number" && v > maxVal) maxVal = v;
+    if (v > maxVal) maxVal = v;
   }
   const scale = getSpeedScale(maxVal);
   const scaledMax = maxVal / scale.scale;
@@ -510,40 +505,22 @@ function updateRealtimeScale() {
 function updateRealtimeAverage() {
   const avgEl = document.getElementById("avg-speed");
   if (!avgEl) return;
-  let count = 0;
   let sum = 0;
   for (let i = 0; i < realtimeTxSeries.length; i++) {
-    const tx = realtimeTxSeries[i];
-    const rx = realtimeRxSeries[i];
-    if (typeof tx === "number" && typeof rx === "number") {
-      sum += tx + rx;
-      count++;
-    }
+    sum += realtimeTxSeries[i] + realtimeRxSeries[i];
   }
-  if (!count) {
-    avgEl.textContent = "--";
-    return;
-  }
-  const avg = sum / count;
+  const avg = sum / realtimeTxSeries.length;
   avgEl.textContent = formatSpeed(avg);
 }
 
 function pushRealtimePoint(txSpeed, rxSpeed) {
   const label = formatTimeLabel(new Date());
-  if (realtimeCount < realtimeWindowSize) {
-    const idx = realtimeCount;
-    realtimeLabels[idx] = label;
-    realtimeTxSeries[idx] = txSpeed;
-    realtimeRxSeries[idx] = rxSpeed;
-    realtimeCount++;
-  } else {
-    realtimeLabels.shift();
-    realtimeTxSeries.shift();
-    realtimeRxSeries.shift();
-    realtimeLabels.push(label);
-    realtimeTxSeries.push(txSpeed);
-    realtimeRxSeries.push(rxSpeed);
-  }
+  realtimeLabels.shift();
+  realtimeTxSeries.shift();
+  realtimeRxSeries.shift();
+  realtimeLabels.push(label);
+  realtimeTxSeries.push(txSpeed);
+  realtimeRxSeries.push(rxSpeed);
 
   updateRealtimeAverage();
   updateRealtimeScale();
