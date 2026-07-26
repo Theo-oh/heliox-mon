@@ -12,7 +12,8 @@ import (
 
 // doCollectSystemMetrics 执行系统资源采集
 func (c *Collector) doCollectSystemMetrics() {
-	now := time.Now().Unix()
+	nowTime := time.Now()
+	now := nowTime.Unix()
 
 	cpu := c.getCPUPercent()
 	memUsed, memTotal := c.getMemoryInfo()
@@ -28,8 +29,7 @@ func (c *Collector) doCollectSystemMetrics() {
 		log.Printf("保存系统指标失败: %v", err)
 	}
 
-	// 清理旧数据，只保留最近 1 小时
-	_, _ = c.db.Exec("DELETE FROM system_metrics WHERE ts < ?", now-3600)
+	c.cleanupSystemMetrics(nowTime)
 }
 
 // getCPUPercent 获取 CPU 使用率（通过两次采样差值计算）

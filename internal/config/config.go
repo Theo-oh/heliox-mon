@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -141,6 +142,12 @@ func Load() (*Config, error) {
 		cfg.DailyReportHour = 9
 	}
 
+	// 钳制计费重置日到 1-28：29-31 在短月不存在，会被 time.Date 规范化到下个月
+	if day := clampResetDay(cfg.ResetDay); day != cfg.ResetDay {
+		log.Printf("RESET_DAY=%d 超出有效范围 1-28，已调整为 %d", cfg.ResetDay, day)
+		cfg.ResetDay = day
+	}
+
 	// 验证必填项
 	if cfg.Password == "" {
 		return nil, fmt.Errorf("HELIOX_MON_PASS 未设置")
@@ -197,8 +204,17 @@ func (c *Config) DataPath(name string) string {
 
 // GetBillingCycleDates 根据 ResetDay 计算计费周期起止日期
 func (c *Config) GetBillingCycleDates(now time.Time) (start, end time.Time) {
-	day := c.ResetDay
 	tz := c.Timezone
+	if tz == nil {
+		tz = time.UTC
+	}
+	// 统一换算到配置时区再取年月日，避免调用方传入其他时区的时间导致日历日错位
+	now = now.In(tz)
+
+	// 再钳一次重置日：Load 已钳过，但 Config 也可能被直接构造。
+	// 超出 1-28 会让 time.Date 触发月份规范化（如 2 月 31 日变成 3 月 3 日），
+	// 计费周期起点会跳到未来
+	day := clampResetDay(c.ResetDay)
 
 	if now.Day() >= day {
 		start = time.Date(now.Year(), now.Month(), day, 0, 0, 0, 0, tz)
@@ -207,6 +223,17 @@ func (c *Config) GetBillingCycleDates(now time.Time) (start, end time.Time) {
 	}
 	end = start.AddDate(0, 1, 0).Add(-time.Second)
 	return
+}
+
+// clampResetDay 将计费重置日钳制到 1-28，保证任意月份都存在该日期
+func clampResetDay(day int) int {
+	if day < 1 {
+		return 1
+	}
+	if day > 28 {
+		return 28
+	}
+	return day
 }
 
 func getEnv(key, defaultVal string) string {

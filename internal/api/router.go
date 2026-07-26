@@ -734,7 +734,6 @@ func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
 
 	// 返回所有 target 的数据
 	result := map[string]interface{}{
-		"targets":     []map[string]interface{}{},
 		"start":       startTime.Format("2006-01-02 15:04:05"),
 		"end":         endTime.Format("2006-01-02 15:04:05"),
 		"granularity": granularityMinutes,
@@ -762,6 +761,7 @@ func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
 		clientRows.Close()
 	}
 
+	targetsData := make([]map[string]interface{}, 0, len(targets))
 	for _, pt := range targets {
 		// 按粒度聚合查询：按时间桶分组，计算平均 RTT
 		rows, err := s.db.Query(`
@@ -881,8 +881,9 @@ func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
 				"loss":   lossRate,
 			},
 		}
-		result["targets"] = append(result["targets"].([]map[string]interface{}), targetData)
+		targetsData = append(targetsData, targetData)
 	}
+	result["targets"] = targetsData
 
 	writeJSON(w, result)
 }
@@ -1111,10 +1112,10 @@ func (s *Server) handlePortTraffic(w http.ResponseWriter, r *http.Request) {
 	iptablesOK := s.cachedIptablesOK(portNums)
 
 	result := map[string]interface{}{
-		"ports":       []map[string]interface{}{},
 		"iptables_ok": iptablesOK,
 	}
 
+	portsData := make([]map[string]interface{}, 0, len(ports))
 	for _, p := range ports {
 		portData := map[string]interface{}{
 			"port": p.Port,
@@ -1173,8 +1174,9 @@ func (s *Server) handlePortTraffic(w http.ResponseWriter, r *http.Request) {
 		}
 		portData["last_month"] = map[string]int64{"tx": lastMonthTx, "rx": lastMonthRx, "total": lastMonthTx + lastMonthRx}
 
-		result["ports"] = append(result["ports"].([]map[string]interface{}), portData)
+		portsData = append(portsData, portData)
 	}
+	result["ports"] = portsData
 
 	writeJSON(w, result)
 }

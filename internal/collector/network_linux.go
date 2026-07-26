@@ -71,8 +71,8 @@ func (c *Collector) collectRealtimeSpeed() {
 			c.realtimeMu.Lock()
 			c.realtimeSnapshot = RealtimeSnapshot{
 				Ts:      now,
-				TxBytes: tx + c.totalTxOffset,
-				RxBytes: rx + c.totalRxOffset,
+				TxBytes: tx + c.totalTxOffset.Load(),
+				RxBytes: rx + c.totalRxOffset.Load(),
 				TxSpeed: txSpeed,
 				RxSpeed: rxSpeed,
 			}
@@ -97,19 +97,19 @@ func (c *Collector) doCollectTraffic() {
 	}
 
 	// 检测计数器重置（当前值 < 上次值表示重启或溢出）
-	if c.lastTotalTx > 0 && tx < c.lastTotalTx {
+	if lastTx := c.lastTotalTx.Load(); lastTx > 0 && tx < lastTx {
 		// 计数器重置，累加上次值到偏移量
-		c.totalTxOffset += c.lastTotalTx
-		log.Printf("检测到 TX 计数器重置，累加偏移量: %d", c.lastTotalTx)
+		c.totalTxOffset.Add(lastTx)
+		log.Printf("检测到 TX 计数器重置，累加偏移量: %d", lastTx)
 	}
-	if c.lastTotalRx > 0 && rx < c.lastTotalRx {
-		c.totalRxOffset += c.lastTotalRx
-		log.Printf("检测到 RX 计数器重置，累加偏移量: %d", c.lastTotalRx)
+	if lastRx := c.lastTotalRx.Load(); lastRx > 0 && rx < lastRx {
+		c.totalRxOffset.Add(lastRx)
+		log.Printf("检测到 RX 计数器重置，累加偏移量: %d", lastRx)
 	}
 
 	// 保存快照（加上偏移量）
-	adjustedTx := tx + c.totalTxOffset
-	adjustedRx := rx + c.totalRxOffset
+	adjustedTx := tx + c.totalTxOffset.Load()
+	adjustedRx := rx + c.totalRxOffset.Load()
 
 	_, err = c.db.Exec(
 		"INSERT INTO traffic_snapshots (ts, iface, tx_bytes, rx_bytes) VALUES (?, 'total', ?, ?)",
@@ -119,8 +119,8 @@ func (c *Collector) doCollectTraffic() {
 		log.Printf("保存流量快照失败: %v", err)
 	}
 
-	c.lastTotalTx = tx
-	c.lastTotalRx = rx
+	c.lastTotalTx.Store(tx)
+	c.lastTotalRx.Store(rx)
 
 	// 2. 采集端口流量（如果配置了端口）
 	if c.cfg.SnellPort > 0 || c.cfg.VlessPort > 0 {
@@ -133,8 +133,8 @@ func (c *Collector) initTrafficOffsets() {
 	// 总流量偏移
 	rawTx, rawRx, err := c.readProcNetDev()
 	if err == nil {
-		c.lastTotalTx = rawTx
-		c.lastTotalRx = rawRx
+		c.lastTotalTx.Store(rawTx)
+		c.lastTotalRx.Store(rawRx)
 
 		var lastTx, lastRx int64
 		row := c.db.QueryRow(
@@ -142,10 +142,10 @@ func (c *Collector) initTrafficOffsets() {
 		)
 		if err := row.Scan(&lastTx, &lastRx); err == nil {
 			if lastTx > 0 && uint64(lastTx) > rawTx {
-				c.totalTxOffset = uint64(lastTx) - rawTx
+				c.totalTxOffset.Store(uint64(lastTx) - rawTx)
 			}
 			if lastRx > 0 && uint64(lastRx) > rawRx {
-				c.totalRxOffset = uint64(lastRx) - rawRx
+				c.totalRxOffset.Store(uint64(lastRx) - rawRx)
 			}
 		}
 	}

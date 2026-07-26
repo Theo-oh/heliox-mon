@@ -67,6 +67,21 @@ func TestGetBillingCycleDates(t *testing.T) {
 			wantStart: time.Date(2025, time.December, 15, 0, 0, 0, 0, tz),
 			wantEnd:   time.Date(2026, time.January, 15, 0, 0, 0, 0, tz).Add(-time.Second),
 		},
+		{
+			// 重置日超出 1-28 会被钳制，否则 time.Date 会把 2 月 31 日规范化到 3 月
+			name:      "重置日超出上限-钳制到28",
+			resetDay:  31,
+			now:       mk(2026, time.March, 10),
+			wantStart: time.Date(2026, time.February, 28, 0, 0, 0, 0, tz),
+			wantEnd:   time.Date(2026, time.March, 28, 0, 0, 0, 0, tz).Add(-time.Second),
+		},
+		{
+			name:      "重置日为0-钳制到1",
+			resetDay:  0,
+			now:       mk(2026, time.March, 10),
+			wantStart: time.Date(2026, time.March, 1, 0, 0, 0, 0, tz),
+			wantEnd:   time.Date(2026, time.April, 1, 0, 0, 0, 0, tz).Add(-time.Second),
+		},
 	}
 
 	for _, c := range cases {
@@ -80,6 +95,35 @@ func TestGetBillingCycleDates(t *testing.T) {
 				t.Errorf("end = %v, want %v", end, c.wantEnd)
 			}
 		})
+	}
+}
+
+// 调用方传入非配置时区的时间时，日历日应按配置时区换算，而非直接取原时区的年月日
+func TestGetBillingCycleDates_NormalizesTimezone(t *testing.T) {
+	tz := time.FixedZone("+08", 8*3600)
+	cfg := &Config{ResetDay: 15, Timezone: tz}
+
+	// UTC 的 3 月 14 日 20:00 = +08 的 3 月 15 日 04:00，应落在「本月起」的周期
+	now := time.Date(2026, time.March, 14, 20, 0, 0, 0, time.UTC)
+	start, _ := cfg.GetBillingCycleDates(now)
+
+	want := time.Date(2026, time.March, 15, 0, 0, 0, 0, tz)
+	if !start.Equal(want) {
+		t.Errorf("start = %v, want %v", start, want)
+	}
+}
+
+func TestLoad_ClampsResetDay(t *testing.T) {
+	t.Setenv("HELIOX_MON_PASS", "secret")
+	t.Setenv("HELIOX_ENV_PATH", "/nonexistent/.env")
+	t.Setenv("RESET_DAY", "31")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load 失败: %v", err)
+	}
+	if cfg.ResetDay != 28 {
+		t.Errorf("ResetDay = %d, want 28", cfg.ResetDay)
 	}
 }
 

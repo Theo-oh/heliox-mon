@@ -17,12 +17,12 @@ func (c *Collector) doCollectTraffic() {
 	rx := uint64(rand.Int63n(10 * 1024 * 1024))
 
 	// 累加到假的总计数器 (模拟 /proc/net/dev 递增)
-	c.lastTotalTx += tx
-	c.lastTotalRx += rx
+	totalTx := c.lastTotalTx.Add(tx)
+	totalRx := c.lastTotalRx.Add(rx)
 
 	_, err := c.db.Exec(
 		"INSERT INTO traffic_snapshots (ts, iface, tx_bytes, rx_bytes) VALUES (?, 'total', ?, ?)",
-		now, c.lastTotalTx, c.lastTotalRx,
+		now, totalTx, totalRx,
 	)
 	if err != nil {
 		log.Printf("[Mock] 保存流量快照失败: %v", err)
@@ -80,8 +80,8 @@ func (c *Collector) collectRealtimeSpeed() {
 			c.realtimeMu.Lock()
 			c.realtimeSnapshot = RealtimeSnapshot{
 				Ts:      now,
-				TxBytes: c.lastTotalTx,
-				RxBytes: c.lastTotalRx,
+				TxBytes: c.lastTotalTx.Load(),
+				RxBytes: c.lastTotalRx.Load(),
 				TxSpeed: tx,
 				RxSpeed: rx,
 			}
@@ -92,7 +92,8 @@ func (c *Collector) collectRealtimeSpeed() {
 
 // doCollectSystemMetrics 模拟系统资源采集
 func (c *Collector) doCollectSystemMetrics() {
-	now := time.Now().Unix()
+	nowTime := time.Now()
+	now := nowTime.Unix()
 
 	cpu := rand.Float64() * 100
 	memTotal := uint64(16 * 1024 * 1024 * 1024) // 16GB
@@ -111,6 +112,8 @@ func (c *Collector) doCollectSystemMetrics() {
 	if err != nil {
 		log.Printf("[Mock] 保存系统指标失败: %v", err)
 	}
+
+	c.cleanupSystemMetrics(nowTime)
 }
 
 // doCollectLatency 模拟延迟采集

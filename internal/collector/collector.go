@@ -6,6 +6,7 @@ import (
 	"math"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/hh/heliox-mon/internal/config"
@@ -20,15 +21,17 @@ type Collector struct {
 	stop     chan struct{}
 	wg       sync.WaitGroup
 
-	// 上次采集的流量数据（用于计算增量）
-	lastTotalTx uint64
-	lastTotalRx uint64
+	// 上次采集的流量数据（用于计算增量）。总量字段用原子类型：
+	// 实时网速协程（每秒）与流量采集协程（每分钟）会并发访问，
+	// 端口相关的 map 只在流量采集协程内使用，无需同步
+	lastTotalTx atomic.Uint64
+	lastTotalRx atomic.Uint64
 	lastPortTx  map[int]uint64
 	lastPortRx  map[int]uint64
 
 	// 计数器重置偏移量（用于处理重启/溢出）
-	totalTxOffset uint64
-	totalRxOffset uint64
+	totalTxOffset atomic.Uint64
+	totalRxOffset atomic.Uint64
 	portTxOffset  map[int]uint64
 	portRxOffset  map[int]uint64
 
@@ -39,6 +42,9 @@ type Collector struct {
 	// 实时快照（每秒更新，用于计算实时网速）
 	realtimeSnapshot RealtimeSnapshot
 	realtimeMu       sync.RWMutex
+
+	// 上次清理系统指标的时间（只在系统采集协程内读写）
+	lastMetricsCleanup time.Time
 }
 
 // RealtimeSnapshot 实时流量快照
@@ -206,8 +212,11 @@ func (c *Collector) runDailyAggregation() {
 func (c *Collector) runDailyReport() {
 	defer c.wg.Done()
 
+	// base 是推算下一次推送的基准时刻。推送后取「本次目标时刻」与「当前时刻」的较晚者：
+	// 若时钟回拨导致唤醒时 now 仍早于目标整点，用 now 会把同一整点再算成下一次而重复推送
+	base := time.Now().In(c.cfg.Timezone)
 	for {
-		next := nextReportTime(time.Now().In(c.cfg.Timezone), c.cfg.DailyReportHour, c.cfg.Timezone)
+		next := nextReportTime(base, c.cfg.DailyReportHour, c.cfg.Timezone)
 		log.Printf("每日流量报告下次推送时间: %s", next.Format("2006-01-02 15:04:05 MST"))
 		timer := time.NewTimer(time.Until(next))
 		select {
@@ -219,6 +228,10 @@ func (c *Collector) runDailyReport() {
 				log.Printf("发送每日流量报告失败: %v", err)
 			} else {
 				log.Println("每日流量报告已推送")
+			}
+			base = next
+			if now := time.Now().In(c.cfg.Timezone); now.After(base) {
+				base = now
 			}
 		}
 	}
@@ -374,6 +387,28 @@ func (c *Collector) aggregateLatencyData() {
 	aggCutoff := time.Now().Add(-latencyAggRetention).Unix()
 	if _, err := c.db.Exec("DELETE FROM latency_records WHERE is_aggregated = 1 AND ts < ?", aggCutoff); err != nil {
 		log.Printf("清理过期聚合数据失败: %v", err)
+	}
+}
+
+// 系统指标保留策略
+const (
+	systemMetricsRetention     = time.Hour       // 只保留最近 1 小时
+	systemMetricsCleanupPeriod = 5 * time.Minute // 清理间隔
+)
+
+// cleanupSystemMetrics 按固定间隔清理过期系统指标。
+// 采集频率是 5 秒一次，若每次采集都 DELETE，会让 idx_system_metrics_ts 反复重建，
+// 白白放大 WAL 写入与磁盘 IO；多留几分钟数据对查询（只取最新一条）无影响。
+// 仅由系统采集协程单线程调用，故 lastMetricsCleanup 无需加锁。
+func (c *Collector) cleanupSystemMetrics(now time.Time) {
+	if now.Sub(c.lastMetricsCleanup) < systemMetricsCleanupPeriod {
+		return
+	}
+	c.lastMetricsCleanup = now
+
+	cutoff := now.Add(-systemMetricsRetention).Unix()
+	if _, err := c.db.Exec("DELETE FROM system_metrics WHERE ts < ?", cutoff); err != nil {
+		log.Printf("清理系统指标失败: %v", err)
 	}
 }
 
