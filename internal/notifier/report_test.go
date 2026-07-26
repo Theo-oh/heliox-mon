@@ -80,6 +80,22 @@ func TestWeekdayCN(t *testing.T) {
 	}
 }
 
+func TestFormatLoss(t *testing.T) {
+	cases := map[float64]string{
+		0:      "0%",
+		0.005:  "<0.01%", // 低于两位小数精度，给下限而非 0.00%
+		0.0139: "0.01%",  // 7200 包丢 1 个
+		0.07:   "0.07%",  // 7200 包丢 5 个
+		1.5:    "1.50%",
+		100:    "100.00%", // 全丢包
+	}
+	for in, want := range cases {
+		if got := formatLoss(in); got != want {
+			t.Errorf("formatLoss(%g)=%q，期望 %q", in, got, want)
+		}
+	}
+}
+
 func TestDailyLatency(t *testing.T) {
 	db, err := storage.NewDB(t.TempDir())
 	if err != nil {
@@ -117,9 +133,9 @@ func TestDailyLatency(t *testing.T) {
 		t.Errorf("bad 目标 stats=%+v，期望 ok=false loss=100", stats[1])
 	}
 
-	// 小节应为 HTML 富文本：含加粗标题、可折叠引用块、ms 单位、无数据标记，且 Tag 已转义
+	// 小节应为 HTML 富文本：含加粗标题、可折叠引用块、ms 单位、全丢包标记，且 Tag 已转义
 	sec := n.latencySection(start, end)
-	for _, want := range []string{"<b>网络延迟</b>", "<blockquote expandable>", "</blockquote>", "ms", "无数据", "A&amp;B"} {
+	for _, want := range []string{"<b>网络延迟</b>", "<blockquote expandable>", "</blockquote>", "ms", "全程无响应", "丢100.00%", "A&amp;B"} {
 		if !strings.Contains(sec, want) {
 			t.Errorf("小节缺少 %q：\n%s", want, sec)
 		}

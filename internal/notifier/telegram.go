@@ -169,6 +169,7 @@ type latencyStat struct {
 	avgRTT float64 // 平均 RTT（ms）
 	minRTT float64 // 整段最低 RTT（ms），最接近真实链路
 	loss   float64 // 丢包率（%）
+	sent   int64   // 发包总数，用于区分「全丢包」与「真的没采到数据」
 	ok     bool    // 是否有有效 RTT 数据点
 }
 
@@ -198,6 +199,7 @@ func (n *Notifier) dailyLatency(startTs, endTs int64) []latencyStat {
 			avgRTT: avg.Float64,
 			minRTT: min.Float64,
 			loss:   loss,
+			sent:   sent,
 			ok:     avg.Valid, // 全丢包时 AVG(rtt_ms) 为 NULL
 		})
 	}
@@ -212,7 +214,8 @@ func (n *Notifier) latencySection(startTs, endTs int64) string {
 	}
 	hasData := false
 	for _, s := range stats {
-		if s.ok {
+		// 全丢包时 ok=false 但 sent>0，这类目标本身就是要重点报的，不能算「无数据」
+		if s.ok || s.sent > 0 {
 			hasData = true
 			break
 		}
@@ -223,14 +226,17 @@ func (n *Notifier) latencySection(startTs, endTs int64) string {
 
 	rows := make([][2]string, 0, len(stats))
 	for _, s := range stats {
-		if !s.ok {
+		switch {
+		case s.ok:
+			rows = append(rows, [2]string{
+				esc(s.tag),
+				fmt.Sprintf("%.1fms  最低 %.1f  丢%s", s.avgRTT, s.minRTT, formatLoss(s.loss)),
+			})
+		case s.sent > 0:
+			rows = append(rows, [2]string{esc(s.tag), "⚠️ 全程无响应  丢" + formatLoss(s.loss)})
+		default:
 			rows = append(rows, [2]string{esc(s.tag), "无数据"})
-			continue
 		}
-		rows = append(rows, [2]string{
-			esc(s.tag),
-			fmt.Sprintf("%.1fms  最低 %.1f  丢%.0f%%", s.avgRTT, s.minRTT, s.loss),
-		})
 	}
 	// 实际采样时段放标题括号里，反映探测中途启动时的真实覆盖窗口
 	title := "<b>网络延迟</b>"
@@ -257,6 +263,20 @@ func (n *Notifier) latencyWindow(startTs, endTs int64) string {
 	tz := n.cfg.Timezone
 	return time.Unix(minTs.Int64, 0).In(tz).Format("15:04") + "–" +
 		time.Unix(maxTs.Int64, 0).In(tz).Format("15:04")
+}
+
+// formatLoss 渲染全天丢包率。默认每分钟 5 个包、单目标一天约 7200 个包，
+// 整数百分比要丢满 36 个包才不显示成 0，会把日常的零星丢包全部抹平，
+// 故保留两位小数，并对非零极小值给出下限提示而不是 0.00%。
+func formatLoss(loss float64) string {
+	switch {
+	case loss <= 0:
+		return "0%"
+	case loss < 0.01:
+		return "<0.01%"
+	default:
+		return fmt.Sprintf("%.2f%%", loss)
+	}
 }
 
 // esc 转义 HTML 元字符，供 parse_mode=HTML 下拼入用户可控字符串（服务器名、探测目标 Tag）。
