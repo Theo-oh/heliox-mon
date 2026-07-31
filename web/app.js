@@ -382,17 +382,44 @@ async function fetchSystem() {
 const realtimeWindowSize = 60;
 let realtimeChart = null;
 let realtimeScale = getSpeedScale(1024);
+// 窗口未填满前用 null 占位而非 0，避免图表和 tooltip 把"还没数据"显示成"速度为 0"
 const realtimeLabels = Array.from({ length: realtimeWindowSize }, () => "");
-const realtimeTxSeries = Array.from({ length: realtimeWindowSize }, () => 0);
-const realtimeRxSeries = Array.from({ length: realtimeWindowSize }, () => 0);
+const realtimeTxSeries = Array.from({ length: realtimeWindowSize }, () => null);
+const realtimeRxSeries = Array.from({ length: realtimeWindowSize }, () => null);
 
 function getRealtimePalette() {
+  const isLight = document.body.classList.contains("theme-light");
   return {
     down: getCssVar("--speed-down") || "#4dd4ff",
     up: getCssVar("--speed-up") || "#b66cff",
     grid: getCssVar("--speed-grid") || "rgba(255, 255, 255, 0.08)",
     muted: getCssVar("--muted") || "#6e6e80",
     text: getCssVar("--text") || "#f5f5f7",
+    tooltipBg: isLight ? "rgba(255, 255, 255, 0.95)" : "rgba(28, 28, 30, 0.95)",
+    tooltipText: isLight ? "#1c1c1e" : "#f5f5f7",
+    tooltipBorder: isLight ? "rgba(0, 0, 0, 0.1)" : "rgba(255, 255, 255, 0.1)",
+  };
+}
+
+function buildRealtimeTooltip(palette) {
+  return {
+    enabled: true,
+    backgroundColor: palette.tooltipBg,
+    titleColor: palette.tooltipText,
+    bodyColor: palette.tooltipText,
+    borderColor: palette.tooltipBorder,
+    borderWidth: 1,
+    cornerRadius: 8,
+    padding: 12,
+    displayColors: true,
+    usePointStyle: true,
+    boxPadding: 4,
+    titleFont: { weight: "600" },
+    callbacks: {
+      title: (items) => items[0]?.label || "",
+      label: (item) =>
+        ` ${item.dataset.label} ${formatSpeed(item.parsed.y ?? 0)}`,
+    },
   };
 }
 
@@ -482,7 +509,7 @@ function initRealtimeChart() {
             boxWidth: 28,
           },
         },
-        tooltip: { enabled: false },
+        tooltip: buildRealtimeTooltip(palette),
       },
       scales: {
         x: {
@@ -532,6 +559,7 @@ function applyRealtimeTheme() {
   if (realtimeChart.options.plugins?.legend?.labels) {
     realtimeChart.options.plugins.legend.labels.color = palette.muted;
   }
+  realtimeChart.options.plugins.tooltip = buildRealtimeTooltip(palette);
   realtimeChart.update("none");
 }
 
@@ -557,13 +585,16 @@ function updateRealtimeAverage() {
   if (!txEl && !rxEl) return;
 
   let txSum = 0,
-    rxSum = 0;
+    rxSum = 0,
+    count = 0;
   for (let i = 0; i < realtimeTxSeries.length; i++) {
+    if (realtimeTxSeries[i] === null) continue; // 只对已采到的点求平均，否则开头一分钟会被占位值拉低
     txSum += realtimeTxSeries[i];
     rxSum += realtimeRxSeries[i];
+    count++;
   }
-  const txAvg = txSum / realtimeTxSeries.length;
-  const rxAvg = rxSum / realtimeRxSeries.length;
+  const txAvg = count ? txSum / count : 0;
+  const rxAvg = count ? rxSum / count : 0;
 
   const [txNum, txUnit] = formatSpeedParts(txAvg);
   const [rxNum, rxUnit] = formatSpeedParts(rxAvg);
@@ -584,7 +615,9 @@ function pushRealtimePoint(txSpeed, rxSpeed) {
 
   updateRealtimeAverage();
   updateRealtimeScale();
-  if (realtimeChart) realtimeChart.update();
+  // 必须用 "none"：默认模式在鼠标悬停期间每秒 shift 数据会把 hover 样式留在旧索引上，
+  // 导致移开鼠标后残留一串圆点
+  if (realtimeChart) realtimeChart.update("none");
 }
 
 function connectRealtime() {
