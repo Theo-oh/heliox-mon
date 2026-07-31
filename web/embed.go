@@ -3,5 +3,5 @@ package web
 
 import "embed"
 
-//go:embed index.html style.css app.js favicon.svg login.html vendor manifest.json sw.js icon-192.png icon-512.png
+//go:embed index.html style.css app.js favicon.svg login.html vendor manifest.json sw.js icon-192.png icon-512.png icon-512-maskable.png
 var Assets embed.FS

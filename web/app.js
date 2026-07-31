@@ -659,6 +659,11 @@ function applyTheme(theme) {
   if (themeText) {
     themeText.textContent = isLight ? "浅色" : "深色";
   }
+  // PWA 独立窗口的标题栏/状态栏取色于此，不同步会导致浅色主题下顶部仍是深色
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeMeta) {
+    themeMeta.setAttribute("content", isLight ? "#f5f5f7" : "#0a0a0a");
+  }
   renderLatencyChart();
   applyRealtimeTheme();
 }

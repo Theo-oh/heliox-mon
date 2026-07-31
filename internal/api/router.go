@@ -163,6 +163,19 @@ const (
 	authTokenBytes = 32
 )
 
+// publicAssets 无需认证即可访问的静态资源。
+// 登录页要用到样式与图标；manifest.json 由 <link rel="manifest"> 默认不带凭据地拉取，
+// sw.js 与图标则可能在未持有会话时被浏览器请求，都必须放行。
+var publicAssets = map[string]bool{
+	"/style.css":             true,
+	"/favicon.svg":           true,
+	"/manifest.json":         true,
+	"/sw.js":                 true,
+	"/icon-192.png":          true,
+	"/icon-512.png":          true,
+	"/icon-512-maskable.png": true,
+}
+
 // auth 认证中间件 (Cookie + Basic Fallback)
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -170,9 +183,7 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 		// 注意: /login 由单独 handler 处理，实际上不会经过这里(除非 mux 匹配逻辑特殊)，
 		// 但为了保险起见，style.css 等静态资源如果是通过 "/" handleStatic 服务的，
 		// 必须在这里放行。
-		if r.URL.Path == "/style.css" || r.URL.Path == "/favicon.svg" ||
-			r.URL.Path == "/manifest.json" || r.URL.Path == "/sw.js" ||
-			r.URL.Path == "/icon-192.png" || r.URL.Path == "/icon-512.png" {
+		if publicAssets[r.URL.Path] {
 			next(w, r)
 			return
 		}

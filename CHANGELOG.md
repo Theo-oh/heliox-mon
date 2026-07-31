@@ -5,6 +5,14 @@
 
 ## [Unreleased]
 
+### 新增
+
+- PWA 支持：新增 `manifest.json`、Service Worker 与 192/512 应用图标，面板可作为
+  独立窗口的桌面/移动 Web App 安装。Service Worker 采用网络优先策略，API 与 SSE
+  不经拦截以保证监控数据实时性，断网时回退到缓存的静态外壳。
+- `theme-color` 随浅色/深色主题切换同步更新，独立窗口标题栏不再固定为深色。
+- 页面内边距加入 `env(safe-area-inset-*)`，iOS 独立窗口下内容不再被状态栏遮挡。
+
 ## [0.18.2] - 2026-07-26
 
 ### 修复

@@ -51,7 +51,11 @@ body {
   color: var(--text);
   line-height: 1.5;
   min-height: 100vh;
-  padding: 40px 20px;
+  /* iOS 独立窗口用 black-translucent 状态栏，内容会顶到刘海下方，需让开安全区 */
+  padding: calc(40px + env(safe-area-inset-top, 0px))
+    calc(20px + env(safe-area-inset-right, 0px))
+    calc(40px + env(safe-area-inset-bottom, 0px))
+    calc(20px + env(safe-area-inset-left, 0px));
   display: flex;
   justify-content: center;
   transition:
