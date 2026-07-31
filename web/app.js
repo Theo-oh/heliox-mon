@@ -9,6 +9,13 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
+// formatBytesParts 把数值与单位拆开，供「大字号数值 + 小字号单位」的卡片排版使用
+function formatBytesParts(bytes) {
+  const text = formatBytes(bytes);
+  const sep = text.indexOf(" ");
+  return sep < 0 ? [text, ""] : [text.slice(0, sep), text.slice(sep + 1)];
+}
+
 function formatSpeed(bytesPerSec) {
   return formatSpeedParts(bytesPerSec).join(" ");
 }
@@ -371,95 +378,211 @@ const stealWarnPercent = 1;
 // 重传率经验阈值：1% 已能感知卡顿，3% 以上基本可以判定线路劣化
 const retransWarnPercent = 1;
 const retransDangerPercent = 3;
+// 占用率类指标（CPU/内存/磁盘/负载）共用一套阈值，避免每张卡各说各话
+const usageWarnPercent = 70;
+const usageDangerPercent = 90;
+
+// levelOf 把占用率映射成状态等级，角标与进度条共用同一判定
+function levelOf(percent) {
+  if (percent >= usageDangerPercent) return "is-danger";
+  if (percent >= usageWarnPercent) return "is-warn";
+  return "";
+}
+
+// tagFor 按等级挑该指标自己的措辞：阈值一套，但每张卡说自己的人话
+function tagFor(level, words) {
+  if (level === "is-danger") return words[2];
+  if (level === "is-warn") return words[1];
+  return words[0];
+}
+
+// setTag 写状态角标；text 为空表示这一轮没有可信数据，直接不占位
+function setTag(id, text, level) {
+  const el = document.getElementById(id);
+  el.classList.remove("is-warn", "is-danger", "is-info", "is-hidden");
+  if (!text) {
+    el.textContent = "";
+    el.classList.add("is-hidden");
+    return;
+  }
+  el.textContent = text;
+  if (level) el.classList.add(level);
+}
+
+// setBar 设置进度条宽度与状态色。非零但极小的占比给一个最小可见宽度，
+// 否则「有一点点」和「完全没有」在视觉上无法区分
+function setBar(id, percent, level) {
+  const el = document.getElementById(id);
+  const value = Math.max(0, Math.min(100, Number(percent) || 0));
+  el.style.width = value + "%";
+  el.style.minWidth = value > 0 ? "3px" : "0";
+  el.classList.remove("is-warn", "is-danger");
+  if (level) el.classList.add(level);
+}
 
 // 渲染系统状态卡片（初次由 /api/system 拉取，之后由 SSE 的 system 事件驱动）
 function renderSystem(data) {
-  // 采集器刚启动时还没有两次采样的差值，cpu_percent 为 null
-  document.getElementById("cpu").textContent =
-    data.cpu_percent === null ? "--%" : data.cpu_percent.toFixed(1) + "%";
-
-  const stealEl = document.getElementById("cpu-steal");
-  const steal = Number(data.steal_avg_percent) || 0;
-  // steal 平时是 0，只有被宿主机抢占时才值得占用视觉空间
-  if (steal >= stealWarnPercent) {
-    stealEl.textContent = "宿主机抢占 " + steal.toFixed(1) + "%";
-    stealEl.classList.remove("is-hidden");
-    stealEl.classList.add("is-warn");
-  } else {
-    stealEl.textContent = "";
-    stealEl.classList.add("is-hidden");
-    stealEl.classList.remove("is-warn");
-  }
-
-  document.getElementById("memory").textContent =
-    formatBytes(data.mem_used) + " / " + formatBytes(data.mem_total);
-  document.getElementById("memory-note").textContent = data.mem_total
-    ? ((data.mem_used / data.mem_total) * 100).toFixed(0) + "% 已用"
-    : "";
-
+  renderCPU(data);
+  renderMemory(data);
+  renderDisk(data);
+  renderLoad(data);
   renderConnections(data);
   renderRetrans(data);
-
-  // 磁盘剩余按 disk_avail 显示：普通用户真正能写入的容量，
-  // 比 total - used 少掉文件系统预留给 root 的部分
-  document.getElementById("disk").textContent =
-    formatBytes(data.disk_used) +
-    " / " +
-    formatBytes(data.disk_total) +
-    "（可用 " +
-    formatBytes(data.disk_avail) +
-    "）";
-
-  const cores = Number(data.cpu_cores) || 0;
-  document.getElementById("load").textContent =
-    data.load_1.toFixed(2) +
-    " / " +
-    data.load_5.toFixed(2) +
-    " / " +
-    data.load_15.toFixed(2) +
-    (cores ? "（" + cores + " 核）" : "");
-
-  document.getElementById("uptime").textContent = formatUptime(data.uptime_sec);
+  renderUptime(data);
 }
 
-// renderConnections 活跃连接数，副标题按端口拆分。
+// renderCPU 使用率 + 核数，宿主机抢占明显时并入副信息
+function renderCPU(data) {
+  // 采集器刚启动时还没有两次采样的差值，cpu_percent 为 null
+  const valid = data.cpu_percent !== null && data.cpu_percent !== undefined;
+  const value = valid ? Number(data.cpu_percent) : 0;
+  const level = valid ? levelOf(value) : "";
+
+  document.getElementById("cpu").textContent = valid ? value.toFixed(1) : "--";
+  setBar("cpu-bar", value, level);
+  setTag("cpu-tag", valid ? tagFor(level, ["空闲", "繁忙", "过载"]) : "", level);
+
+  const cores = Number(data.cpu_cores) || 0;
+  const steal = Number(data.steal_avg_percent) || 0;
+  // steal 平时是 0，只有被宿主机抢占时才值得占用视觉空间
+  const stealing = steal >= stealWarnPercent;
+  const parts = [];
+  if (cores) parts.push(cores + " 核");
+  if (stealing) parts.push("宿主机抢占 " + steal.toFixed(1) + "%");
+
+  const note = document.getElementById("cpu-note");
+  note.textContent = parts.join(" · ");
+  note.classList.toggle("is-warn", stealing);
+}
+
+function renderMemory(data) {
+  const used = Number(data.mem_used) || 0;
+  const total = Number(data.mem_total) || 0;
+  const percent = total ? (used / total) * 100 : 0;
+  const level = levelOf(percent);
+  const [value, unit] = formatBytesParts(used);
+
+  document.getElementById("memory").textContent = value;
+  document.getElementById("memory-unit").textContent =
+    unit + " / " + formatBytes(total);
+  setBar("memory-bar", percent, level);
+  setTag(
+    "memory-tag",
+    total ? tagFor(level, ["充裕", "偏高", "紧张"]) : "",
+    level,
+  );
+  document.getElementById("memory-note").textContent = total
+    ? percent.toFixed(0) +
+      "% 已用 · 可用 " +
+      formatBytes(Math.max(total - used, 0))
+    : "";
+}
+
+function renderDisk(data) {
+  const used = Number(data.disk_used) || 0;
+  const total = Number(data.disk_total) || 0;
+  const percent = total ? (used / total) * 100 : 0;
+  const level = levelOf(percent);
+  const [value, unit] = formatBytesParts(used);
+
+  document.getElementById("disk").textContent = value;
+  document.getElementById("disk-unit").textContent =
+    unit + " / " + formatBytes(total);
+  setBar("disk-bar", percent, level);
+  setTag("disk-tag", total ? tagFor(level, ["健康", "注意", "告警"]) : "", level);
+  // 剩余按 disk_avail 显示：普通用户真正能写入的容量，
+  // 比 total - used 少掉文件系统预留给 root 的部分
+  document.getElementById("disk-note").textContent = total
+    ? percent.toFixed(0) + "% 已用 · 可用 " + formatBytes(data.disk_avail)
+    : "";
+}
+
+// renderLoad 负载按核数换算成百分比再套统一阈值，省得用户自己心算
+function renderLoad(data) {
+  const cores = Number(data.cpu_cores) || 0;
+  const items = [
+    { id: "1", value: Number(data.load_1) || 0 },
+    { id: "5", value: Number(data.load_5) || 0 },
+    { id: "15", value: Number(data.load_15) || 0 },
+  ];
+
+  document.getElementById("load-1").textContent = items[0].value.toFixed(2);
+
+  const level = cores ? levelOf((items[0].value / cores) * 100) : "";
+  setTag(
+    "load-tag",
+    cores ? Math.round((items[0].value / cores) * 100) + "% 负载率" : "",
+    level,
+  );
+
+  items.forEach((item) => {
+    const percent = cores ? (item.value / cores) * 100 : 0;
+    setBar("load-bar-" + item.id, percent, cores ? levelOf(percent) : "");
+    document.getElementById("load-text-" + item.id).textContent =
+      item.id + "m " + item.value.toFixed(2);
+  });
+}
+
+// renderConnections 活跃连接数，分段条与副信息按端口拆分。
 // 后端读不到 /proc/net/tcp 时返回 null，显示占位符而不是把「没读到」画成 0
 function renderConnections(data) {
-  document.getElementById("conns").textContent =
-    data.conns_total === undefined || data.conns_total === null
-      ? "--"
-      : data.conns_total;
+  const available = data.conns_total !== undefined && data.conns_total !== null;
+  document.getElementById("conns").textContent = available
+    ? data.conns_total
+    : "--";
 
-  const detail = (data.conns_by_port || [])
-    .map((item) => item.port + ": " + item.count)
-    .join("  ·  ");
-  document.getElementById("conns-detail").textContent = detail;
+  const ports = available ? data.conns_by_port || [] : [];
+  setTag("conns-tag", ports.length ? ports.length + " 端口" : "", "is-info");
+
+  // 各段宽度按连接数占比分配；某端口为 0 时退化成一个最小占位块
+  document.getElementById("conns-seg").innerHTML = ports
+    .map((item) => {
+      const count = Number(item.count) || 0;
+      return count > 0
+        ? '<div class="stat-seg-item" style="flex:' + count + '"></div>'
+        : '<div class="stat-seg-item is-empty"></div>';
+    })
+    .join("");
+
+  document.getElementById("conns-detail").textContent = ports
+    .map((item) => item.port + " · " + item.count)
+    .join("　");
 }
 
 // renderRetrans TCP 重传率，超过阈值时变色
 function renderRetrans(data) {
-  const el = document.getElementById("retrans");
   const note = document.getElementById("retrans-note");
-  el.classList.remove("is-warn", "is-danger");
 
   // 没有两次采样的差值时不伪造 0%
   if (data.retrans_percent === null || data.retrans_percent === undefined) {
-    el.textContent = "--%";
+    document.getElementById("retrans").textContent = "--";
+    setBar("retrans-bar", 0, "");
+    setTag("retrans-tag", "", "");
     note.textContent = "";
     return;
   }
 
   const value = Number(data.retrans_percent);
-  el.textContent = value.toFixed(2) + "%";
-  if (value >= retransDangerPercent) {
-    el.classList.add("is-danger");
-    note.textContent = "线路丢包严重";
-  } else if (value >= retransWarnPercent) {
-    el.classList.add("is-warn");
-    note.textContent = "线路质量下降";
-  } else {
-    note.textContent = "线路正常";
-  }
+  let level = "";
+  if (value >= retransDangerPercent) level = "is-danger";
+  else if (value >= retransWarnPercent) level = "is-warn";
+
+  document.getElementById("retrans").textContent = value.toFixed(2);
+  // 重传率没有「总量」概念，进度条以 danger 阈值为满刻度，纯作趋势示意
+  setBar("retrans-bar", (value / retransDangerPercent) * 100, level);
+  setTag("retrans-tag", tagFor(level, ["线路正常", "质量下降", "丢包严重"]), level);
+  note.textContent =
+    "阈值 " +
+    retransWarnPercent +
+    "% · " +
+    (value > 0 ? "近期有重传" : "无丢包重传");
+}
+
+function renderUptime(data) {
+  const pill = document.getElementById("uptime-pill");
+  const text = formatUptime(data.uptime_sec);
+  document.getElementById("uptime").textContent = text;
+  pill.hidden = text === "--";
 }
 
 // formatUptime 把秒数格式化为「X 天 Y 小时」

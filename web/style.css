@@ -22,6 +22,10 @@
   --radius-lg: 24px;
   --radius-md: 16px;
   --radius-sm: 12px;
+
+  /* 状态卡进度条：轨道与默认填充色 */
+  --track-bg: rgba(255, 255, 255, 0.09);
+  --stat-bar: #b66cff;
 }
 
 body.theme-light {
@@ -35,6 +39,8 @@ body.theme-light {
   --item-bg: rgba(240, 240, 244, 0.9);
   --shadow-lg: 0 20px 60px rgba(20, 20, 30, 0.12);
   --speed-grid: rgba(0, 0, 0, 0.08);
+  --track-bg: rgba(0, 0, 0, 0.09);
+  --stat-bar: #8b5cf6;
 }
 
 * {
@@ -83,10 +89,46 @@ body {
 .top-bar {
   position: absolute;
   top: 30px;
+  /* 给出左边界，控件多起来后窄屏才能换行而不是横向溢出 */
+  left: 30px;
   right: 30px;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
+}
+
+/* 运行时间胶囊：绿点表达「持续在线」，与其余页眉控件同族 */
+.uptime-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--item-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  padding: 6px 14px 6px 11px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.uptime-pill[hidden] {
+  display: none;
+}
+
+.uptime-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  box-shadow: 0 0 0 3px rgba(48, 209, 88, 0.16);
+}
+
+.uptime-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 
 .server-pill {
@@ -355,21 +397,21 @@ body.theme-light .section-title {
 /* System Stats Grid */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
 }
 
 .stat {
   background: var(--card-bg);
   border-radius: var(--radius-md);
-  padding: 24px 20px;
-  text-align: center;
+  padding: 20px 22px 22px;
   border: 1px solid var(--card-border);
-  transition: all 0.3s ease;
+  transition:
+    border-color 0.3s ease,
+    transform 0.3s ease;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  min-height: 110px;
+  gap: 14px;
 }
 
 .stat:hover {
@@ -377,27 +419,152 @@ body.theme-light .section-title {
   transform: translateY(-2px);
 }
 
+.stat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  /* 固定高度，让没有角标的卡片与有角标的卡片主数值仍对齐 */
+  min-height: 22px;
+}
+
 .stat-label {
   font-size: 13px;
   color: var(--muted);
-  margin-bottom: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+}
+
+/* 状态角标：把「有阈值的数字」翻译成一眼可判的健康度 */
+.stat-tag {
+  --tag-color: var(--accent-green);
+  --tag-bg: rgba(48, 209, 88, 0.14);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+  color: var(--tag-color);
+  background: var(--tag-bg);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-tag.is-warn {
+  --tag-color: var(--accent-orange);
+  --tag-bg: rgba(255, 159, 10, 0.14);
+}
+
+.stat-tag.is-danger {
+  --tag-color: var(--accent-red);
+  --tag-bg: rgba(255, 69, 58, 0.14);
+}
+
+.stat-tag.is-info {
+  --tag-color: var(--accent-blue);
+  --tag-bg: rgba(10, 132, 255, 0.14);
+}
+
+.stat-tag.is-hidden {
+  display: none;
 }
 
 .stat-value {
-  font-size: 22px;
-  font-weight: 600;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
   color: var(--text);
   font-variant-numeric: tabular-nums;
-  line-height: 1.2;
 }
 
-/* 卡片副标题：端口明细、steal 提示等次要信息 */
+.stat-unit {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.stat-bar {
+  height: 5px;
+  border-radius: 99px;
+  background: var(--track-bg);
+  overflow: hidden;
+}
+
+.stat-bar-fill {
+  width: 0;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--stat-bar);
+  transition:
+    width 0.4s ease,
+    background-color 0.3s ease;
+}
+
+.stat-bar-fill.is-warn {
+  background: var(--accent-orange);
+}
+
+.stat-bar-fill.is-danger {
+  background: var(--accent-red);
+}
+
+.stat-bar-fill.is-dim {
+  opacity: 0.7;
+}
+
+.stat-bar-fill.is-dimmer {
+  opacity: 0.45;
+}
+
+/* 负载卡：三档并排的迷你进度条 */
+.stat-bars {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.stat-bars-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stat-bars-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 连接数卡：按端口拆分的分段条，宽度即各端口占比 */
+.stat-seg {
+  display: flex;
+  gap: 5px;
+  height: 5px;
+}
+
+.stat-seg-item {
+  flex: 1;
+  border-radius: 99px;
+  background: var(--speed-down);
+}
+
+.stat-seg-item:nth-child(2n) {
+  background: var(--stat-bar);
+}
+
+/* 该端口无连接时给一个最小占位块，说明「端口在但没人连」 */
+.stat-seg-item.is-empty {
+  flex: 0 0 4px;
+  background: var(--track-bg);
+}
+
+/* 卡片副信息：占比、可用量、端口明细等 */
 .stat-note {
   font-size: 12px;
   color: var(--muted);
-  margin-top: 8px;
   min-height: 16px;
   font-variant-numeric: tabular-nums;
 }
@@ -408,30 +575,6 @@ body.theme-light .section-title {
 
 .stat-note.is-warn {
   color: var(--accent-orange);
-}
-
-.stat-value.is-warn {
-  color: var(--accent-orange);
-}
-
-.stat-value.is-danger {
-  color: var(--accent-red);
-}
-
-/* 磁盘/负载/uptime：变化缓慢，压成一行摘要 */
-.stats-footnote {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
-  margin-top: 16px;
-  padding: 0 4px;
-  font-size: 12px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.stats-footnote span span {
-  color: var(--text);
 }
 
 /* Realtime Traffic Panel */
@@ -1021,13 +1164,26 @@ body.theme-light .threshold-marker {
 }
 
 /* Responsive */
+@media (max-width: 1000px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .wrapper {
     padding: 30px 20px;
   }
-  .cards,
-  .stats-grid {
+  .cards {
     grid-template-columns: 1fr;
+  }
+  .top-bar {
+    left: 20px;
+    right: 20px;
+  }
+  /* 窄屏页眉控件挤在一行，只留时长本身 */
+  .uptime-label {
+    display: none;
   }
   .realtime-metrics {
     grid-template-columns: 1fr;
@@ -1080,6 +1236,12 @@ body.theme-light .threshold-marker {
   }
   .latency-chart-wrap {
     height: 240px;
+  }
+}
+
+@media (max-width: 560px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
   }
 }
 

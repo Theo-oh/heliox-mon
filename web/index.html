@@ -30,6 +30,13 @@
   <body>
     <div class="wrapper">
       <div class="top-bar">
+        <!-- 运行时间是上下文而非指标，与服务器名/主题同属页眉控件族 -->
+        <div id="uptime-pill" class="uptime-pill" hidden>
+          <span class="uptime-dot"></span>
+          <span class="uptime-label">已稳定运行</span>
+          <span id="uptime" class="uptime-value">--</span>
+        </div>
+
         <div id="server-name" class="server-pill">Server</div>
 
         <!-- 通知胶囊：仅在配置了 Telegram 时显示，点击弹出测试面板 -->
@@ -90,33 +97,108 @@
       <!-- 系统资源 -->
       <div class="section">
         <div class="section-title">系统状态</div>
+        <!-- 统一卡内结构：标签 + 状态角标 / 主数值 / 进度条 / 副信息 -->
         <div class="stats-grid">
           <div class="stat">
-            <div class="stat-label">CPU 使用率</div>
-            <div id="cpu" class="stat-value">--%</div>
-            <div id="cpu-steal" class="stat-note is-hidden"></div>
+            <div class="stat-head">
+              <span class="stat-label">CPU 使用率</span>
+              <span id="cpu-tag" class="stat-tag is-hidden"></span>
+            </div>
+            <div class="stat-value">
+              <span id="cpu">--</span><span class="stat-unit">%</span>
+            </div>
+            <div class="stat-bar">
+              <div id="cpu-bar" class="stat-bar-fill"></div>
+            </div>
+            <div id="cpu-note" class="stat-note"></div>
           </div>
+
           <div class="stat">
-            <div class="stat-label">内存使用</div>
-            <div id="memory" class="stat-value">-- / -- GB</div>
+            <div class="stat-head">
+              <span class="stat-label">内存使用</span>
+              <span id="memory-tag" class="stat-tag is-hidden"></span>
+            </div>
+            <div class="stat-value">
+              <span id="memory">--</span
+              ><span id="memory-unit" class="stat-unit">GB</span>
+            </div>
+            <div class="stat-bar">
+              <div id="memory-bar" class="stat-bar-fill"></div>
+            </div>
             <div id="memory-note" class="stat-note"></div>
           </div>
+
           <div class="stat">
-            <div class="stat-label">活跃连接</div>
-            <div id="conns" class="stat-value">--</div>
+            <div class="stat-head">
+              <span class="stat-label">磁盘空间</span>
+              <span id="disk-tag" class="stat-tag is-hidden"></span>
+            </div>
+            <div class="stat-value">
+              <span id="disk">--</span
+              ><span id="disk-unit" class="stat-unit">GB</span>
+            </div>
+            <div class="stat-bar">
+              <div id="disk-bar" class="stat-bar-fill"></div>
+            </div>
+            <div id="disk-note" class="stat-note"></div>
+          </div>
+
+          <div class="stat">
+            <div class="stat-head">
+              <span class="stat-label">系统负载</span>
+              <span id="load-tag" class="stat-tag is-hidden"></span>
+            </div>
+            <div class="stat-value">
+              <span id="load-1">--</span><span class="stat-unit">1 分钟</span>
+            </div>
+            <!-- 三档负载按核数换算成百分比，透明度递减表达时间上的远近 -->
+            <div class="stat-bars">
+              <div class="stat-bars-item">
+                <div class="stat-bar">
+                  <div id="load-bar-1" class="stat-bar-fill"></div>
+                </div>
+                <span id="load-text-1" class="stat-bars-label">1m --</span>
+              </div>
+              <div class="stat-bars-item">
+                <div class="stat-bar">
+                  <div id="load-bar-5" class="stat-bar-fill is-dim"></div>
+                </div>
+                <span id="load-text-5" class="stat-bars-label">5m --</span>
+              </div>
+              <div class="stat-bars-item">
+                <div class="stat-bar">
+                  <div id="load-bar-15" class="stat-bar-fill is-dimmer"></div>
+                </div>
+                <span id="load-text-15" class="stat-bars-label">15m --</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="stat">
+            <div class="stat-head">
+              <span class="stat-label">活跃连接</span>
+              <span id="conns-tag" class="stat-tag is-hidden"></span>
+            </div>
+            <div class="stat-value">
+              <span id="conns">--</span><span class="stat-unit">条</span>
+            </div>
+            <div id="conns-seg" class="stat-seg"></div>
             <div id="conns-detail" class="stat-note"></div>
           </div>
+
           <div class="stat">
-            <div class="stat-label">TCP 重传率</div>
-            <div id="retrans" class="stat-value">--%</div>
+            <div class="stat-head">
+              <span class="stat-label">TCP 重传率</span>
+              <span id="retrans-tag" class="stat-tag is-hidden"></span>
+            </div>
+            <div class="stat-value">
+              <span id="retrans">--</span><span class="stat-unit">%</span>
+            </div>
+            <div class="stat-bar">
+              <div id="retrans-bar" class="stat-bar-fill"></div>
+            </div>
             <div id="retrans-note" class="stat-note"></div>
           </div>
-        </div>
-        <!-- 变化缓慢的指标降级为一行摘要，不占用需要频繁扫视的卡片位 -->
-        <div class="stats-footnote">
-          <span>磁盘 <span id="disk">--</span></span>
-          <span>负载 <span id="load">-- / -- / --</span></span>
-          <span>运行 <span id="uptime">--</span></span>
         </div>
       </div>
 
