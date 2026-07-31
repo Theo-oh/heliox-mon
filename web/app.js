@@ -119,7 +119,8 @@ async function fetchStats() {
     const data = await res.json();
 
     document.title = data.server_name;
-    const badge = document.getElementById("server-name");
+    // 只写文本节点，胶囊里的铃铛图标不能被整体覆盖掉
+    const badge = document.getElementById("server-name-text");
     if (badge) badge.textContent = data.server_name;
     document.getElementById("current-time").textContent = data.current_time;
 
@@ -2266,49 +2267,63 @@ function setupTrendToggle() {
 }
 
 // 初始化
-// 拉取通知配置：未配置 Telegram 则隐藏胶囊，保持顶栏干净；
-// 已配置则显示胶囊（每日报告开启时文案为推送时刻）并填充弹层状态
+// 拉取通知配置：未配置 Telegram 时主机名胶囊保持纯展示，顶栏干净；
+// 已配置则亮出铃铛并允许点开弹层，推送时刻放在弹层里而非顶栏
 async function fetchNotifyStatus() {
-  const pill = document.getElementById("notify-pill");
-  const pillText = document.getElementById("notify-pill-text");
+  const pill = document.getElementById("server-name");
   const tgStatus = document.getElementById("tg-pop-status");
   const drStatus = document.getElementById("dr-pop-status");
   if (!pill) return;
+
+  // disabled 同时挡住点击与 hover 态，弹层入口和视觉提示保持一致
+  const setInteractive = (on, hint) => {
+    pill.classList.toggle("is-notify", on);
+    pill.disabled = !on;
+    if (on) {
+      pill.setAttribute("aria-haspopup", "dialog");
+      pill.setAttribute("aria-expanded", "false");
+      pill.title = hint;
+    } else {
+      pill.removeAttribute("aria-haspopup");
+      pill.removeAttribute("aria-expanded");
+      pill.removeAttribute("title");
+    }
+  };
+
   try {
     const res = await fetch("/api/config");
     if (!res.ok) throw new Error("HTTP " + res.status);
     const cfg = await res.json();
 
     if (!cfg.telegram_enabled) {
-      pill.hidden = true;
+      setInteractive(false);
       return;
     }
-    pill.hidden = false;
 
     const dr = cfg.daily_report || {};
-    const timeLabel =
+    const hourLabel =
       dr.enabled && dr.hour != null
-        ? `每日 ${String(dr.hour).padStart(2, "0")}:00`
+        ? `${String(dr.hour).padStart(2, "0")}:00`
         : null;
 
-    if (pillText) pillText.textContent = timeLabel || "通知";
+    setInteractive(true, hourLabel ? `每日报告 ${hourLabel}` : "Telegram 通知");
     if (tgStatus) {
       tgStatus.textContent = "已配置";
       tgStatus.className = "notify-badge is-on";
     }
     if (drStatus) {
-      drStatus.textContent = timeLabel ? `每天 ${timeLabel.slice(3)}` : "已关闭";
+      drStatus.textContent = hourLabel ? `每天 ${hourLabel}` : "已关闭";
       drStatus.className = "notify-badge " + (dr.enabled ? "is-on" : "is-off");
     }
   } catch (e) {
     console.error("获取通知配置失败", e);
-    pill.hidden = true; // 拿不到状态时不显示，避免误导
+    setInteractive(false); // 拿不到状态时不给入口，避免误导
   }
 }
 
-// 通知胶囊：点击开合弹层（点击外部 / Esc 关闭），弹层内「发送测试消息」即时验证
+// 主机名胶囊：点击开合通知弹层（点击外部 / Esc 关闭），弹层内「发送测试消息」即时验证
 function setupNotifyPill() {
-  const pill = document.getElementById("notify-pill");
+  const pill = document.getElementById("server-name");
   const pop = document.getElementById("notify-popover");
   if (!pill || !pop) return;
 

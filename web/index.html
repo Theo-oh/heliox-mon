@@ -44,23 +44,15 @@
             <span id="uptime" class="uptime-value">--</span>
           </div>
 
-          <div id="server-name" class="server-pill">Server</div>
-
-          <!-- 通知胶囊：仅在配置了 Telegram 时显示，点击弹出测试面板 -->
+          <!-- 主机名胶囊兼通知入口：配置了 Telegram 才长出铃铛并可点开面板，
+               省掉一枚独立胶囊；未配置时 disabled，就是块纯展示的名牌 -->
           <div class="notify-wrap">
-            <button
-              id="notify-pill"
-              class="notify-pill"
-              type="button"
-              aria-haspopup="dialog"
-              aria-expanded="false"
-              hidden
-            >
+            <button id="server-name" class="server-pill" type="button" disabled>
               <svg
-                class="notify-pill-icon"
+                class="server-bell"
                 viewBox="0 0 24 24"
-                width="14"
-                height="14"
+                width="13"
+                height="13"
                 aria-hidden="true"
               >
                 <path
@@ -68,7 +60,7 @@
                   d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-5v-1l-1.6-1.6V9.5a5.4 5.4 0 0 0-4.15-5.26V3.5a1.25 1.25 0 0 0-2.5 0v.74A5.4 5.4 0 0 0 6.6 9.5v4.9L5 16v1Z"
                 />
               </svg>
-              <span id="notify-pill-text">通知</span>
+              <span id="server-name-text">Server</span>
             </button>
 
             <div id="notify-popover" class="notify-popover" role="dialog" hidden>

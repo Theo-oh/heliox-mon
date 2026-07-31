@@ -137,13 +137,37 @@ body {
 }
 
 .server-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: var(--item-bg);
   padding: 6px 16px;
   border-radius: 20px;
   font-size: 13px;
   color: var(--muted);
   border: 1px solid var(--card-border);
+  font-family: inherit; /* button 不继承 body 字体，不加会和邻居胶囊字形不一致 */
   font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+/* 配了 Telegram 才带铃铛并可点：hover 变色是这枚「彩蛋入口」唯一的可点提示 */
+.server-pill.is-notify {
+  cursor: pointer;
+}
+
+.server-pill.is-notify:hover {
+  border-color: var(--card-hover-border);
+  color: var(--text);
+}
+
+.server-bell {
+  display: none;
+  color: var(--accent-green); /* 绿色小铃铛：出现即代表「通知已就绪」 */
+}
+
+.server-pill.is-notify .server-bell {
+  display: inline-flex;
 }
 
 .theme-toggle {
@@ -1284,34 +1308,10 @@ body.theme-light .trend-today-badge {
   box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.25);
 }
 
-/* 通知胶囊 + 弹层 */
+/* 通知弹层（挂在主机名胶囊下方） */
 .notify-wrap {
   position: relative;
   display: inline-flex;
-}
-.notify-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--item-bg);
-  border: 1px solid var(--card-border);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 6px 12px;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.notify-pill:hover {
-  border-color: var(--card-hover-border);
-  color: var(--text);
-}
-.notify-pill-icon {
-  color: var(--accent-green); /* 绿色小铃铛：只在已配置时出现，暗示「通知已就绪」 */
-}
-.notify-pill[hidden] {
-  display: none;
 }
 
 .notify-popover {
