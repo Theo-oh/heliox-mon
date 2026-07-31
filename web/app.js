@@ -835,9 +835,19 @@ function pushRealtimePoint(txSpeed, rxSpeed) {
 
   updateRealtimeAverage();
   updateRealtimeScale();
-  // 必须用 "none"：默认模式在鼠标悬停期间每秒 shift 数据会把 hover 样式留在旧索引上，
-  // 导致移开鼠标后残留一串圆点
-  if (realtimeChart) realtimeChart.update("none");
+
+  if (realtimeChart) {
+    // Chart.js 把 hover 态记在 element 对象自己身上，而 shift() 每秒让整排 element 左移一格。
+    // 鼠标不动时它只按 index 判断"激活的还是同一格"，于是既不清旧的、又给挪到这一格的新
+    // element 补上高亮，每秒攒出一个跟着数据往左漂的圆点。这里在更新前把上一秒那个 element
+    // 的 hover 样式摘掉，剩下的交给它自己重放鼠标位置，高亮就始终只落在光标压着的那一格。
+    for (const el of realtimeChart.getActiveElements()) {
+      realtimeChart
+        .getDatasetMeta(el.datasetIndex)
+        .controller.removeHoverStyle(el.element, el.datasetIndex, el.index);
+    }
+    realtimeChart.update("none"); // 每秒刷新，跳过动画路径
+  }
 }
 
 function connectRealtime() {
