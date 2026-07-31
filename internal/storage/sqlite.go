@@ -111,20 +111,9 @@ func migrate(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_latency_target_ts ON latency_records(target, ts)`,
 		`CREATE INDEX IF NOT EXISTS idx_latency_agg_ts ON latency_records(is_aggregated, ts)`,
 
-		// 系统资源快照
-		`CREATE TABLE IF NOT EXISTS system_metrics (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			ts INTEGER NOT NULL,
-			cpu_percent REAL,
-			mem_used INTEGER,
-			mem_total INTEGER,
-			disk_used INTEGER,
-			disk_total INTEGER,
-			load_1 REAL,
-			load_5 REAL,
-			load_15 REAL
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_system_metrics_ts ON system_metrics(ts)`,
+		// 系统资源指标已改为只存内存（见 collector.SystemSnapshot）：
+		// 每 5 秒一行、只查最新一行，落库纯属浪费磁盘 IO。清理旧库遗留的表。
+		`DROP TABLE IF EXISTS system_metrics`,
 
 		// 报警记录（用于冷却）
 		`CREATE TABLE IF NOT EXISTS alert_records (

@@ -92,28 +92,20 @@ func (c *Collector) collectRealtimeSpeed() {
 
 // doCollectSystemMetrics 模拟系统资源采集
 func (c *Collector) doCollectSystemMetrics() {
-	nowTime := time.Now()
-	now := nowTime.Unix()
-
-	cpu := rand.Float64() * 100
-	memTotal := uint64(16 * 1024 * 1024 * 1024) // 16GB
-	memUsed := uint64(rand.Float64() * float64(memTotal))
+	memTotal := uint64(16 * 1024 * 1024 * 1024)   // 16GB
 	diskTotal := uint64(512 * 1024 * 1024 * 1024) // 512GB
-	diskUsed := uint64(rand.Float64() * float64(diskTotal))
-	load1 := rand.Float64() * 2
-	load5 := rand.Float64() * 2
-	load15 := rand.Float64() * 2
 
-	_, err := c.db.Exec(
-		`INSERT INTO system_metrics (ts, cpu_percent, mem_used, mem_total, disk_used, disk_total, load_1, load_5, load_15)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		now, cpu, memUsed, memTotal, diskUsed, diskTotal, load1, load5, load15,
-	)
-	if err != nil {
-		log.Printf("[Mock] 保存系统指标失败: %v", err)
-	}
-
-	c.cleanupSystemMetrics(nowTime)
+	c.setSystemSnapshot(SystemSnapshot{
+		Ts:         time.Now().Unix(),
+		CPUPercent: rand.Float64() * 100,
+		MemUsed:    uint64(rand.Float64() * float64(memTotal)),
+		MemTotal:   memTotal,
+		DiskUsed:   uint64(rand.Float64() * float64(diskTotal)),
+		DiskTotal:  diskTotal,
+		Load1:      rand.Float64() * 2,
+		Load5:      rand.Float64() * 2,
+		Load15:     rand.Float64() * 2,
+	})
 }
 
 // doCollectLatency 模拟延迟采集

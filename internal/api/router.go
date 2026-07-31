@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hh/heliox-mon/internal/collector"
 	"github.com/hh/heliox-mon/internal/config"
 	"github.com/hh/heliox-mon/internal/storage"
 	"github.com/hh/heliox-mon/web"
@@ -35,6 +36,7 @@ type Server struct {
 	db               *storage.DB
 	server           *http.Server
 	realtimeProvider RealtimeDataProvider
+	systemProvider   SystemDataProvider
 	notifier         Notifier
 	sessions         sync.Map // token -> expireTime(int64)
 	stopCleanup      chan struct{}
@@ -50,18 +52,25 @@ type RealtimeDataProvider interface {
 	GetRealtimeSpeed() (txSpeed, rxSpeed float64, ts int64)
 }
 
+// SystemDataProvider 系统资源提供者接口（数据来自采集器内存，不落库）
+type SystemDataProvider interface {
+	GetSystemSnapshot() collector.SystemSnapshot
+}
+
 // Notifier 通知发送接口（用于页面「测试发送」/「日报预览」手动触发）
 type Notifier interface {
 	SendTest() error
 	SendDailyReport() error
 }
 
-// NewServer 创建服务器
-func NewServer(cfg *config.Config, db *storage.DB, realtimeProvider RealtimeDataProvider, notifier Notifier) *Server {
+// NewServer 创建服务器。realtimeProvider 与 systemProvider 实际都由采集器实现，
+// 分成两个接口是为了让各 handler 的依赖显式可见。
+func NewServer(cfg *config.Config, db *storage.DB, realtimeProvider RealtimeDataProvider, systemProvider SystemDataProvider, notifier Notifier) *Server {
 	s := &Server{
 		cfg:              cfg,
 		db:               db,
 		realtimeProvider: realtimeProvider,
+		systemProvider:   systemProvider,
 		notifier:         notifier,
 		stopCleanup:      make(chan struct{}),
 	}
@@ -507,32 +516,29 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	row := s.db.QueryRow(
-		"SELECT ts, cpu_percent, mem_used, mem_total, disk_used, disk_total, load_1, load_5, load_15 FROM system_metrics ORDER BY ts DESC LIMIT 1",
-	)
 
-	var ts int64
-	var cpu, load1, load5, load15 float64
-	var memUsed, memTotal, diskUsed, diskTotal int64
-
-	if err := row.Scan(&ts, &cpu, &memUsed, &memTotal, &diskUsed, &diskTotal, &load1, &load5, &load15); err != nil {
+	snap := s.systemProvider.GetSystemSnapshot()
+	if snap.Ts == 0 {
 		http.Error(w, "No data", http.StatusNotFound)
 		return
 	}
 
-	data := map[string]interface{}{
-		"ts":          ts,
-		"cpu_percent": cpu,
-		"mem_used":    memUsed,
-		"mem_total":   memTotal,
-		"disk_used":   diskUsed,
-		"disk_total":  diskTotal,
-		"load_1":      load1,
-		"load_5":      load5,
-		"load_15":     load15,
-	}
+	writeJSON(w, systemSnapshotJSON(snap))
+}
 
-	writeJSON(w, data)
+// systemSnapshotJSON 将系统快照转成前端使用的字段名
+func systemSnapshotJSON(snap collector.SystemSnapshot) map[string]interface{} {
+	return map[string]interface{}{
+		"ts":          snap.Ts,
+		"cpu_percent": snap.CPUPercent,
+		"mem_used":    snap.MemUsed,
+		"mem_total":   snap.MemTotal,
+		"disk_used":   snap.DiskUsed,
+		"disk_total":  snap.DiskTotal,
+		"load_1":      snap.Load1,
+		"load_5":      snap.Load5,
+		"load_15":     snap.Load15,
+	}
 }
 
 // handleTrafficDaily 每日流量

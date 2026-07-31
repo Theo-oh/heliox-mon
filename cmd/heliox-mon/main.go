@@ -37,8 +37,8 @@ func main() {
 	col.Start()
 	defer col.Stop()
 
-	// 启动 HTTP 服务（传入采集器作为实时数据源）
-	server := api.NewServer(cfg, db, col, ntf)
+	// 启动 HTTP 服务（传入采集器作为实时网速与系统资源的数据源）
+	server := api.NewServer(cfg, db, col, col, ntf)
 	go func() {
 		if err := server.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("HTTP 服务启动失败: %v", err)

@@ -2,7 +2,6 @@ package collector
 
 import (
 	"bufio"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -12,24 +11,21 @@ import (
 
 // doCollectSystemMetrics 执行系统资源采集
 func (c *Collector) doCollectSystemMetrics() {
-	nowTime := time.Now()
-	now := nowTime.Unix()
-
-	cpu := c.getCPUPercent()
 	memUsed, memTotal := c.getMemoryInfo()
 	diskUsed, diskTotal := c.getDiskInfo()
 	load1, load5, load15 := c.getLoadAvg()
 
-	_, err := c.db.Exec(
-		`INSERT INTO system_metrics (ts, cpu_percent, mem_used, mem_total, disk_used, disk_total, load_1, load_5, load_15)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		now, cpu, memUsed, memTotal, diskUsed, diskTotal, load1, load5, load15,
-	)
-	if err != nil {
-		log.Printf("保存系统指标失败: %v", err)
-	}
-
-	c.cleanupSystemMetrics(nowTime)
+	c.setSystemSnapshot(SystemSnapshot{
+		Ts:         time.Now().Unix(),
+		CPUPercent: c.getCPUPercent(),
+		MemUsed:    memUsed,
+		MemTotal:   memTotal,
+		DiskUsed:   diskUsed,
+		DiskTotal:  diskTotal,
+		Load1:      load1,
+		Load5:      load5,
+		Load15:     load15,
+	})
 }
 
 // getCPUPercent 获取 CPU 使用率（通过两次采样差值计算）

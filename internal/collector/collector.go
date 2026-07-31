@@ -43,8 +43,9 @@ type Collector struct {
 	realtimeSnapshot RealtimeSnapshot
 	realtimeMu       sync.RWMutex
 
-	// 上次清理系统指标的时间（只在系统采集协程内读写）
-	lastMetricsCleanup time.Time
+	// 系统资源快照（每 5 秒更新，只存内存）
+	systemSnapshot SystemSnapshot
+	systemMu       sync.RWMutex
 }
 
 // RealtimeSnapshot 实时流量快照
@@ -54,6 +55,21 @@ type RealtimeSnapshot struct {
 	RxBytes uint64
 	TxSpeed float64 // bytes/s
 	RxSpeed float64 // bytes/s
+}
+
+// SystemSnapshot 系统资源快照。
+// 前端只关心「此刻」的资源占用，历史值从未被查询过，
+// 因此不落库——避免每 5 秒一次 INSERT+DELETE 空耗 VPS 的磁盘 IO。
+type SystemSnapshot struct {
+	Ts         int64
+	CPUPercent float64
+	MemUsed    uint64
+	MemTotal   uint64
+	DiskUsed   uint64
+	DiskTotal  uint64
+	Load1      float64
+	Load5      float64
+	Load15     float64
 }
 
 // Notifier 通知器接口
@@ -88,6 +104,20 @@ func (c *Collector) GetRealtimeSpeed() (txSpeed, rxSpeed float64, ts int64) {
 	c.realtimeMu.RLock()
 	defer c.realtimeMu.RUnlock()
 	return c.realtimeSnapshot.TxSpeed, c.realtimeSnapshot.RxSpeed, c.realtimeSnapshot.Ts
+}
+
+// GetSystemSnapshot 获取系统资源快照（供 API 使用）
+func (c *Collector) GetSystemSnapshot() SystemSnapshot {
+	c.systemMu.RLock()
+	defer c.systemMu.RUnlock()
+	return c.systemSnapshot
+}
+
+// setSystemSnapshot 由采集协程写入快照
+func (c *Collector) setSystemSnapshot(s SystemSnapshot) {
+	c.systemMu.Lock()
+	defer c.systemMu.Unlock()
+	c.systemSnapshot = s
 }
 
 // Start 启动采集器
@@ -139,6 +169,9 @@ func (c *Collector) collectSystemMetrics() {
 	defer c.wg.Done()
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
+
+	// 先采集一次，避免服务刚启动的 5 秒内接口无数据可返回
+	c.doCollectSystemMetrics()
 
 	for {
 		select {
@@ -387,28 +420,6 @@ func (c *Collector) aggregateLatencyData() {
 	aggCutoff := time.Now().Add(-latencyAggRetention).Unix()
 	if _, err := c.db.Exec("DELETE FROM latency_records WHERE is_aggregated = 1 AND ts < ?", aggCutoff); err != nil {
 		log.Printf("清理过期聚合数据失败: %v", err)
-	}
-}
-
-// 系统指标保留策略
-const (
-	systemMetricsRetention     = time.Hour       // 只保留最近 1 小时
-	systemMetricsCleanupPeriod = 5 * time.Minute // 清理间隔
-)
-
-// cleanupSystemMetrics 按固定间隔清理过期系统指标。
-// 采集频率是 5 秒一次，若每次采集都 DELETE，会让 idx_system_metrics_ts 反复重建，
-// 白白放大 WAL 写入与磁盘 IO；多留几分钟数据对查询（只取最新一条）无影响。
-// 仅由系统采集协程单线程调用，故 lastMetricsCleanup 无需加锁。
-func (c *Collector) cleanupSystemMetrics(now time.Time) {
-	if now.Sub(c.lastMetricsCleanup) < systemMetricsCleanupPeriod {
-		return
-	}
-	c.lastMetricsCleanup = now
-
-	cutoff := now.Add(-systemMetricsRetention).Unix()
-	if _, err := c.db.Exec("DELETE FROM system_metrics WHERE ts < ?", cutoff); err != nil {
-		log.Printf("清理系统指标失败: %v", err)
 	}
 }
 
