@@ -2,6 +2,8 @@ package collector
 
 import (
 	"bufio"
+	"errors"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -13,6 +15,8 @@ const tcpStateEstablished = "01"
 // countEstablished 统计各代理端口上的 ESTABLISHED 连接数。
 // 相比 CPU/内存这类通用指标，「此刻有多少人在用」才是代理服务最直接的健康信号，
 // 连接数异常暴涨也能一眼看出。
+// 任一张表读取失败都返回 nil：少算的连接数一样会被当成真值展示，
+// 与其报个偏低的数字，不如明确地说「不知道」。
 func countEstablished(ports []int) map[int]int {
 	if len(ports) == 0 {
 		return nil
@@ -35,17 +39,20 @@ func countEstablished(ports []int) map[int]int {
 
 	// IPv4 与 IPv6 是两张独立的表，监听 :: 的服务连接会记在 tcp6 里
 	for _, path := range []string{"/proc/net/tcp", "/proc/net/tcp6"} {
-		countEstablishedIn(path, want, counts)
+		if !countEstablishedIn(path, want, counts) {
+			return nil
+		}
 	}
 	return counts
 }
 
-// countEstablishedIn 累加单张 /proc/net/tcp* 表中命中端口的 ESTABLISHED 连接
-func countEstablishedIn(path string, want map[uint64]int, counts map[int]int) {
+// countEstablishedIn 累加单张 /proc/net/tcp* 表中命中端口的 ESTABLISHED 连接，
+// 返回 false 表示这张表没能完整读完
+func countEstablishedIn(path string, want map[uint64]int, counts map[int]int) bool {
 	file, err := os.Open(path)
 	if err != nil {
 		// IPv6 未启用时 /proc/net/tcp6 不存在，属正常情况
-		return
+		return errors.Is(err, os.ErrNotExist)
 	}
 	defer file.Close()
 
@@ -67,6 +74,13 @@ func countEstablishedIn(path string, want map[uint64]int, counts map[int]int) {
 			counts[p]++
 		}
 	}
+
+	// 读到一半出错会静默少算，必须让调用方知道这轮数据不可用
+	if err := scanner.Err(); err != nil {
+		log.Printf("读取 %s 失败: %v", path, err)
+		return false
+	}
+	return true
 }
 
 // parseHexPort 从 /proc/net/tcp 的 "地址:端口" 十六进制字段中取出端口

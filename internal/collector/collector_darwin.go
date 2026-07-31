@@ -91,8 +91,16 @@ func (c *Collector) collectRealtimeSpeed() {
 	}
 }
 
+// mockRound 已完成的采集轮次（只在系统采集协程内读写）。
+// 用来让首轮走「还没有基准」的分支，本地开发时才能看到线上首次启动的占位符表现
+var mockRound int
+
 // doCollectSystemMetrics 模拟系统资源采集
 func (c *Collector) doCollectSystemMetrics() {
+	mockRound++
+	// CPU 使用率与重传率都要两次采样才算得出，首轮无值可给
+	hasBaseline := mockRound > 1
+
 	memTotal := uint64(16 * 1024 * 1024 * 1024)   // 16GB
 	diskTotal := uint64(512 * 1024 * 1024 * 1024) // 512GB
 	diskUsed := uint64(rand.Float64() * float64(diskTotal))
@@ -104,24 +112,31 @@ func (c *Collector) doCollectSystemMetrics() {
 		}
 	}
 
+	steal := rand.Float64() * 3
+	var stealAvg float64
+	if hasBaseline {
+		stealAvg = c.pushSteal(steal)
+	}
+
 	c.setSystemSnapshot(SystemSnapshot{
-		Ts:             time.Now().Unix(),
-		CPUPercent:     rand.Float64() * 100,
-		CPUValid:       true,
-		StealPercent:   rand.Float64() * 3,
-		CPUCores:       runtime.NumCPU(),
-		MemUsed:        uint64(rand.Float64() * float64(memTotal)),
-		MemTotal:       memTotal,
-		DiskUsed:       diskUsed,
-		DiskAvail:      diskTotal - diskUsed,
-		DiskTotal:      diskTotal,
-		Load1:          rand.Float64() * 2,
-		Load5:          rand.Float64() * 2,
-		Load15:         rand.Float64() * 2,
-		PortConns:      portConns,
-		RetransPercent: rand.Float64() * 2,
-		RetransValid:   true,
-		UptimeSec:      int64(rand.Intn(30 * 86400)),
+		Ts:              time.Now().Unix(),
+		CPUPercent:      rand.Float64() * 100,
+		CPUValid:        hasBaseline,
+		StealPercent:    steal,
+		StealAvgPercent: stealAvg,
+		CPUCores:        runtime.NumCPU(),
+		MemUsed:         uint64(rand.Float64() * float64(memTotal)),
+		MemTotal:        memTotal,
+		DiskUsed:        diskUsed,
+		DiskAvail:       diskTotal - diskUsed,
+		DiskTotal:       diskTotal,
+		Load1:           rand.Float64() * 2,
+		Load5:           rand.Float64() * 2,
+		Load15:          rand.Float64() * 2,
+		PortConns:       portConns,
+		RetransPercent:  rand.Float64() * 2,
+		RetransValid:    hasBaseline,
+		UptimeSec:       int64(rand.Intn(30 * 86400)),
 	})
 }
 

@@ -365,7 +365,8 @@ async function fetchSystem() {
   }
 }
 
-// steal 长期高于该值说明宿主机被超售，值得提示
+// 近 1 分钟均值高于该值说明宿主机被超售，值得提示。
+// 判定用均值而非瞬时值：单轮 steal 抖到 1% 很常见，会让角标反复闪烁
 const stealWarnPercent = 1;
 // 重传率经验阈值：1% 已能感知卡顿，3% 以上基本可以判定线路劣化
 const retransWarnPercent = 1;
@@ -378,7 +379,7 @@ function renderSystem(data) {
     data.cpu_percent === null ? "--%" : data.cpu_percent.toFixed(1) + "%";
 
   const stealEl = document.getElementById("cpu-steal");
-  const steal = Number(data.steal_percent) || 0;
+  const steal = Number(data.steal_avg_percent) || 0;
   // steal 平时是 0，只有被宿主机抢占时才值得占用视觉空间
   if (steal >= stealWarnPercent) {
     stealEl.textContent = "宿主机抢占 " + steal.toFixed(1) + "%";
@@ -421,7 +422,8 @@ function renderSystem(data) {
   document.getElementById("uptime").textContent = formatUptime(data.uptime_sec);
 }
 
-// renderConnections 活跃连接数，副标题按端口拆分
+// renderConnections 活跃连接数，副标题按端口拆分。
+// 后端读不到 /proc/net/tcp 时返回 null，显示占位符而不是把「没读到」画成 0
 function renderConnections(data) {
   document.getElementById("conns").textContent =
     data.conns_total === undefined || data.conns_total === null

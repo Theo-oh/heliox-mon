@@ -44,6 +44,17 @@ type Collector struct {
 	lastTCP        tcpStats
 	hasTCPBaseline bool
 
+	// steal 滑动窗口（只在系统采集协程内读写）：单轮采样的 steal 抖动很常见，
+	// 直接拿瞬时值判定「宿主机超售」会让角标反复闪烁，改用近 1 分钟均值
+	stealWindow [stealWindowSize]float64
+	stealFilled int
+	stealNext   int
+
+	// 连接数采集缓存（只在系统采集协程内读写）：
+	// 扫描 /proc/net/tcp{,6} 是 O(连接数) 且内核持锁，连接数上万时不宜每 5 秒来一次
+	lastConns   map[int]int
+	lastConnsAt time.Time
+
 	// 实时快照（每秒更新，用于计算实时网速）
 	realtimeSnapshot RealtimeSnapshot
 	realtimeMu       sync.RWMutex
@@ -68,10 +79,11 @@ type RealtimeSnapshot struct {
 type SystemSnapshot struct {
 	Ts int64
 
-	CPUPercent   float64
-	CPUValid     bool    // 首次采样只记基准，此时使用率不可用
-	StealPercent float64 // 宿主机抢占占比，持续偏高说明 VPS 所在物理机超售
-	CPUCores     int
+	CPUPercent      float64
+	CPUValid        bool    // 首次采样只记基准，此时使用率不可用
+	StealPercent    float64 // 本轮宿主机抢占占比
+	StealAvgPercent float64 // 近 1 分钟均值，用于判定 VPS 所在物理机是否超售
+	CPUCores        int
 
 	MemUsed  uint64
 	MemTotal uint64
@@ -85,7 +97,8 @@ type SystemSnapshot struct {
 	Load15 float64
 
 	// 各代理端口的 ESTABLISHED 连接数。采集协程每轮都新建 map 再整体替换，
-	// 读取方拿到的 map 不会再被写入，因此无需额外加锁
+	// 读取方拿到的 map 不会再被写入，因此无需额外加锁。
+	// nil 表示这一轮没读到（而非「0 个连接」），API 会输出 null
 	PortConns map[int]int
 
 	RetransPercent float64 // 两次采样之间的 TCP 重传率
@@ -105,6 +118,25 @@ type cpuTimes struct {
 type tcpStats struct {
 	outSegs     uint64
 	retransSegs uint64
+}
+
+// 系统采集每 5 秒一轮，12 轮即近 1 分钟
+const stealWindowSize = 12
+
+// pushSteal 记录本轮 steal 并返回近 1 分钟均值
+func (c *Collector) pushSteal(v float64) float64 {
+	c.stealWindow[c.stealNext] = v
+	c.stealNext = (c.stealNext + 1) % stealWindowSize
+	if c.stealFilled < stealWindowSize {
+		c.stealFilled++
+	}
+
+	var sum float64
+	// 窗口按顺序填充，未填满时前 stealFilled 个即全部有效样本
+	for i := 0; i < c.stealFilled; i++ {
+		sum += c.stealWindow[i]
+	}
+	return sum / float64(c.stealFilled)
 }
 
 // Notifier 通知器接口

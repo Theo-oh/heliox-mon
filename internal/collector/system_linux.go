@@ -10,33 +10,59 @@ import (
 	"time"
 )
 
+// connsCollectInterval 连接数重新扫描的间隔。
+// 「此刻有多少人在用」不需要 5 秒粒度，而 /proc/net/tcp 是 seq_file 全表遍历、
+// 遍历期间内核还要持 hash 桶锁；连接数上万时每 5 秒扫一次，等于让监控自己去
+// 加重被监控机器的负载
+const connsCollectInterval = 15 * time.Second
+
 // doCollectSystemMetrics 执行系统资源采集
 func (c *Collector) doCollectSystemMetrics() {
+	now := time.Now()
+
 	cpuPercent, stealPercent, cpuOK := c.getCPUPercent()
 	memUsed, memTotal := c.getMemoryInfo()
 	diskUsed, diskAvail, diskTotal := c.getDiskInfo()
 	load1, load5, load15 := c.getLoadAvg()
 	retrans, retransOK := c.getRetransPercent()
 
+	// 无基准的那一轮 stealPercent 只是占位的 0，不该混进均值把窗口拉低
+	var stealAvg float64
+	if cpuOK {
+		stealAvg = c.pushSteal(stealPercent)
+	}
+
 	c.setSystemSnapshot(SystemSnapshot{
-		Ts:             time.Now().Unix(),
-		CPUPercent:     cpuPercent,
-		CPUValid:       cpuOK,
-		StealPercent:   stealPercent,
-		CPUCores:       runtime.NumCPU(),
-		MemUsed:        memUsed,
-		MemTotal:       memTotal,
-		DiskUsed:       diskUsed,
-		DiskAvail:      diskAvail,
-		DiskTotal:      diskTotal,
-		Load1:          load1,
-		Load5:          load5,
-		Load15:         load15,
-		PortConns:      countEstablished([]int{c.cfg.SnellPort, c.cfg.VlessPort}),
-		RetransPercent: retrans,
-		RetransValid:   retransOK,
-		UptimeSec:      getUptime(),
+		Ts:              now.Unix(),
+		CPUPercent:      cpuPercent,
+		CPUValid:        cpuOK,
+		StealPercent:    stealPercent,
+		StealAvgPercent: stealAvg,
+		CPUCores:        runtime.NumCPU(),
+		MemUsed:         memUsed,
+		MemTotal:        memTotal,
+		DiskUsed:        diskUsed,
+		DiskAvail:       diskAvail,
+		DiskTotal:       diskTotal,
+		Load1:           load1,
+		Load5:           load5,
+		Load15:          load15,
+		PortConns:       c.collectPortConns(now),
+		RetransPercent:  retrans,
+		RetransValid:    retransOK,
+		UptimeSec:       getUptime(),
 	})
+}
+
+// collectPortConns 按 connsCollectInterval 降频扫描连接数，间隔内复用上轮结果
+func (c *Collector) collectPortConns(now time.Time) map[int]int {
+	if !c.lastConnsAt.IsZero() && now.Sub(c.lastConnsAt) < connsCollectInterval {
+		return c.lastConns
+	}
+
+	c.lastConns = countEstablished([]int{c.cfg.SnellPort, c.cfg.VlessPort})
+	c.lastConnsAt = now
+	return c.lastConns
 }
 
 // getCPUPercent 通过两次采样的差值计算 CPU 使用率与 steal 占比。
