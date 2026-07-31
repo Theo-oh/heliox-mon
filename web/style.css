@@ -86,12 +86,17 @@ body {
     border-color 0.3s ease;
 }
 
+/* 页眉：标题与控件同处一行，取代原先「居中大标题 + 右上角浮层」的两段式 */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px 20px;
+  margin-bottom: 44px;
+}
+
 .top-bar {
-  position: absolute;
-  top: 30px;
-  /* 给出左边界，控件多起来后窄屏才能换行而不是横向溢出 */
-  left: 30px;
-  right: 30px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -175,16 +180,15 @@ body {
 
 /* Hero Header */
 .hero {
-  text-align: center;
-  margin-bottom: 50px;
-  margin-top: 20px;
+  min-width: 0;
 }
 
 .hero h1 {
-  font-size: 48px;
+  /* 比区块标题（32px）明显大一档，否则页眉与区块的层级会拉不开 */
+  font-size: 40px;
   font-weight: 700;
-  letter-spacing: -1.5px;
-  margin-bottom: 12px;
+  letter-spacing: -1px;
+  margin-bottom: 4px;
   background: linear-gradient(135deg, #fff 0%, #a1a1a6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -200,9 +204,10 @@ body.theme-light .hero h1 {
 }
 
 .hero p {
-  font-size: 17px;
+  font-size: 13px;
   color: var(--muted);
   font-weight: 400;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Section */
@@ -1177,9 +1182,9 @@ body.theme-light .threshold-marker {
   .cards {
     grid-template-columns: 1fr;
   }
+  /* 页眉换行后控件独占一行，跟着标题左对齐 */
   .top-bar {
-    left: 20px;
-    right: 20px;
+    justify-content: flex-start;
   }
   /* 窄屏页眉控件挤在一行，只留时长本身 */
   .uptime-label {
@@ -1196,7 +1201,7 @@ body.theme-light .threshold-marker {
     font-size: 42px;
   }
   .hero h1 {
-    font-size: 36px;
+    font-size: 28px;
   }
   .latency-controls {
     align-items: stretch;
