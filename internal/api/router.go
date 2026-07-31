@@ -170,7 +170,9 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 		// 注意: /login 由单独 handler 处理，实际上不会经过这里(除非 mux 匹配逻辑特殊)，
 		// 但为了保险起见，style.css 等静态资源如果是通过 "/" handleStatic 服务的，
 		// 必须在这里放行。
-		if r.URL.Path == "/style.css" || r.URL.Path == "/favicon.svg" {
+		if r.URL.Path == "/style.css" || r.URL.Path == "/favicon.svg" ||
+			r.URL.Path == "/manifest.json" || r.URL.Path == "/sw.js" ||
+			r.URL.Path == "/icon-192.png" || r.URL.Path == "/icon-512.png" {
 			next(w, r)
 			return
 		}
@@ -1270,6 +1272,11 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 	case strings.HasSuffix(path, ".svg"):
 		w.Header().Set("Content-Type", "image/svg+xml")
+	case strings.HasSuffix(path, ".png"):
+		w.Header().Set("Content-Type", "image/png")
+	case strings.HasSuffix(path, ".json"):
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
 	}
 
 	data, err := fs.ReadFile(web.Assets, path)
