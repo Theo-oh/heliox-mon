@@ -40,6 +40,10 @@ type Collector struct {
 	lastCPU        cpuTimes
 	hasCPUBaseline bool
 
+	// TCP 重传采样基准（同样只在系统采集协程内读写）
+	lastTCP        tcpStats
+	hasTCPBaseline bool
+
 	// 实时快照（每秒更新，用于计算实时网速）
 	realtimeSnapshot RealtimeSnapshot
 	realtimeMu       sync.RWMutex
@@ -80,6 +84,13 @@ type SystemSnapshot struct {
 	Load5  float64
 	Load15 float64
 
+	// 各代理端口的 ESTABLISHED 连接数。采集协程每轮都新建 map 再整体替换，
+	// 读取方拿到的 map 不会再被写入，因此无需额外加锁
+	PortConns map[int]int
+
+	RetransPercent float64 // 两次采样之间的 TCP 重传率
+	RetransValid   bool
+
 	UptimeSec int64
 }
 
@@ -88,6 +99,12 @@ type cpuTimes struct {
 	total uint64 // 各时间片之和
 	idle  uint64 // idle + iowait：iowait 期间 CPU 同样是空闲的，不该算进使用率
 	steal uint64 // 被宿主机抢走的时间片，VPS 超售的直接信号
+}
+
+// tcpStats /proc/net/snmp 中的 TCP 累计计数
+type tcpStats struct {
+	outSegs     uint64
+	retransSegs uint64
 }
 
 // Notifier 通知器接口

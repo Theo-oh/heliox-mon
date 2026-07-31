@@ -359,24 +359,119 @@ async function fetchSystem() {
       return;
     }
 
-    const data = await res.json();
-
-    // 采集器刚启动时还没有两次采样的差值，cpu_percent 为 null
-    document.getElementById("cpu").textContent =
-      data.cpu_percent === null ? "--%" : data.cpu_percent.toFixed(1) + "%";
-    document.getElementById("memory").textContent =
-      formatBytes(data.mem_used) + " / " + formatBytes(data.mem_total);
-    document.getElementById("disk").textContent =
-      formatBytes(data.disk_used) + " / " + formatBytes(data.disk_total);
-    document.getElementById("load").textContent =
-      data.load_1.toFixed(2) +
-      " / " +
-      data.load_5.toFixed(2) +
-      " / " +
-      data.load_15.toFixed(2);
+    renderSystem(await res.json());
   } catch (e) {
     console.error("获取系统数据失败:", e);
   }
+}
+
+// steal 长期高于该值说明宿主机被超售，值得提示
+const stealWarnPercent = 1;
+// 重传率经验阈值：1% 已能感知卡顿，3% 以上基本可以判定线路劣化
+const retransWarnPercent = 1;
+const retransDangerPercent = 3;
+
+// 渲染系统状态卡片（初次由 /api/system 拉取，之后由 SSE 的 system 事件驱动）
+function renderSystem(data) {
+  // 采集器刚启动时还没有两次采样的差值，cpu_percent 为 null
+  document.getElementById("cpu").textContent =
+    data.cpu_percent === null ? "--%" : data.cpu_percent.toFixed(1) + "%";
+
+  const stealEl = document.getElementById("cpu-steal");
+  const steal = Number(data.steal_percent) || 0;
+  // steal 平时是 0，只有被宿主机抢占时才值得占用视觉空间
+  if (steal >= stealWarnPercent) {
+    stealEl.textContent = "宿主机抢占 " + steal.toFixed(1) + "%";
+    stealEl.classList.remove("is-hidden");
+    stealEl.classList.add("is-warn");
+  } else {
+    stealEl.textContent = "";
+    stealEl.classList.add("is-hidden");
+    stealEl.classList.remove("is-warn");
+  }
+
+  document.getElementById("memory").textContent =
+    formatBytes(data.mem_used) + " / " + formatBytes(data.mem_total);
+  document.getElementById("memory-note").textContent = data.mem_total
+    ? ((data.mem_used / data.mem_total) * 100).toFixed(0) + "% 已用"
+    : "";
+
+  renderConnections(data);
+  renderRetrans(data);
+
+  // 磁盘剩余按 disk_avail 显示：普通用户真正能写入的容量，
+  // 比 total - used 少掉文件系统预留给 root 的部分
+  document.getElementById("disk").textContent =
+    formatBytes(data.disk_used) +
+    " / " +
+    formatBytes(data.disk_total) +
+    "（可用 " +
+    formatBytes(data.disk_avail) +
+    "）";
+
+  const cores = Number(data.cpu_cores) || 0;
+  document.getElementById("load").textContent =
+    data.load_1.toFixed(2) +
+    " / " +
+    data.load_5.toFixed(2) +
+    " / " +
+    data.load_15.toFixed(2) +
+    (cores ? "（" + cores + " 核）" : "");
+
+  document.getElementById("uptime").textContent = formatUptime(data.uptime_sec);
+}
+
+// renderConnections 活跃连接数，副标题按端口拆分
+function renderConnections(data) {
+  document.getElementById("conns").textContent =
+    data.conns_total === undefined || data.conns_total === null
+      ? "--"
+      : data.conns_total;
+
+  const detail = (data.conns_by_port || [])
+    .map((item) => item.port + ": " + item.count)
+    .join("  ·  ");
+  document.getElementById("conns-detail").textContent = detail;
+}
+
+// renderRetrans TCP 重传率，超过阈值时变色
+function renderRetrans(data) {
+  const el = document.getElementById("retrans");
+  const note = document.getElementById("retrans-note");
+  el.classList.remove("is-warn", "is-danger");
+
+  // 没有两次采样的差值时不伪造 0%
+  if (data.retrans_percent === null || data.retrans_percent === undefined) {
+    el.textContent = "--%";
+    note.textContent = "";
+    return;
+  }
+
+  const value = Number(data.retrans_percent);
+  el.textContent = value.toFixed(2) + "%";
+  if (value >= retransDangerPercent) {
+    el.classList.add("is-danger");
+    note.textContent = "线路丢包严重";
+  } else if (value >= retransWarnPercent) {
+    el.classList.add("is-warn");
+    note.textContent = "线路质量下降";
+  } else {
+    note.textContent = "线路正常";
+  }
+}
+
+// formatUptime 把秒数格式化为「X 天 Y 小时」
+function formatUptime(sec) {
+  const total = Number(sec) || 0;
+  if (total <= 0) return "--";
+
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  if (days > 0) return days + " 天 " + hours + " 小时";
+
+  const minutes = Math.floor((total % 3600) / 60);
+  if (hours > 0) return hours + " 小时 " + minutes + " 分";
+  return minutes + " 分";
 }
 
 // SSE 实时网速
@@ -634,6 +729,16 @@ function connectRealtime() {
     if (rxEl) rxEl.textContent = formatSpeed(rxSpeed);
     pushRealtimePoint(txSpeed, rxSpeed);
   };
+
+  // 系统状态走具名事件，与默认的网速消息共用这条长连接，
+  // 省掉一轮独立轮询，也让页面与采集节奏对齐
+  eventSource.addEventListener("system", (event) => {
+    try {
+      renderSystem(JSON.parse(event.data));
+    } catch (e) {
+      console.error("解析系统状态失败:", e);
+    }
+  });
 
   eventSource.onerror = () => {
     console.error("SSE 连接断开，5秒后重连...");
@@ -2280,9 +2385,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // 定时刷新
+  // 定时刷新（系统状态由 SSE 的 system 事件推送，不再单独轮询）
   setInterval(fetchStats, 60000); // 1 分钟
-  setInterval(fetchSystem, 5000); // 5 秒
   setInterval(() => {
     // 延迟监控：如果有自定义时间范围则用该范围刷新，否则用默认
     if (latencyStartDate && latencyEndDate) {

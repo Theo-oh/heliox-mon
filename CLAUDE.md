@@ -50,7 +50,7 @@ HELIOX_MON_PASS=test go run ./cmd/heliox-mon
 - **SQLite 用纯 Go 驱动 `modernc.org/sqlite`（无需 CGO）**，WAL 模式；表结构与迁移集中在 `internal/storage/sqlite.go` 的 `migrate()`，启动时执行。
 - **配置全部来自环境变量**（`internal/config/config.go`），无配置文件；唯一例外是读取 heliox 的 `.env` 以获取 `SNELL_PORT`/`VLESS_PORT`。`HELIOX_MON_PASS` 必填，缺失则启动失败。
 - **认证**：Web 用随机 token + HttpOnly Cookie 会话，`/api/*` 同时兼容 Basic Auth；可选 Cloudflare Turnstile。
-- **数据流**：`collector` 每秒/每分钟采集 -> 写快照表 -> 每分钟降采样为日汇总(`*_daily`)；`api` 读库返回 JSON，实时网速经 SSE (`/api/traffic/realtime`) 从采集器内存推送。
+- **数据流**：`collector` 每秒/每分钟采集 -> 写快照表 -> 每分钟降采样为日汇总(`*_daily`)；`api` 读库返回 JSON。**流量与系统资源两类实时数据不落库**，只在采集器内存里维护最新快照（`RealtimeSnapshot` / `SystemSnapshot`），都经 SSE (`/api/traffic/realtime`) 推送：默认消息是每秒的网速，具名事件 `system` 是每 5 秒的系统资源；`/api/system` 保留为同一份快照的一次性拉取入口。
 - **通知（Telegram）** 集中在 `internal/notifier`：阈值流量预警（`alert_records` 表做 24h 冷却）、每日流量报告（`SendDailyReport`，采集器 `runDailyReport` 用定时器对齐到 `DAILY_REPORT_HOUR` 整点、重启不重发）、页面测试发送（`SendTest` ← `POST /api/notify/test`）。三类消息都带 `[SERVER_NAME]` 前缀以区分多机。新增相关配置项时同步更新 `.env.example` 与 README 环境变量表。
 
 ## 统计准确性（改动相关代码时务必保持）
@@ -58,6 +58,8 @@ HELIOX_MON_PASS=test go run ./cmd/heliox-mon
 - 流量只统计物理网卡：`readProcNetDev` 通过 `isVirtualIface` 排除 `lo`/容器网桥/隧道接口（tun/wg/cloudflared 等），避免代理流量被重复计入。新增隧道类型需更新前缀列表。
 - 累计计数器用偏移量处理重启/溢出（`initTrafficOffsets` + 采集时检测回退）；不要改成直接用原始 `/proc` 值。
 - 延迟数据：原始记录保留 7 天，更早的按 10 分钟桶降采样并保留 90 天（`aggregateLatencyData`）——不要退回成直接 DELETE。
+- CPU 使用率按 `busy = total - idle - iowait` 计算（`parseCPUStatLine`）：iowait 期间 CPU 是空闲的，不能算进使用率；`guest`/`guest_nice` 已被内核计入 `user`/`nice`，累加 `/proc/stat` 时只取到 `steal` 为止，多加会让分母偏大。steal 单独作为指标暴露，不要并回使用率。
+- CPU 使用率与 TCP 重传率都依赖两次采样的差值，首次采样无基准时返回 `ok=false`，API 输出 `null` 让前端显示 `--`——不要为了「好看」填 0，那是把「不知道」谎报成「正常」。
 
 ## 代码风格
 

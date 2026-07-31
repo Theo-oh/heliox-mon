@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -528,6 +529,23 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 
 // systemSnapshotJSON 将系统快照转成前端使用的字段名
 func systemSnapshotJSON(snap collector.SystemSnapshot) map[string]interface{} {
+	// 端口连接数按端口号升序输出，避免 map 顺序随机导致前端卡片跳来跳去
+	ports := make([]int, 0, len(snap.PortConns))
+	for port := range snap.PortConns {
+		ports = append(ports, port)
+	}
+	sort.Ints(ports)
+
+	conns := make([]map[string]interface{}, 0, len(ports))
+	totalConns := 0
+	for _, port := range ports {
+		conns = append(conns, map[string]interface{}{
+			"port":  port,
+			"count": snap.PortConns[port],
+		})
+		totalConns += snap.PortConns[port]
+	}
+
 	data := map[string]interface{}{
 		"ts":            snap.Ts,
 		"steal_percent": snap.StealPercent,
@@ -540,7 +558,16 @@ func systemSnapshotJSON(snap collector.SystemSnapshot) map[string]interface{} {
 		"load_1":        snap.Load1,
 		"load_5":        snap.Load5,
 		"load_15":       snap.Load15,
+		"conns_total":   totalConns,
+		"conns_by_port": conns,
 		"uptime_sec":    snap.UptimeSec,
+	}
+
+	// 与 cpu_percent 同理：没有基准时不伪造成 0%
+	if snap.RetransValid {
+		data["retrans_percent"] = snap.RetransPercent
+	} else {
+		data["retrans_percent"] = nil
 	}
 
 	// 首次采样还没有差值可算，返回 null 让前端显示占位符，
@@ -719,6 +746,9 @@ func (s *Server) handleTrafficRealtime(w http.ResponseWriter, r *http.Request) {
 
 	dataTicker := time.NewTicker(1 * time.Second)
 	defer dataTicker.Stop()
+	// 系统资源本身 5 秒才采集一次，按同样节奏推送，避免每秒重复发送同一份数据
+	systemTicker := time.NewTicker(5 * time.Second)
+	defer systemTicker.Stop()
 	heartbeat := time.NewTicker(30 * time.Second) // 防止代理超时断开
 	defer heartbeat.Stop()
 
@@ -729,6 +759,21 @@ func (s *Server) handleTrafficRealtime(w http.ResponseWriter, r *http.Request) {
 		case <-heartbeat.C:
 			// 心跳帧，保持连接活跃
 			if _, err := w.Write([]byte(": heartbeat\n\n")); err != nil {
+				return
+			}
+			flusher.Flush()
+		case <-systemTicker.C:
+			// 具名事件，与默认的网速消息互不干扰
+			snap := s.systemProvider.GetSystemSnapshot()
+			if snap.Ts == 0 {
+				continue
+			}
+			jsonData, err := json.Marshal(systemSnapshotJSON(snap))
+			if err != nil {
+				log.Printf("序列化系统快照失败: %v", err)
+				continue
+			}
+			if _, err := w.Write([]byte("event: system\ndata: " + string(jsonData) + "\n\n")); err != nil {
 				return
 			}
 			flusher.Flush()

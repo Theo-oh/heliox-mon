@@ -16,22 +16,26 @@ func (c *Collector) doCollectSystemMetrics() {
 	memUsed, memTotal := c.getMemoryInfo()
 	diskUsed, diskAvail, diskTotal := c.getDiskInfo()
 	load1, load5, load15 := c.getLoadAvg()
+	retrans, retransOK := c.getRetransPercent()
 
 	c.setSystemSnapshot(SystemSnapshot{
-		Ts:           time.Now().Unix(),
-		CPUPercent:   cpuPercent,
-		CPUValid:     cpuOK,
-		StealPercent: stealPercent,
-		CPUCores:     runtime.NumCPU(),
-		MemUsed:      memUsed,
-		MemTotal:     memTotal,
-		DiskUsed:     diskUsed,
-		DiskAvail:    diskAvail,
-		DiskTotal:    diskTotal,
-		Load1:        load1,
-		Load5:        load5,
-		Load15:       load15,
-		UptimeSec:    getUptime(),
+		Ts:             time.Now().Unix(),
+		CPUPercent:     cpuPercent,
+		CPUValid:       cpuOK,
+		StealPercent:   stealPercent,
+		CPUCores:       runtime.NumCPU(),
+		MemUsed:        memUsed,
+		MemTotal:       memTotal,
+		DiskUsed:       diskUsed,
+		DiskAvail:      diskAvail,
+		DiskTotal:      diskTotal,
+		Load1:          load1,
+		Load5:          load5,
+		Load15:         load15,
+		PortConns:      countEstablished([]int{c.cfg.SnellPort, c.cfg.VlessPort}),
+		RetransPercent: retrans,
+		RetransValid:   retransOK,
+		UptimeSec:      getUptime(),
 	})
 }
 

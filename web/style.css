@@ -393,6 +393,47 @@ body.theme-light .section-title {
   line-height: 1.2;
 }
 
+/* 卡片副标题：端口明细、steal 提示等次要信息 */
+.stat-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 8px;
+  min-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-note.is-hidden {
+  visibility: hidden;
+}
+
+.stat-note.is-warn {
+  color: var(--accent-orange);
+}
+
+.stat-value.is-warn {
+  color: var(--accent-orange);
+}
+
+.stat-value.is-danger {
+  color: var(--accent-red);
+}
+
+/* 磁盘/负载/uptime：变化缓慢，压成一行摘要 */
+.stats-footnote {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-top: 16px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-footnote span span {
+  color: var(--text);
+}
+
 /* Realtime Traffic Panel */
 .realtime-panel {
   background: var(--card-bg);
