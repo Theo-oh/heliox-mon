@@ -446,13 +446,11 @@ function renderCPU(data) {
   const steal = Number(data.steal_avg_percent) || 0;
   // steal 平时是 0，只有被宿主机抢占时才值得占用视觉空间
   const stealing = steal >= stealWarnPercent;
-  const parts = [];
-  if (cores) parts.push(cores + " 核");
-  if (stealing) parts.push("宿主机抢占 " + steal.toFixed(1) + "%");
-
-  const note = document.getElementById("cpu-note");
-  note.textContent = parts.join(" · ");
-  note.classList.toggle("is-warn", stealing);
+  // 核数与抢占分成两段：只有抢占那段染成警告色，核数是中性事实
+  document.getElementById("cpu-cores").textContent = cores ? cores + " 核" : "";
+  document.getElementById("cpu-steal").textContent = stealing
+    ? (cores ? " · " : "") + "宿主机抢占 " + steal.toFixed(1) + "%"
+    : "";
 }
 
 function renderMemory(data) {

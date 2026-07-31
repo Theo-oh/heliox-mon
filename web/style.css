@@ -574,11 +574,8 @@ body.theme-light .section-title {
   font-variant-numeric: tabular-nums;
 }
 
-.stat-note.is-hidden {
-  visibility: hidden;
-}
-
-.stat-note.is-warn {
+/* 副信息里被单独标警的片段（如宿主机抢占），同行其余部分保持中性色 */
+.stat-note .is-warn {
   color: var(--accent-orange);
 }
 
