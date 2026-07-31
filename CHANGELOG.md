@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-07-31
+
 ### 新增
 
 - PWA 支持：新增 `manifest.json`、Service Worker 与 192/512 应用图标，面板可作为
