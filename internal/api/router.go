@@ -528,17 +528,30 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 
 // systemSnapshotJSON 将系统快照转成前端使用的字段名
 func systemSnapshotJSON(snap collector.SystemSnapshot) map[string]interface{} {
-	return map[string]interface{}{
-		"ts":          snap.Ts,
-		"cpu_percent": snap.CPUPercent,
-		"mem_used":    snap.MemUsed,
-		"mem_total":   snap.MemTotal,
-		"disk_used":   snap.DiskUsed,
-		"disk_total":  snap.DiskTotal,
-		"load_1":      snap.Load1,
-		"load_5":      snap.Load5,
-		"load_15":     snap.Load15,
+	data := map[string]interface{}{
+		"ts":            snap.Ts,
+		"steal_percent": snap.StealPercent,
+		"cpu_cores":     snap.CPUCores,
+		"mem_used":      snap.MemUsed,
+		"mem_total":     snap.MemTotal,
+		"disk_used":     snap.DiskUsed,
+		"disk_avail":    snap.DiskAvail,
+		"disk_total":    snap.DiskTotal,
+		"load_1":        snap.Load1,
+		"load_5":        snap.Load5,
+		"load_15":       snap.Load15,
+		"uptime_sec":    snap.UptimeSec,
 	}
+
+	// 首次采样还没有差值可算，返回 null 让前端显示占位符，
+	// 而不是把「暂时不知道」谎报成 0%
+	if snap.CPUValid {
+		data["cpu_percent"] = snap.CPUPercent
+	} else {
+		data["cpu_percent"] = nil
+	}
+
+	return data
 }
 
 // handleTrafficDaily 每日流量

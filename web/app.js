@@ -361,8 +361,9 @@ async function fetchSystem() {
 
     const data = await res.json();
 
+    // 采集器刚启动时还没有两次采样的差值，cpu_percent 为 null
     document.getElementById("cpu").textContent =
-      data.cpu_percent.toFixed(1) + "%";
+      data.cpu_percent === null ? "--%" : data.cpu_percent.toFixed(1) + "%";
     document.getElementById("memory").textContent =
       formatBytes(data.mem_used) + " / " + formatBytes(data.mem_total);
     document.getElementById("disk").textContent =

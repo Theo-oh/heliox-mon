@@ -35,9 +35,10 @@ type Collector struct {
 	portTxOffset  map[int]uint64
 	portRxOffset  map[int]uint64
 
-	// CPU 采样（用于计算实时使用率）
-	lastCPUTotal uint64
-	lastCPUIdle  uint64
+	// CPU 采样基准（只在系统采集协程内读写）。用独立的 bool 标记而非
+	// 「total == 0」判断是否已有基准：total 本身可以合法地为任意值
+	lastCPU        cpuTimes
+	hasCPUBaseline bool
 
 	// 实时快照（每秒更新，用于计算实时网速）
 	realtimeSnapshot RealtimeSnapshot
@@ -61,15 +62,32 @@ type RealtimeSnapshot struct {
 // 前端只关心「此刻」的资源占用，历史值从未被查询过，
 // 因此不落库——避免每 5 秒一次 INSERT+DELETE 空耗 VPS 的磁盘 IO。
 type SystemSnapshot struct {
-	Ts         int64
-	CPUPercent float64
-	MemUsed    uint64
-	MemTotal   uint64
-	DiskUsed   uint64
-	DiskTotal  uint64
-	Load1      float64
-	Load5      float64
-	Load15     float64
+	Ts int64
+
+	CPUPercent   float64
+	CPUValid     bool    // 首次采样只记基准，此时使用率不可用
+	StealPercent float64 // 宿主机抢占占比，持续偏高说明 VPS 所在物理机超售
+	CPUCores     int
+
+	MemUsed  uint64
+	MemTotal uint64
+
+	DiskUsed  uint64
+	DiskAvail uint64 // 普通用户可写容量，比 total-used 少掉 root 保留块
+	DiskTotal uint64
+
+	Load1  float64
+	Load5  float64
+	Load15 float64
+
+	UptimeSec int64
+}
+
+// cpuTimes /proc/stat 首行的累计 CPU 时间（单位 jiffies）
+type cpuTimes struct {
+	total uint64 // 各时间片之和
+	idle  uint64 // idle + iowait：iowait 期间 CPU 同样是空闲的，不该算进使用率
+	steal uint64 // 被宿主机抢走的时间片，VPS 超售的直接信号
 }
 
 // Notifier 通知器接口

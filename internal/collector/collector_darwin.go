@@ -5,6 +5,7 @@ package collector
 import (
 	"log"
 	"math/rand"
+	"runtime"
 	"time"
 )
 
@@ -94,17 +95,23 @@ func (c *Collector) collectRealtimeSpeed() {
 func (c *Collector) doCollectSystemMetrics() {
 	memTotal := uint64(16 * 1024 * 1024 * 1024)   // 16GB
 	diskTotal := uint64(512 * 1024 * 1024 * 1024) // 512GB
+	diskUsed := uint64(rand.Float64() * float64(diskTotal))
 
 	c.setSystemSnapshot(SystemSnapshot{
-		Ts:         time.Now().Unix(),
-		CPUPercent: rand.Float64() * 100,
-		MemUsed:    uint64(rand.Float64() * float64(memTotal)),
-		MemTotal:   memTotal,
-		DiskUsed:   uint64(rand.Float64() * float64(diskTotal)),
-		DiskTotal:  diskTotal,
-		Load1:      rand.Float64() * 2,
-		Load5:      rand.Float64() * 2,
-		Load15:     rand.Float64() * 2,
+		Ts:           time.Now().Unix(),
+		CPUPercent:   rand.Float64() * 100,
+		CPUValid:     true,
+		StealPercent: rand.Float64() * 3,
+		CPUCores:     runtime.NumCPU(),
+		MemUsed:      uint64(rand.Float64() * float64(memTotal)),
+		MemTotal:     memTotal,
+		DiskUsed:     diskUsed,
+		DiskAvail:    diskTotal - diskUsed,
+		DiskTotal:    diskTotal,
+		Load1:        rand.Float64() * 2,
+		Load5:        rand.Float64() * 2,
+		Load15:       rand.Float64() * 2,
+		UptimeSec:    int64(rand.Intn(30 * 86400)),
 	})
 }
 
