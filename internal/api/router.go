@@ -2,8 +2,10 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
@@ -162,6 +164,34 @@ const (
 	authSessionTTL = 30 * 24 * time.Hour // 30 天
 	authTokenBytes = 32
 )
+
+// assetETags 内嵌静态资源的内容哈希（含首尾引号，符合 ETag 语法）。
+// 资源在编译期就固定了，启动时算一次即可；有强校验器后浏览器的重验证才能命中 304。
+var assetETags = buildAssetETags()
+
+func buildAssetETags() map[string]string {
+	m := make(map[string]string)
+	err := fs.WalkDir(web.Assets, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		data, readErr := fs.ReadFile(web.Assets, p)
+		if readErr != nil {
+			return readErr
+		}
+		sum := sha256.Sum256(data)
+		m[p] = `"` + hex.EncodeToString(sum[:16]) + `"`
+		return nil
+	})
+	if err != nil {
+		// 拿不到 ETag 只是退化成每次重传，不影响正确性，因此不阻断启动
+		log.Printf("计算静态资源 ETag 失败: %v", err)
+	}
+	return m
+}
 
 // publicAssets 无需认证即可访问的静态资源。
 // 登录页要用到样式与图标；manifest.json 由 <link rel="manifest"> 默认不带凭据地拉取，
@@ -1283,8 +1313,10 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 	case strings.HasSuffix(path, ".svg"):
 		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set("Cache-Control", "max-age=86400")
 	case strings.HasSuffix(path, ".png"):
 		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "max-age=86400")
 	case strings.HasSuffix(path, ".json"):
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
@@ -1295,9 +1327,13 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if _, err := w.Write(data); err != nil {
-		log.Printf("写出静态资源 %s 失败: %v", path, err)
+
+	if etag, ok := assetETags[path]; ok {
+		w.Header().Set("ETag", etag)
 	}
+	// 交给 ServeContent 处理 If-None-Match：命中时回 304，
+	// 否则 no-cache 的资源（含 vendor 下 ~1.3MB 图表库）每次页面加载都要整包重传
+	http.ServeContent(w, r, path, time.Time{}, bytes.NewReader(data))
 }
 
 // cachedIptablesOK 返回带缓存的 iptables 规则检测结果（TTL 60 秒），

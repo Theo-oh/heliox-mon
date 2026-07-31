@@ -13,6 +13,14 @@
 - `theme-color` 随浅色/深色主题切换同步更新，独立窗口标题栏不再固定为深色。
 - 页面内边距加入 `env(safe-area-inset-*)`，iOS 独立窗口下内容不再被状态栏遮挡。
 
+### 优化
+
+- 内嵌静态资源改为带 `ETag` 并交由 `http.ServeContent` 处理条件请求。此前 HTML/CSS/JS
+  只有 `Cache-Control: no-cache` 而无校验器，浏览器无法重验证，每次打开页面都要重传
+  `vendor/` 下约 1.3 MB 的图表库；现在命中时返回 304。
+- 图标与 SVG 增加 `Cache-Control: max-age=86400`。
+- 三张 PNG 图标去掉全不透明的冗余 alpha 通道并重新压缩（无损），合计 184 KB → 79 KB。
+
 ## [0.18.2] - 2026-07-26
 
 ### 修复
