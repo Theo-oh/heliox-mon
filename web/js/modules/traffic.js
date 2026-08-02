@@ -1,8 +1,23 @@
-// 流量统计：本月/今日/昨日总量、配额进度条、按端口明细
+// 流量统计：本月总量 + 计费配额进度、按协议明细表
 
 import { $, escapeHtml, setHtml, setText } from "../core/dom.js";
-import { formatBytes } from "../core/format.js";
+import {
+  formatBytes,
+  formatBytesParts,
+  formatDateValue,
+} from "../core/format.js";
 import { getJSON, logFetchError } from "../core/http.js";
+
+const GB = 1024 * 1024 * 1024;
+
+const BILLING_MODE_TEXT = {
+  bidirectional: "双向计费",
+  tx_only: "仅出站 (TX)",
+  rx_only: "仅入站 (RX)",
+  max_value: "取最大值 (Max)",
+};
+
+const DEFAULT_THRESHOLDS = [80, 90, 95];
 
 export function initTraffic() {
   refreshTraffic();
@@ -18,198 +33,235 @@ export async function refreshTraffic() {
     setText("server-name-text", data.server_name);
     $("current-time").textContent = data.current_time;
 
-    // 流量数据
-    setText("today-tx", `↑ ${formatBytes(data.today.tx)}`);
-    setText("today-rx", `↓ ${formatBytes(data.today.rx)}`);
-    setText("today-total", `⇅ ${formatBytes(data.today.tx + data.today.rx)}`);
-
-    setText("yesterday-tx", `↑ ${formatBytes(data.yesterday.tx)}`);
-    setText("yesterday-rx", `↓ ${formatBytes(data.yesterday.rx)}`);
-    setText(
-      "yesterday-total",
-      `⇅ ${formatBytes(data.yesterday.tx + data.yesterday.rx)}`,
-    );
-
-    // 本月总计
+    const cycle = computeCycle(data.reset_day);
     const monthTotalBytes = data.this_month.tx + data.this_month.rx;
-    const monthTotalGB = (monthTotalBytes / 1024 / 1024 / 1024).toFixed(2);
-    $("month-total").textContent = monthTotalGB + " GB";
 
-    // 获取端口流量
-    fetchPortTraffic();
+    setText(
+      "billing-mode-pill",
+      `计费 ${BILLING_MODE_TEXT[data.billing_mode] || data.billing_mode}`,
+    );
+    setText(
+      "cycle-pill",
+      `重置日 ${cycle.day} 号 · 剩余 ${cycle.remainDays} 天`,
+    );
+    setText("cycle-start", `${formatDateValue(cycle.start)} 起`);
 
-    // 渲染高级流量进度条
-    renderTrafficProgress(data);
+    const [monthValue, monthUnit] = formatBytesParts(monthTotalBytes);
+    setText("month-total", monthValue);
+    setText("month-total-unit", monthUnit);
+
+    renderQuota(data, cycle);
+    renderTotalRow(data);
+
+    // 端口明细单独一个接口，失败不应连累上面已渲染好的整机数据
+    fetchPortTraffic(monthTotalBytes);
   } catch (e) {
     logFetchError("获取统计数据失败:", e);
   }
 }
 
-// 渲染流量进度条（支持双向/单向/刻度）
-function renderTrafficProgress(data) {
-  const limitGB = data.monthly_limit_gb;
-  if (limitGB <= 0) return;
+/**
+ * 计费周期在前端按 reset_day 推算，与后端 GetBillingCycleDates 同口径：
+ * 重置日钳到 1-28，保证任意月份都存在该日历日。
+ * @param {number} resetDay
+ */
+function computeCycle(resetDay) {
+  const day = Math.min(28, Math.max(1, Number(resetDay) || 1));
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const start =
+    today.getDate() >= day
+      ? new Date(today.getFullYear(), today.getMonth(), day)
+      : new Date(today.getFullYear(), today.getMonth() - 1, day);
+  const next = new Date(start.getFullYear(), start.getMonth() + 1, day);
 
-  const usedBytes = data.used_bytes;
-  const usedGB = Math.round(usedBytes / 1024 / 1024 / 1024);
-  const totalPercent = (usedBytes / (limitGB * 1024 * 1024 * 1024)) * 100;
+  const totalDays = daysBetween(start, next);
+  // 「剩余」含今天：08-02 看 08-12 重置就是剩 10 天
+  const remainDays = Math.max(1, daysBetween(today, next));
+  return {
+    day,
+    start,
+    totalDays,
+    remainDays,
+    elapsedDays: Math.max(1, totalDays - remainDays + 1),
+  };
+}
 
-  // 更新文本
-  setText("quota-used", usedGB);
-  setText("quota-limit", limitGB);
-  setText("quota-percent-text", `${totalPercent.toFixed(1)}%`);
-  setText("reset-day", data.reset_day);
+// 两个本地午夜跨夏令时可能差不满整数天，取整还原日历日差
+/** @param {Date} a @param {Date} b */
+function daysBetween(a, b) {
+  return Math.round((b.getTime() - a.getTime()) / 86400000);
+}
 
-  // 更新 Badge
-  const badgeEl = $("billing-mode-badge");
-  if (badgeEl) {
-    let modeText = data.billing_mode;
-    if (modeText === "bidirectional") modeText = "双向计费";
-    else if (modeText === "tx_only") modeText = "仅出站 (TX)";
-    else if (modeText === "rx_only") modeText = "仅入站 (RX)";
-    else if (modeText === "max_value") modeText = "取最大值 (Max)";
-    badgeEl.textContent = modeText;
-  }
+// 配额区间的数字统一按 GB 展示：大额度看整数更清楚，小额度才需要两位小数
+/** @param {number} gb */
+function formatGB(gb) {
+  return gb >= 100 ? Math.round(gb).toString() : gb.toFixed(2);
+}
 
-  // 渲染进度条轨道
-  const track = $("progress-track");
-  if (!track) return;
-  track.innerHTML = ""; // 清空
+/** @param {any} data @param {ReturnType<typeof computeCycle>} cycle */
+function renderQuota(data, cycle) {
+  const limitGB = Number(data.monthly_limit_gb) || 0;
+  const usedGB = data.used_bytes / GB;
+  const dailyGB = usedGB / cycle.elapsedDays;
+  const forecastGB = dailyGB * cycle.totalDays;
 
-  // 1. 添加刻度 (Threshold Markers)
-  const thresholds =
+  const thresholds = (
     data.alert_thresholds && data.alert_thresholds.length > 0
       ? data.alert_thresholds
-      : [80, 90, 95];
-  thresholds.forEach((t) => {
-    if (t > 0 && t < 100) {
-      const marker = document.createElement("div");
-      marker.className = "threshold-marker";
-      marker.style.left = `${t}%`;
-      marker.title = `预警阈值: ${t}%`;
-      track.appendChild(marker);
+      : DEFAULT_THRESHOLDS
+  )
+    .filter((/** @type {number} */ t) => t > 0 && t < 100)
+    .sort((/** @type {number} */ a, /** @type {number} */ b) => a - b);
+
+  const block = $("quota-block");
+  // 未配置额度时整块配额条无意义，但日均/预估仍按计费口径成立
+  if (block) block.hidden = limitGB <= 0;
+
+  if (limitGB > 0) {
+    const percent = (usedGB / limitGB) * 100;
+    setText("quota-used", formatGB(usedGB));
+    setText("quota-limit", formatGB(limitGB));
+    setText("quota-percent", `${percent.toFixed(1)}%`);
+    setText("quota-remain", formatGB(Math.max(0, limitGB - usedGB)));
+    setText("quota-remain-unit", "GB");
+    setText(
+      "quota-legend",
+      thresholds.length > 0 ? `${thresholds.join(" · ")} 预警` : "",
+    );
+
+    const fill = $("quota-fill");
+    if (fill) {
+      fill.style.width = `${Math.min(percent, 100).toFixed(2)}%`;
+      // 越过最低预警阈值即转红，与 Telegram 预警的触发口径一致
+      fill.classList.toggle(
+        "is-danger",
+        thresholds.length > 0 && percent >= thresholds[0],
+      );
     }
-  });
-
-  // 2. 计算分段
-  const limitBytes = limitGB * 1024 * 1024 * 1024;
-  const segments = [];
-  let isDanger = false;
-
-  // 检查是否超过最小阈值 (通常是第一个)
-  const sortedThresholds = [...thresholds].sort((a, b) => a - b);
-  if (sortedThresholds.length > 0 && totalPercent >= sortedThresholds[0]) {
-    isDanger = true;
+    renderThresholdMarks(thresholds);
+  } else {
+    setText("quota-remain", "--");
+    setText("quota-remain-unit", "");
   }
 
-  // 根据模式决定渲染段
-  if (data.billing_mode === "bidirectional") {
-    // 双向：分开显示 TX 和 RX
-    const txPercent = (data.this_month.tx / limitBytes) * 100;
-    const rxPercent = (data.this_month.rx / limitBytes) * 100;
-    segments.push({ type: "tx", width: txPercent });
-    segments.push({ type: "rx", width: rxPercent });
-  } else {
-    // 单向或其他：显示总计 (tx_only, rx_only, max_value)
-    // 注意：max_value 模式下 used_bytes 已是 max(tx, rx)
-    segments.push({ type: "total", width: totalPercent });
-  }
+  setText("daily-avg", formatGB(dailyGB));
+  setText("cycle-forecast", formatGB(forecastGB));
 
-  // 3. 渲染分段
-  segments.forEach((seg) => {
-    const div = document.createElement("div");
-    div.className = `progress-bar-segment segment-${seg.type}`;
-    div.style.width = `${Math.min(seg.width, 100).toFixed(2)}%`; // 防止溢出视觉
-    track.appendChild(div);
-  });
-
-  // 4. 变红逻辑
-  if (isDanger) {
-    track.classList.add("danger");
-  } else {
-    track.classList.remove("danger");
+  const forecastBox = $("cycle-forecast-box");
+  if (forecastBox) {
+    const forecastPercent = limitGB > 0 ? (forecastGB / limitGB) * 100 : 0;
+    forecastBox.classList.toggle(
+      "is-ok",
+      limitGB > 0 &&
+        (thresholds.length === 0 || forecastPercent < thresholds[0]),
+    );
+    forecastBox.classList.toggle(
+      "is-warn",
+      limitGB > 0 &&
+        thresholds.length > 0 &&
+        forecastPercent >= thresholds[0] &&
+        forecastPercent < 100,
+    );
+    forecastBox.classList.toggle(
+      "is-danger",
+      limitGB > 0 && forecastPercent >= 100,
+    );
   }
 }
 
+/** @param {number[]} thresholds */
+function renderThresholdMarks(thresholds) {
+  const marks = $("quota-marks");
+  if (!marks) return;
+  marks.innerHTML = "";
+  thresholds.forEach((t) => {
+    const mark = document.createElement("div");
+    mark.className = "tf-quota-mark";
+    mark.style.left = `${t}%`;
+    mark.title = `预警阈值: ${t}%`;
+    marks.appendChild(mark);
+  });
+}
+
+// 明细表的「总计」行走整机口径，端口行只覆盖 iptables 记账的那几个端口
+/** @param {any} data */
+function renderTotalRow(data) {
+  const periods = /** @type {const} */ (["today", "yesterday"]);
+  periods.forEach((period) => {
+    const d = data[period];
+    setText(`total-${period}-tx`, `↑ ${formatBytes(d.tx)}`);
+    setText(`total-${period}-rx`, `↓ ${formatBytes(d.rx)}`);
+    setText(`total-${period}-sum`, `⇅ ${formatBytes(d.tx + d.rx)}`);
+  });
+
+  const [value, unit] = formatBytesParts(
+    data.this_month.tx + data.this_month.rx,
+  );
+  setText("total-month", value);
+  setText("total-month-unit", unit);
+}
+
 // 获取端口流量
-async function fetchPortTraffic() {
+/** @param {number} monthTotalBytes */
+async function fetchPortTraffic(monthTotalBytes) {
   try {
     const data = await getJSON("/api/traffic/ports");
 
     if (!data.ports || data.ports.length === 0) {
-      // 显示提示信息
-      setHtml(
-        "port-traffic-today",
-        '<div class="port-no-data">暂无端口流量数据</div>',
-      );
+      setHtml("port-rows", '<div class="pt-note">暂无端口流量数据</div>');
       return;
     }
 
     // 检查 iptables 规则状态
     if (data.iptables_ok === false) {
       setHtml(
-        "port-traffic-today",
-        '<div class="port-warning">⚠️ iptables 规则未完整配置（TCP/UDP），请运行 setup-iptables.sh</div>',
+        "port-rows",
+        '<div class="pt-note">⚠️ iptables 规则未完整配置（TCP/UDP），请运行 setup-iptables.sh</div>',
       );
       return;
     }
 
-    // 渲染今日端口流量
-    renderPortList("port-traffic-today", data.ports, "today");
-    // 渲染昨日端口流量
-    renderPortList("port-traffic-yesterday", data.ports, "yesterday");
-    // 渲染本月端口流量
-    renderPortMonthGrid("port-traffic-month", data.ports);
+    renderPortRows(data.ports, monthTotalBytes);
   } catch (e) {
     logFetchError("获取端口流量失败:", e);
   }
 }
 
-// 渲染端口流量列表
-function renderPortList(containerId, ports, period) {
-  const container = $(containerId);
-  if (!container) return;
-
-  container.innerHTML = ports
-    .map((p) => {
-      const d = p[period];
-      const name = escapeHtml(p.name.toLowerCase());
-      // 使用 Grid 布局：第一行名称，第二行三组数据
-      return `
-      <div class="port-item ${name}">
-        <span class="port-name">${name}</span>
-        <div class="port-stats">
-          <div class="stats-group-up">
-            <span class="stat-up">↑ ${formatBytes(d.tx)}</span>
+/** @param {any[]} ports @param {number} monthTotalBytes */
+function renderPortRows(ports, monthTotalBytes) {
+  setHtml(
+    "port-rows",
+    ports
+      .map((p) => {
+        const [monthValue, monthUnit] = formatBytesParts(p.this_month.total);
+        // 占比条量的是该协议占整机本月流量的比重，所以分母用整机口径
+        const share =
+          monthTotalBytes > 0
+            ? (p.this_month.total / monthTotalBytes) * 100
+            : 0;
+        return `
+      <div class="pt-row">
+        <span class="pt-proto">${escapeHtml(p.name.toLowerCase())}</span>
+        <div class="pt-cell">
+          <div class="stat-up">↑ ${formatBytes(p.today.tx)}</div>
+          <div class="stat-down">↓ ${formatBytes(p.today.rx)}</div>
+        </div>
+        <div class="pt-cell">
+          <div class="stat-up">↑ ${formatBytes(p.yesterday.tx)}</div>
+          <div class="stat-down">↓ ${formatBytes(p.yesterday.rx)}</div>
+        </div>
+        <div class="pt-right">
+          <div class="pt-month">
+            <span>${monthValue}</span> <span class="pt-unit">${monthUnit}</span>
           </div>
-          <div class="stats-group-down">
-            <span class="stat-down">↓ ${formatBytes(d.rx)}</span>
-          </div>
-          <div class="stats-group-total">
-            <span class="stat-total">⇅ ${formatBytes(d.total)}</span>
+          <div class="pt-share">
+            <div class="pt-share-fill" style="width:${Math.min(share, 100).toFixed(1)}%"></div>
           </div>
         </div>
       </div>
     `;
-    })
-    .join("");
-}
-
-// 渲染本月端口流量网格
-function renderPortMonthGrid(containerId, ports) {
-  const container = $(containerId);
-  if (!container) return;
-
-  container.innerHTML = ports
-    .map((p) => {
-      const d = p.this_month;
-      const gb = (d.total / 1024 / 1024 / 1024).toFixed(2);
-      return `
-      <div class="month-item">
-        <div class="port-name">${escapeHtml(p.name.toLowerCase())}</div>
-        <div class="port-value">${gb} GB</div>
-      </div>
-    `;
-    })
-    .join("");
+      })
+      .join(""),
+  );
 }

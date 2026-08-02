@@ -371,6 +371,19 @@ body.theme-light .hero h1 {
   color: var(--speed-down);
 }
 
+/* 预测/阈值类指标的三档状态色（绿=在预算内，橙=逼近预警，红=已超） */
+.metric-bar-value.is-ok {
+  color: var(--accent-green);
+}
+
+.metric-bar-value.is-warn {
+  color: var(--accent-orange);
+}
+
+.metric-bar-value.is-danger {
+  color: var(--accent-red);
+}
+
 .metric-bar-unit {
   font-size: 11px;
   font-weight: 400;
@@ -397,10 +410,13 @@ body.theme-light .section-title {
 }
 
 /* Card Components */
+/* 两卡并排；单列窄于 470px 就自动上下堆叠——再窄明细表的列会互相挤到换行。
+   下限必须写成 min(470px, 100%)：光写 470px 时 auto-fit 的轨道不会缩到 470 以下，
+   375px 视口上整页会横向溢出 100 多像素 */
 .cards {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(min(470px, 100%), 1fr));
+  gap: 16px;
 }
 
 .card {
@@ -428,138 +444,263 @@ body.theme-light .section-title {
 }
 
 /* ==========================================================================
-   5. 模块：流量统计（端口行 / 本月合计）
-   配额卡在本文件靠后位置，见「模块：流量统计（配额卡）」。
+   5. 模块：流量统计（配额卡 / 按协议明细表）
    ========================================================================== */
-/* Stats/Lists inside Cards (Port Rows) */
-.port-item {
-  background: var(--item-bg);
-  border-radius: var(--radius-sm);
-  padding: 14px 16px;
-  margin-bottom: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+/* 两张卡共用的骨架：竖排 + 统一内边距 */
+.tf-card {
+  padding: 22px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
+  gap: 18px;
 }
 
-.port-item:last-child {
-  margin-bottom: 0;
+.tf-card.is-detail {
+  gap: 14px;
+  padding-bottom: 16px;
 }
 
-.total-item {
-  margin-top: 12px;
+.tf-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.port-name {
-  font-size: 14px;
-  color: var(--muted);
-  font-weight: 500;
-  border-bottom: none;
-  padding-bottom: 4px;
-}
-
-.port-stats {
-  display: grid;
-  grid-template-columns: 1.2fr 1.2fr 1.5fr;
-  width: 100%;
+.tf-card-title {
   font-size: 13px;
   color: var(--muted);
-  font-family: monospace, sans-serif;
-  align-items: center;
+  white-space: nowrap;
 }
 
-/* Alignments */
-.stats-group-up {
-  text-align: left;
+.tf-card-note {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-.stats-group-down {
-  text-align: center;
+
+/* 指标条钉在卡底，两张卡等高时底边才对得齐 */
+.tf-card .metric-bar {
+  margin-top: auto;
 }
-.stats-group-total {
+
+/* 本月总流量主数值 */
+.tf-hero {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.tf-hero-value {
+  font-size: 52px;
+  font-weight: 700;
+  letter-spacing: -2px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.tf-hero-unit {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* 计费配额条 */
+.tf-quota-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tf-quota-head b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tf-quota-track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+body.theme-light .tf-quota-track {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.tf-quota-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--speed-up), var(--speed-down));
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tf-quota-fill.is-danger {
+  background: var(--accent-red);
+}
+
+.tf-quota-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
+body.theme-light .tf-quota-mark {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.tf-quota-legend {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--axis-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 预警文案右移一点，让它落在 80–95 那段刻度下方而不是贴着轨道末端 */
+.tf-quota-legend span:last-child {
+  margin-right: 6.5%;
+}
+
+/* 按协议明细表：四行各自成 grid，共用同一套列宽即可对齐，
+   不引入 subgrid（Safari 16 以下不支持） */
+.pt-legend {
+  display: inline-flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pt-legend i {
+  font-style: normal;
+}
+
+.pt-row {
+  display: grid;
+  grid-template-columns: 56px 1fr 1fr minmax(120px, 1.2fr);
+  gap: 0 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--divider-faint);
+}
+
+.pt-head {
+  padding: 0 0 8px;
+  font-size: 10px;
+  color: var(--axis-faint);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.pt-total {
+  padding: 14px 0 0;
+  border-bottom: 0;
+}
+
+.pt-proto {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pt-total .pt-proto {
+  color: var(--muted);
+}
+
+.pt-cell {
+  font-size: 12px;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pt-total .pt-cell {
+  font-weight: 600;
+}
+
+.pt-sum {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.pt-right {
   text-align: right;
 }
 
-.port-stats strong,
-.stat-total {
-  font-size: 14px;
+.pt-month {
+  font-size: 17px;
   font-weight: 600;
-  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pt-unit {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.pt-total .pt-month {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.pt-total .pt-unit {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 占比条：该协议占整机本月流量的比重。用配额条同款渐变而不按协议分色，
+   阶段②已把紫/青锁定为上下行语义，这里再拿它区分协议会冲突 */
+.pt-share {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+body.theme-light .pt-share {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.pt-share-fill {
+  height: 100%;
+  min-width: 3px;
+  border-radius: 999px;
+  margin-left: auto;
+  background: linear-gradient(90deg, var(--speed-up), var(--speed-down));
+}
+
+.pt-note {
+  padding: 16px 0;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--divider-faint);
 }
 
 /* 上下行走全站语义色，不再用绿/蓝——绿现在只表示「健康/正常」 */
 .stat-up {
   color: var(--speed-up);
 }
+
 .stat-down {
   color: var(--speed-down);
-}
-
-/* Month Total Box */
-.total-box {
-  background: var(--card-bg);
-  border-radius: var(--radius-md);
-  padding: 30px;
-  text-align: center;
-  margin-top: 20px;
-  border: 1px solid var(--card-border);
-  transition: all 0.3s ease;
-  grid-column: 1 / -1;
-}
-
-.total-box:hover {
-  border-color: var(--card-hover-border);
-  transform: translateY(-2px);
-}
-
-.total-box-inner {
-  background: var(--item-bg);
-  border-radius: var(--radius-sm);
-  padding: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.month-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 30px;
-  max-width: 800px;
-  margin: 0 auto 24px auto;
-}
-
-.month-item {
-  text-align: center;
-}
-
-.month-item .port-name {
-  font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 8px;
-  display: block;
-}
-
-.month-item .port-value {
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.month-total-label {
-  font-size: 14px;
-  color: var(--muted);
-  margin-bottom: 10px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  padding-top: 24px;
-  border-top: 1px solid var(--card-border);
-}
-
-.month-total-value {
-  font-size: 56px;
-  font-weight: 700;
-  letter-spacing: -2px;
-  color: var(--text);
 }
 
 /* ==========================================================================
@@ -1250,120 +1391,7 @@ body.theme-light .latency-chart-wrap {
 }
 
 /* ==========================================================================
-   10. 模块：流量统计（配额卡）
-   与上面的端口行同属流量统计，位置分开是历史原因，改动时两处都要看。
-   ========================================================================== */
-/* Quota Card */
-.total-box .quota-card {
-  margin-top: 24px;
-  background: transparent;
-  border: none;
-  padding: 0;
-}
-
-.quota-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.quota-text {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: var(--text);
-  font-weight: 600;
-}
-
-.quota-reset {
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.billing-mode-badge {
-  background: var(--bg);
-  border: 1px solid var(--card-border);
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.progress-track {
-  position: relative;
-  height: 24px; /* Increased height for better visibility */
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 12px;
-  margin-bottom: 8px;
-  overflow: hidden;
-  display: flex;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-body.theme-light .progress-track {
-  background: rgba(0, 0, 0, 0.06);
-}
-
-.progress-bar-segment {
-  height: 100%;
-  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-  /* Optional: Add a subtle gradient or gloss effect */
-  background-image: linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.15),
-    rgba(0, 0, 0, 0.05)
-  );
-}
-
-.segment-tx {
-  background-color: var(--speed-up);
-}
-
-.segment-rx {
-  background-color: var(--speed-down);
-}
-
-/* Fallback/SingleColor */
-.segment-total {
-  background-color: var(--text);
-}
-
-/* Danger State overrides */
-.progress-track.danger .progress-bar-segment {
-  background-color: var(--accent-red) !important;
-}
-
-.threshold-marker {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background-color: rgba(255, 255, 255, 0.6);
-  z-index: 10;
-  pointer-events: none;
-}
-
-body.theme-light .threshold-marker {
-  background-color: rgba(0, 0, 0, 0.3);
-}
-
-.quota-footer {
-  text-align: right;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-/* ==========================================================================
-   11. 响应式断点（1000 / 768 / 560px，集中在此）
+   10. 响应式断点（1000 / 768 / 560px，集中在此）
    ========================================================================== */
 /* Responsive */
 @media (max-width: 1000px) {
@@ -1376,9 +1404,6 @@ body.theme-light .threshold-marker {
   .wrapper {
     padding: 30px 20px;
   }
-  .cards {
-    grid-template-columns: 1fr;
-  }
   /* 页眉换行后控件独占一行，跟着标题左对齐 */
   .top-bar {
     justify-content: flex-start;
@@ -1390,13 +1415,6 @@ body.theme-light .threshold-marker {
   /* 窄屏读数换行后，合计/峰值不再靠 auto 顶到右侧，改为跟随左对齐 */
   .rt-read-aside {
     margin-left: 0;
-  }
-  .month-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-  .month-total-value {
-    font-size: 42px;
   }
   .hero h1 {
     font-size: 28px;
@@ -1470,10 +1488,66 @@ body.theme-light .threshold-marker {
   .rt-read-sep {
     display: none;
   }
+  .tf-hero-value {
+    font-size: 40px;
+    letter-spacing: -1.5px;
+  }
+  /* 明细表 4 列全是 nowrap，列宽不够时整行会溢出卡片（把最后一列顶到卡外，
+     而不是换行）。两卡堆叠后单卡还有 ~430px，缩到 11px 就够用 */
+  .pt-row {
+    grid-template-columns: 46px 1fr 1fr minmax(88px, 1.2fr);
+    gap: 0 8px;
+  }
+  .pt-cell {
+    font-size: 11px;
+  }
+  .pt-month {
+    font-size: 16px;
+  }
+  .pt-total .pt-month {
+    font-size: 20px;
+  }
+}
+
+/* 375px 一档还得再缩。数值长度取决于实际流量（"↓ 111.58 MB" 比 "↓ 3.4 GB" 宽一半），
+   靠断点算死列宽迟早会被某台机器的数量级打脸，所以给表格兜一个横向滚动：
+   真撑不下时是这张表自己滚，而不是顶破整页布局 */
+@media (max-width: 440px) {
+  .tf-card {
+    padding: 18px;
+  }
+  .pt-table {
+    overflow-x: auto;
+  }
+  /* 本月累计那一列的下限要顶到它自己的 min-content：写小了另外两列会用 1fr
+     把余量抢光，把它按在下限上截断（先被截的正好是最大的那个总计数字） */
+  .pt-row {
+    grid-template-columns: 36px 1fr 1fr minmax(72px, 1fr);
+    gap: 0 4px;
+  }
+  .pt-head {
+    font-size: 9px;
+    letter-spacing: 0.4px;
+  }
+  .pt-proto {
+    font-size: 12px;
+  }
+  .pt-cell {
+    font-size: 10px;
+  }
+  .pt-month {
+    font-size: 14px;
+  }
+  .pt-total .pt-month {
+    font-size: 16px;
+  }
+  .pt-total .pt-unit {
+    font-size: 10px;
+  }
 }
 
 /* ==========================================================================
-   12. 动画
+   11. 动画
    ========================================================================== */
 /* 趋势图今日圆点呼吸动画 */
 @keyframes trendPulse {
@@ -1513,7 +1587,7 @@ body.theme-light .trend-today-badge {
 }
 
 /* ==========================================================================
-   13. 通知弹层
+   12. 通知弹层
    ========================================================================== */
 /* 通知弹层（挂在主机名胶囊下方） */
 .notify-wrap {

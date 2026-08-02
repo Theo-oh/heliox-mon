@@ -11,17 +11,20 @@
     <meta name="theme-color" content="#0a0a0a" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
     <meta name="apple-mobile-web-app-title" content="Heliox" />
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="icon-192.png" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="style.css" />
     <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch((err) => {
-            console.error('ServiceWorker 注册失败:', err);
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/sw.js").catch((err) => {
+            console.error("ServiceWorker 注册失败:", err);
           });
         });
       }
@@ -63,7 +66,12 @@
               <span id="server-name-text">Server</span>
             </button>
 
-            <div id="notify-popover" class="notify-popover" role="dialog" hidden>
+            <div
+              id="notify-popover"
+              class="notify-popover"
+              role="dialog"
+              hidden
+            >
               <div class="notify-pop-row">
                 <span class="notify-pop-label">Telegram</span>
                 <span id="tg-pop-status" class="notify-badge">—</span>
@@ -284,87 +292,108 @@
 
       <!-- 流量统计 -->
       <div class="section">
-        <div class="section-title">流量统计</div>
+        <div class="section-head">
+          <div class="section-title">流量统计</div>
+          <div class="head-tools">
+            <span id="billing-mode-pill" class="head-pill">计费 --</span>
+            <span id="cycle-pill" class="head-pill is-num">重置日 --</span>
+          </div>
+        </div>
         <div class="cards">
-          <!-- 今日流量 -->
-          <div class="card">
-            <div class="card-title">今日流量 <span id="today-date"></span></div>
-            <div id="port-traffic-today" class="port-list">
-              <!-- JS 注入端口流量 -->
+          <!-- 左卡：本月总流量 + 计费配额。
+               注意主数值与配额条不同源：前者是 this_month 双向总和，
+               后者按 billing_mode 折算的 used_bytes，tx_only 下两者必然不等 -->
+          <div class="card tf-card">
+            <div class="tf-card-head">
+              <span class="tf-card-title">本月总流量</span>
+              <span id="cycle-start" class="tf-card-note"></span>
             </div>
-            <div class="port-item total-item">
-              <span class="port-name">总计</span>
-              <div class="port-stats">
-                <div class="stats-group-up">
-                  <span class="stat-up" id="today-tx">↑ --</span>
+            <div class="tf-hero">
+              <span id="month-total" class="tf-hero-value">--</span>
+              <span id="month-total-unit" class="tf-hero-unit"></span>
+            </div>
+
+            <div id="quota-block" class="tf-quota">
+              <div class="tf-quota-head">
+                <span
+                  >计费用量 <b id="quota-used">--</b> /
+                  <b id="quota-limit">--</b> GB</span
+                >
+                <b id="quota-percent">--</b>
+              </div>
+              <div class="tf-quota-track">
+                <div id="quota-fill" class="tf-quota-fill"></div>
+                <div id="quota-marks">
+                  <!-- JS 注入预警阈值刻度 -->
                 </div>
-                <div class="stats-group-down">
-                  <span class="stat-down" id="today-rx">↓ --</span>
+              </div>
+              <div class="tf-quota-legend">
+                <span>0</span>
+                <span id="quota-legend"></span>
+              </div>
+            </div>
+
+            <div class="metric-bar">
+              <div class="metric-bar-item">
+                <div class="metric-bar-label">剩余额度</div>
+                <div class="metric-bar-value">
+                  <span id="quota-remain">--</span>
+                  <span id="quota-remain-unit" class="metric-bar-unit"></span>
                 </div>
-                <div class="stats-group-total">
-                  <span class="stat-total" id="today-total">⇅ --</span>
+              </div>
+              <div class="metric-bar-item">
+                <div class="metric-bar-label">日均消耗</div>
+                <div class="metric-bar-value">
+                  <span id="daily-avg">--</span>
+                  <span class="metric-bar-unit">GB</span>
+                </div>
+              </div>
+              <div class="metric-bar-item">
+                <div class="metric-bar-label">周期末预估</div>
+                <div id="cycle-forecast-box" class="metric-bar-value">
+                  <span id="cycle-forecast">--</span>
+                  <span class="metric-bar-unit">GB</span>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- 昨日流量 -->
-          <div class="card">
-            <div class="card-title">
-              昨日流量 <span id="yesterday-date"></span>
+          <!-- 右卡：按协议明细。「总计」行是整机口径（/api/stats），
+               不是端口行之和——端口只统计 iptables 记账的那几个 -->
+          <div class="card tf-card is-detail">
+            <div class="tf-card-head">
+              <span class="tf-card-title">按协议明细</span>
+              <span class="pt-legend">
+                <span><i class="stat-up">↑</i> 上行</span>
+                <span><i class="stat-down">↓</i> 下行</span>
+              </span>
             </div>
-            <div id="port-traffic-yesterday" class="port-list">
-              <!-- JS 注入端口流量 -->
-            </div>
-            <div class="port-item total-item">
-              <span class="port-name">总计</span>
-              <div class="port-stats">
-                <div class="stats-group-up">
-                  <span class="stat-up" id="yesterday-tx">↑ --</span>
-                </div>
-                <div class="stats-group-down">
-                  <span class="stat-down" id="yesterday-rx">↓ --</span>
-                </div>
-                <div class="stats-group-total">
-                  <span class="stat-total" id="yesterday-total">⇅ --</span>
-                </div>
+            <div class="pt-table">
+              <div class="pt-row pt-head">
+                <span>协议</span><span>今日</span><span>昨日</span>
+                <span class="pt-right">本月累计</span>
               </div>
-            </div>
-          </div>
-
-          <!-- 本月总计 -->
-          <div class="total-box">
-            <div class="card-title">本月流量统计</div>
-            <div class="total-box-inner">
-              <div id="port-traffic-month" class="month-grid">
-                <!-- JS 注入月度分布 -->
+              <div id="port-rows">
+                <!-- JS 注入各协议行 -->
               </div>
-              <div class="month-total-label">本月总流量</div>
-              <div id="month-total" class="month-total-value">-- GB</div>
-            </div>
-
-            <!-- 流量配额 -->
-            <div class="quota-card">
-              <div class="quota-header">
-                <div class="quota-text">
-                  已用 <span id="quota-used">0</span> /
-                  <span id="quota-limit">0</span> GB
-                  <span
-                    id="billing-mode-badge"
-                    class="billing-mode-badge"
-                  ></span>
+              <div class="pt-row pt-total">
+                <span class="pt-proto">总计</span>
+                <div class="pt-cell">
+                  <div class="stat-up" id="total-today-tx">↑ --</div>
+                  <div class="stat-down" id="total-today-rx">↓ --</div>
+                  <div class="pt-sum" id="total-today-sum">⇅ --</div>
                 </div>
-                <div class="quota-reset">
-                  重置日: <span id="reset-day">1</span> 号
+                <div class="pt-cell">
+                  <div class="stat-up" id="total-yesterday-tx">↑ --</div>
+                  <div class="stat-down" id="total-yesterday-rx">↓ --</div>
+                  <div class="pt-sum" id="total-yesterday-sum">⇅ --</div>
                 </div>
-              </div>
-
-              <div id="progress-track" class="progress-track">
-                <!-- JS 注入进度条和刻度 -->
-              </div>
-
-              <div class="quota-footer">
-                <span id="quota-percent-text">0%</span>
+                <div class="pt-right">
+                  <div class="pt-month">
+                    <span id="total-month">--</span>
+                    <span id="total-month-unit" class="pt-unit"></span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
