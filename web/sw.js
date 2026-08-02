@@ -1,14 +1,31 @@
 // 缓存名带版本号：升级前端资源时必须同步 bump，否则旧缓存不会被清理
-const CACHE_NAME = 'heliox-v2';
+const CACHE_NAME = 'heliox-v7';
 
 // 预缓存首屏渲染必需的资源。图表库缺一个页面就会因 Chart/echarts 未定义而报错，
 // 所以 vendor 三件套必须在列表里，否则离线打开只剩空壳。
+// ES module 图是「全或无」的：任何一个 js/ 下的模块拿不到，整个入口都不会执行，
+// 页面停在骨架且没有任何提示——新增模块文件时务必同步补进这份清单。
 const ASSETS_TO_CACHE = [
   '/',
   '/style.css',
-  '/app.js',
   '/favicon.svg',
   '/manifest.json',
+  '/js/main.js',
+  '/js/core/dom.js',
+  '/js/core/format.js',
+  '/js/core/http.js',
+  '/js/core/stream.js',
+  '/js/core/theme.js',
+  '/js/core/vendor.js',
+  '/js/modules/latency/index.js',
+  '/js/modules/latency/chart.js',
+  '/js/modules/latency/palette.js',
+  '/js/modules/latency/stats.js',
+  '/js/modules/notify.js',
+  '/js/modules/realtime.js',
+  '/js/modules/system.js',
+  '/js/modules/traffic.js',
+  '/js/modules/trend.js',
   '/vendor/chart.umd.min.js',
   '/vendor/chartjs-plugin-annotation.min.js',
   '/vendor/echarts.min.js'

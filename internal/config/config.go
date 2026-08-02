@@ -11,6 +11,10 @@ import (
 	"time"
 )
 
+// defaultTurnstileSiteKey 站点公钥原先硬编码在 login.html 里；提出来只是为了让登录页能按需渲染，
+// 默认值保持不变，已部署的实例不必新增环境变量。site key 本就是公开信息，密钥是 secret。
+const defaultTurnstileSiteKey = "0x4AAAAAACOhRkua9joDOJiB"
+
 // PingTarget 延迟监控目标
 type PingTarget struct {
 	Tag string // 显示名称
@@ -70,6 +74,10 @@ type Config struct {
 
 	// 安全
 	TurnstileSecretKey string
+	TurnstileSiteKey   string
+	// DevNoAuth 本地开发免登录：只有 darwin 构建 + 显式开关才为 true，且服务端仍只对
+	// 回环地址放行（见 api.auth）。生产 Linux 二进制里恒为 false。
+	DevNoAuth bool
 
 	// 客户端延迟上报令牌（空则关闭上报功能）
 	ReportToken string
@@ -95,6 +103,8 @@ func Load() (*Config, error) {
 		PingTimeout:        time.Duration(getEnvInt("PING_TIMEOUT_MS", 1000)) * time.Millisecond,
 		PingGap:            time.Duration(getEnvInt("PING_GAP_MS", 200)) * time.Millisecond,
 		TurnstileSecretKey: getEnv("HELIOX_TURNSTILE_SECRET", ""),
+		TurnstileSiteKey:   getEnv("HELIOX_TURNSTILE_SITEKEY", defaultTurnstileSiteKey),
+		DevNoAuth:          devAuthAllowed && getEnvBool("HELIOX_MON_DEV_NO_AUTH", false),
 		ReportToken:        getEnv("HELIOX_MON_REPORT_TOKEN", ""),
 	}
 
@@ -151,6 +161,10 @@ func Load() (*Config, error) {
 	// 验证必填项
 	if cfg.Password == "" {
 		return nil, fmt.Errorf("HELIOX_MON_PASS 未设置")
+	}
+
+	if cfg.DevNoAuth {
+		log.Printf("⚠️  HELIOX_MON_DEV_NO_AUTH 已开启：来自回环地址的请求免登录，仅供本机调试")
 	}
 
 	return cfg, nil

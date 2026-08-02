@@ -11,17 +11,20 @@
     <meta name="theme-color" content="#0a0a0a" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
     <meta name="apple-mobile-web-app-title" content="Heliox" />
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="icon-192.png" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="style.css" />
     <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch((err) => {
-            console.error('ServiceWorker 注册失败:', err);
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/sw.js").catch((err) => {
+            console.error("ServiceWorker 注册失败:", err);
           });
         });
       }
@@ -63,7 +66,12 @@
               <span id="server-name-text">Server</span>
             </button>
 
-            <div id="notify-popover" class="notify-popover" role="dialog" hidden>
+            <div
+              id="notify-popover"
+              class="popover notify-popover"
+              role="dialog"
+              hidden
+            >
               <div class="notify-pop-row">
                 <span class="notify-pop-label">Telegram</span>
                 <span id="tg-pop-status" class="notify-badge">—</span>
@@ -202,29 +210,80 @@
 
       <!-- 实时网速 -->
       <div class="section">
-        <div class="section-title">实时网速</div>
+        <div class="section-head">
+          <div class="section-title">实时网速</div>
+          <div class="head-tools">
+            <span class="head-pill"
+              ><span class="head-pill-dot"></span>LIVE · 1s</span
+            >
+            <span class="head-pill is-num">窗口 60s</span>
+          </div>
+        </div>
         <div class="realtime-panel">
+          <!-- 实时读数行：当前上下行为主，右侧合计/峰值为辅 -->
+          <div class="rt-readout">
+            <div class="rt-read is-up">
+              <span class="rt-read-label">↑ 上行</span>
+              <span id="tx-speed" class="rt-read-value">--</span>
+              <span id="tx-speed-unit" class="rt-read-unit">B/s</span>
+            </div>
+            <div class="rt-read-sep"></div>
+            <div class="rt-read is-down">
+              <span class="rt-read-label">↓ 下行</span>
+              <span id="rx-speed" class="rt-read-value">--</span>
+              <span id="rx-speed-unit" class="rt-read-unit">B/s</span>
+            </div>
+            <div class="rt-read-aside">
+              <span>合计 <b id="rt-sum">--</b></span>
+              <span>峰值 <b id="rt-peak">--</b></span>
+            </div>
+          </div>
+
+          <!-- 镜像面积图：中轴为 0，上行向上、下行向下 -->
           <div class="realtime-chart">
             <canvas id="realtime-chart"></canvas>
+            <span class="rt-chart-tag is-up">上行 ↑</span>
+            <span class="rt-chart-tag is-down">下行 ↓</span>
           </div>
-          <div class="realtime-metrics">
-            <div class="realtime-metric is-up">
-              <span class="label">上行速度</span>
-              <span id="tx-speed" class="value">-- MB/s</span>
+          <div class="rt-timeline">
+            <span>-60s</span><span>-45s</span><span>-30s</span><span>-15s</span
+            ><span>现在</span>
+          </div>
+
+          <div class="metric-bar">
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">60s 上行均值</div>
+              <div class="metric-bar-value is-up">
+                <span id="avg-tx">--</span>
+                <span id="avg-tx-unit" class="metric-bar-unit"></span>
+              </div>
             </div>
-            <div class="realtime-metric is-down">
-              <span class="label">下行速度</span>
-              <span id="rx-speed" class="value">-- MB/s</span>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">60s 下行均值</div>
+              <div class="metric-bar-value is-down">
+                <span id="avg-rx">--</span>
+                <span id="avg-rx-unit" class="metric-bar-unit"></span>
+              </div>
             </div>
-            <div class="realtime-metric is-avg">
-              <span class="label">平均速率</span>
-              <div class="avg-pair">
-                <span id="avg-tx" class="avg-val avg-up"
-                  ><span>↑</span><span>--</span><span></span
-                ></span>
-                <span id="avg-rx" class="avg-val avg-down"
-                  ><span>↓</span><span>--</span><span></span
-                ></span>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">上行峰值</div>
+              <div class="metric-bar-value">
+                <span id="peak-tx">--</span>
+                <span id="peak-tx-unit" class="metric-bar-unit"></span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">下行峰值</div>
+              <div class="metric-bar-value">
+                <span id="peak-rx">--</span>
+                <span id="peak-rx-unit" class="metric-bar-unit"></span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">窗口累计</div>
+              <div class="metric-bar-value">
+                <span id="rt-window-total">--</span>
+                <span id="rt-window-total-unit" class="metric-bar-unit"></span>
               </div>
             </div>
           </div>
@@ -233,87 +292,108 @@
 
       <!-- 流量统计 -->
       <div class="section">
-        <div class="section-title">流量统计</div>
+        <div class="section-head">
+          <div class="section-title">流量统计</div>
+          <div class="head-tools">
+            <span id="billing-mode-pill" class="head-pill">计费 --</span>
+            <span id="cycle-pill" class="head-pill is-num">重置日 --</span>
+          </div>
+        </div>
         <div class="cards">
-          <!-- 今日流量 -->
-          <div class="card">
-            <div class="card-title">今日流量 <span id="today-date"></span></div>
-            <div id="port-traffic-today" class="port-list">
-              <!-- JS 注入端口流量 -->
+          <!-- 左卡：本月总流量 + 计费配额。
+               注意主数值与配额条不同源：前者是 this_month 双向总和，
+               后者按 billing_mode 折算的 used_bytes，tx_only 下两者必然不等 -->
+          <div class="card tf-card">
+            <div class="tf-card-head">
+              <span class="tf-card-title">本月总流量</span>
+              <span id="cycle-start" class="tf-card-note"></span>
             </div>
-            <div class="port-item total-item">
-              <span class="port-name">总计</span>
-              <div class="port-stats">
-                <div class="stats-group-up">
-                  <span class="stat-up" id="today-tx">↑ --</span>
+            <div class="tf-hero">
+              <span id="month-total" class="tf-hero-value">--</span>
+              <span id="month-total-unit" class="tf-hero-unit"></span>
+            </div>
+
+            <div id="quota-block" class="tf-quota">
+              <div class="tf-quota-head">
+                <span
+                  >计费用量 <b id="quota-used">--</b> /
+                  <b id="quota-limit">--</b> GB</span
+                >
+                <b id="quota-percent">--</b>
+              </div>
+              <div class="tf-quota-track">
+                <div id="quota-fill" class="tf-quota-fill"></div>
+                <div id="quota-marks">
+                  <!-- JS 注入预警阈值刻度 -->
                 </div>
-                <div class="stats-group-down">
-                  <span class="stat-down" id="today-rx">↓ --</span>
+              </div>
+              <div class="tf-quota-legend">
+                <span>0</span>
+                <span id="quota-legend"></span>
+              </div>
+            </div>
+
+            <div class="metric-bar">
+              <div class="metric-bar-item">
+                <div class="metric-bar-label">剩余额度</div>
+                <div class="metric-bar-value">
+                  <span id="quota-remain">--</span>
+                  <span id="quota-remain-unit" class="metric-bar-unit"></span>
                 </div>
-                <div class="stats-group-total">
-                  <span class="stat-total" id="today-total">⇅ --</span>
+              </div>
+              <div class="metric-bar-item">
+                <div class="metric-bar-label">日均消耗</div>
+                <div class="metric-bar-value">
+                  <span id="daily-avg">--</span>
+                  <span class="metric-bar-unit">GB</span>
+                </div>
+              </div>
+              <div class="metric-bar-item">
+                <div class="metric-bar-label">周期末预估</div>
+                <div id="cycle-forecast-box" class="metric-bar-value">
+                  <span id="cycle-forecast">--</span>
+                  <span class="metric-bar-unit">GB</span>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- 昨日流量 -->
-          <div class="card">
-            <div class="card-title">
-              昨日流量 <span id="yesterday-date"></span>
+          <!-- 右卡：按协议明细。「总计」行是整机口径（/api/stats），
+               不是端口行之和——端口只统计 iptables 记账的那几个 -->
+          <div class="card tf-card is-detail">
+            <div class="tf-card-head">
+              <span class="tf-card-title">按协议明细</span>
+              <span class="pt-legend">
+                <span><i class="stat-up">↑</i> 上行</span>
+                <span><i class="stat-down">↓</i> 下行</span>
+              </span>
             </div>
-            <div id="port-traffic-yesterday" class="port-list">
-              <!-- JS 注入端口流量 -->
-            </div>
-            <div class="port-item total-item">
-              <span class="port-name">总计</span>
-              <div class="port-stats">
-                <div class="stats-group-up">
-                  <span class="stat-up" id="yesterday-tx">↑ --</span>
-                </div>
-                <div class="stats-group-down">
-                  <span class="stat-down" id="yesterday-rx">↓ --</span>
-                </div>
-                <div class="stats-group-total">
-                  <span class="stat-total" id="yesterday-total">⇅ --</span>
-                </div>
+            <div class="pt-table">
+              <div class="pt-row pt-head">
+                <span>协议</span><span>今日</span><span>昨日</span>
+                <span class="pt-right">本月累计</span>
               </div>
-            </div>
-          </div>
-
-          <!-- 本月总计 -->
-          <div class="total-box">
-            <div class="card-title">本月流量统计</div>
-            <div class="total-box-inner">
-              <div id="port-traffic-month" class="month-grid">
-                <!-- JS 注入月度分布 -->
+              <div id="port-rows">
+                <!-- JS 注入各协议行 -->
               </div>
-              <div class="month-total-label">本月总流量</div>
-              <div id="month-total" class="month-total-value">-- GB</div>
-            </div>
-
-            <!-- 流量配额 -->
-            <div class="quota-card">
-              <div class="quota-header">
-                <div class="quota-text">
-                  已用 <span id="quota-used">0</span> /
-                  <span id="quota-limit">0</span> GB
-                  <span
-                    id="billing-mode-badge"
-                    class="billing-mode-badge"
-                  ></span>
+              <div class="pt-row pt-total">
+                <span class="pt-proto">总计</span>
+                <div class="pt-cell">
+                  <div class="stat-up" id="total-today-tx">↑ --</div>
+                  <div class="stat-down" id="total-today-rx">↓ --</div>
+                  <div class="pt-sum" id="total-today-sum">⇅ --</div>
                 </div>
-                <div class="quota-reset">
-                  重置日: <span id="reset-day">1</span> 号
+                <div class="pt-cell">
+                  <div class="stat-up" id="total-yesterday-tx">↑ --</div>
+                  <div class="stat-down" id="total-yesterday-rx">↓ --</div>
+                  <div class="pt-sum" id="total-yesterday-sum">⇅ --</div>
                 </div>
-              </div>
-
-              <div id="progress-track" class="progress-track">
-                <!-- JS 注入进度条和刻度 -->
-              </div>
-
-              <div class="quota-footer">
-                <span id="quota-percent-text">0%</span>
+                <div class="pt-right">
+                  <div class="pt-month">
+                    <span id="total-month">--</span>
+                    <span id="total-month-unit" class="pt-unit"></span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -322,33 +402,69 @@
 
       <!-- 历史趋势 -->
       <div class="section">
-        <div class="section-title">历史趋势</div>
-        <div class="chart-container">
-          <div class="chart-header">
-            <h3 id="trend-title" class="card-title" style="margin: 0">
-              近6个月流量
-            </h3>
-            <div class="chart-actions">
-              <div class="view-toggle" id="trend-range-toggle">
-                <button id="trend-range-month" class="btn btn-sm active">
-                  近6个月
-                </button>
-                <button id="trend-range-30d" class="btn btn-sm btn-secondary">
-                  近30天
-                </button>
-                <button id="trend-range-cycle" class="btn btn-sm btn-secondary">
-                  计费周期
-                </button>
-              </div>
-              <div class="view-toggle" id="trend-view-toggle">
-                <button id="trend-total" class="btn btn-sm active">总计</button>
-                <button id="trend-detail" class="btn btn-sm btn-secondary">
-                  详细
-                </button>
-              </div>
+        <div class="section-head">
+          <div class="section-title">历史趋势</div>
+          <div class="head-tools">
+            <!-- 范围与视图合成一条分段控件；视图组只对月度柱状图有意义，
+                 切到日视图时连同分隔线一起隐藏 -->
+            <div class="seg-control">
+              <button id="trend-range-month" class="seg-item" type="button">
+                近6个月
+              </button>
+              <button id="trend-range-30d" class="seg-item" type="button">
+                近30天
+              </button>
+              <button id="trend-range-cycle" class="seg-item" type="button">
+                计费周期
+              </button>
+              <span id="trend-view-sep" class="seg-sep"></span>
+              <button id="trend-total" class="seg-item" type="button">
+                总计
+              </button>
+              <button id="trend-detail" class="seg-item" type="button">
+                详细
+              </button>
             </div>
           </div>
-          <div style="height: 250px; position: relative">
+        </div>
+        <div class="chart-container trend-card">
+          <div class="metric-bar is-inline">
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">区间总量</div>
+              <div class="metric-bar-value is-lead">
+                <span id="trend-sum">--</span>
+                <span id="trend-sum-unit" class="metric-bar-unit"></span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">上行 / 下行</div>
+              <div class="metric-bar-value">
+                <span id="trend-tx" class="stat-up">--</span>
+                <span class="metric-bar-sep">/</span>
+                <span id="trend-rx" class="stat-down">--</span>
+                <span id="trend-txrx-unit" class="metric-bar-unit"></span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div id="trend-avg-label" class="metric-bar-label">日均</div>
+              <div class="metric-bar-value">
+                <span id="trend-avg">--</span>
+                <span id="trend-avg-unit" class="metric-bar-unit"></span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div id="trend-peak-label" class="metric-bar-label">峰值</div>
+              <div class="metric-bar-value is-danger">
+                <span id="trend-peak">--</span>
+                <span id="trend-peak-unit" class="metric-bar-unit"></span>
+              </div>
+            </div>
+            <span id="trend-today-badge" class="trend-today-badge" hidden>
+              <span class="trend-today-pulse"></span>
+              <span id="trend-today">今日 --</span>
+            </span>
+          </div>
+          <div class="trend-chart-wrap">
             <canvas id="trend-chart"></canvas>
           </div>
           <div id="trend-legend" class="chart-legend"></div>
@@ -357,74 +473,186 @@
 
       <!-- 延迟监控 -->
       <div class="section">
-        <div class="section-title">延迟监控</div>
-        <div class="chart-container latency-card">
-          <div class="latency-controls">
-            <div class="latency-row latency-row-top">
-              <div class="date-nav">
-                <button id="date-prev" class="btn btn-icon" title="前一天">
-                  ❮
-                </button>
-                <div class="date-range">
-                  <div class="date-field">
-                    <span class="date-label">开始</span>
-                    <input type="date" id="latency-start" />
+        <div class="section-head">
+          <div class="section-title">延迟监控</div>
+          <div class="head-tools">
+            <div id="lat-target-pills" class="lat-target-pills"></div>
+            <div class="seg-control">
+              <button id="lat-range-24h" class="seg-item" type="button">
+                24h
+              </button>
+              <button id="lat-range-7d" class="seg-item" type="button">
+                7 天
+              </button>
+              <button id="lat-range-custom" class="seg-item" type="button">
+                自定义
+              </button>
+            </div>
+            <!-- 日期输入、查询/重置、三个显示开关都收进这个弹层，
+                 让标题行只剩「看什么范围」这一个决策 -->
+            <div class="lat-more-wrap">
+              <button id="lat-more" class="head-pill is-btn" type="button">
+                更多 <span class="lat-caret">▾</span>
+              </button>
+              <div id="lat-more-pop" class="popover lat-more-pop" hidden>
+                <div class="lat-pop-section">
+                  <div class="lat-pop-title">自定义区间</div>
+                  <div class="date-nav">
+                    <button id="date-prev" class="btn-icon" title="前一天">
+                      ❮
+                    </button>
+                    <div class="date-range">
+                      <div class="date-field">
+                        <span class="date-label">开始</span>
+                        <input type="date" id="latency-start" />
+                      </div>
+                      <div class="date-field">
+                        <span class="date-label">结束</span>
+                        <input type="date" id="latency-end" />
+                      </div>
+                    </div>
+                    <button id="date-next" class="btn-icon" title="后一天">
+                      ❯
+                    </button>
                   </div>
-                  <span class="date-sep">—</span>
-                  <div class="date-field">
-                    <span class="date-label">结束</span>
-                    <input type="date" id="latency-end" />
+                  <div class="lat-pop-actions">
+                    <button id="latency-query" class="btn btn-sm">查询</button>
+                    <button
+                      id="latency-recent"
+                      class="btn btn-sm btn-secondary"
+                      type="button"
+                    >
+                      最近 24h
+                    </button>
+                    <button
+                      id="latency-reset"
+                      class="btn btn-sm btn-secondary"
+                      type="button"
+                    >
+                      重置
+                    </button>
                   </div>
                 </div>
-                <button id="date-next" class="btn btn-icon" title="后一天">
-                  ❯
-                </button>
+                <div class="lat-pop-section">
+                  <div class="lat-pop-title">图表元素</div>
+                  <div class="lat-pop-opts">
+                    <label class="opt-pill"
+                      ><input type="checkbox" id="show-loss" checked />
+                      丢包</label
+                    >
+                    <label class="opt-pill"
+                      ><input type="checkbox" id="show-max" /> 极值</label
+                    >
+                    <label class="opt-pill"
+                      ><input type="checkbox" id="show-avg" /> 平均线</label
+                    >
+                  </div>
+                </div>
+                <div id="lat-pop-note" class="lat-pop-note">--</div>
               </div>
-
-              <div class="control-actions">
-                <button id="latency-query" class="btn">查询</button>
-                <button id="latency-recent" class="btn btn-secondary">
-                  最近24h
-                </button>
-                <button id="latency-reset" class="btn btn-secondary">
-                  重置
-                </button>
-              </div>
-              <span id="latency-granularity" class="granularity-tag"></span>
             </div>
+          </div>
+        </div>
 
-            <div class="latency-row latency-row-mid">
-              <div id="target-filters" class="filter-group">
-                <!-- JS生成的复选框 -->
+        <div class="chart-container latency-card">
+          <!-- 链路状态横幅：本模块唯一回答「现在是否正常」的位置 -->
+          <div id="lat-banner" class="lat-banner is-ok">
+            <div class="lat-banner-head">
+              <span class="lat-banner-dot"></span>
+              <span id="lat-banner-title" class="lat-banner-title">--</span>
+            </div>
+            <div class="lat-banner-cell">
+              <span class="lat-banner-label">当前延迟</span>
+              <span id="lat-now" class="lat-banner-lead">--</span>
+              <span class="lat-banner-unit">ms</span>
+            </div>
+            <div class="lat-banner-cell">
+              <span id="lat-second-label" class="lat-banner-label">抖动</span>
+              <span id="lat-second" class="lat-banner-val">--</span>
+              <span id="lat-second-unit" class="lat-banner-unit">ms</span>
+            </div>
+            <div class="lat-banner-cell">
+              <span class="lat-banner-label">丢包</span>
+              <span id="lat-loss-now" class="lat-banner-val">--</span>
+            </div>
+            <span id="lat-banner-meta" class="lat-banner-meta">--</span>
+          </div>
+
+          <div class="metric-bar lat-metrics">
+            <div class="metric-bar-item">
+              <div id="lat-avg-label" class="metric-bar-label">平均</div>
+              <div class="metric-bar-value">
+                <span id="lat-avg">--</span>
+                <span class="metric-bar-unit">ms</span>
               </div>
-
-              <div class="display-options">
-                <span class="opt-label">显示</span>
-                <label class="opt-pill"
-                  ><input type="checkbox" id="show-loss" checked /> 丢包</label
-                >
-                <label class="opt-pill"
-                  ><input type="checkbox" id="show-max" /> 极值</label
-                >
-                <label class="opt-pill"
-                  ><input type="checkbox" id="show-avg" /> 平均线</label
-                >
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">P95</div>
+              <div class="metric-bar-value">
+                <span id="lat-p95">--</span>
+                <span class="metric-bar-unit">ms</span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">最小</div>
+              <div class="metric-bar-value">
+                <span id="lat-min">--</span>
+                <span class="metric-bar-unit">ms</span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">最大</div>
+              <div id="lat-max-value" class="metric-bar-value">
+                <span id="lat-max">--</span>
+                <span class="metric-bar-unit">ms</span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">丢包率</div>
+              <div id="lat-loss-value" class="metric-bar-value">
+                <span id="lat-loss">--</span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">异常时长</div>
+              <div id="lat-anomaly-value" class="metric-bar-value">
+                <span id="lat-anomaly">--</span>
+                <span class="metric-bar-unit">分钟</span>
               </div>
             </div>
           </div>
 
-          <div id="latency-stats" class="latency-stats"></div>
-
-          <div class="latency-chart-wrap">
+          <div class="lat-chart-wrap">
             <div id="latency-chart"></div>
+          </div>
+
+          <div class="lat-legend">
+            <span id="lat-legend-targets" class="lat-legend-targets"></span>
+            <span id="lat-legend-loss" class="lat-legend-item"
+              ><span class="lat-legend-bar"></span>丢包</span
+            >
+            <span class="lat-legend-item"
+              ><span class="lat-legend-block"></span>无数据</span
+            >
+            <span id="lat-legend-meta" class="lat-legend-meta">--</span>
           </div>
         </div>
       </div>
     </div>
 
-    <script src="vendor/chart.umd.min.js"></script>
-    <script src="vendor/chartjs-plugin-annotation.min.js"></script>
-    <script src="vendor/echarts.min.js"></script>
-    <script src="app.js"></script>
+    <!-- vendor 用 defer 而非 async：defer 的经典脚本与 module script 共用同一条
+         有序执行队列，按文档顺序执行，所以 window.Chart / window.echarts 一定先于
+         main.js 就绪。改成 async 会打破这个顺序。 -->
+    <script defer src="vendor/chart.umd.min.js"></script>
+    <script defer src="vendor/chartjs-plugin-annotation.min.js"></script>
+    <script defer src="vendor/echarts.min.js"></script>
+    <!-- 预声明 core 层，把模块发现的瀑布从 3 层压到 1 层 -->
+    <link rel="modulepreload" href="js/core/format.js" />
+    <link rel="modulepreload" href="js/core/dom.js" />
+    <link rel="modulepreload" href="js/core/http.js" />
+    <link rel="modulepreload" href="js/core/stream.js" />
+    <link rel="modulepreload" href="js/core/theme.js" />
+    <link rel="modulepreload" href="js/core/vendor.js" />
+    <script type="module" src="js/main.js"></script>
   </body>
 </html>
