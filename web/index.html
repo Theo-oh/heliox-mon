@@ -202,29 +202,80 @@
 
       <!-- 实时网速 -->
       <div class="section">
-        <div class="section-title">实时网速</div>
+        <div class="section-head">
+          <div class="section-title">实时网速</div>
+          <div class="head-tools">
+            <span class="head-pill"
+              ><span class="head-pill-dot"></span>LIVE · 1s</span
+            >
+            <span class="head-pill is-num">窗口 60s</span>
+          </div>
+        </div>
         <div class="realtime-panel">
+          <!-- 实时读数行：当前上下行为主，右侧合计/峰值为辅 -->
+          <div class="rt-readout">
+            <div class="rt-read is-up">
+              <span class="rt-read-label">↑ 上行</span>
+              <span id="tx-speed" class="rt-read-value">--</span>
+              <span id="tx-speed-unit" class="rt-read-unit">B/s</span>
+            </div>
+            <div class="rt-read-sep"></div>
+            <div class="rt-read is-down">
+              <span class="rt-read-label">↓ 下行</span>
+              <span id="rx-speed" class="rt-read-value">--</span>
+              <span id="rx-speed-unit" class="rt-read-unit">B/s</span>
+            </div>
+            <div class="rt-read-aside">
+              <span>合计 <b id="rt-sum">--</b></span>
+              <span>峰值 <b id="rt-peak">--</b></span>
+            </div>
+          </div>
+
+          <!-- 镜像面积图：中轴为 0，上行向上、下行向下 -->
           <div class="realtime-chart">
             <canvas id="realtime-chart"></canvas>
+            <span class="rt-chart-tag is-up">上行 ↑</span>
+            <span class="rt-chart-tag is-down">下行 ↓</span>
           </div>
-          <div class="realtime-metrics">
-            <div class="realtime-metric is-up">
-              <span class="label">上行速度</span>
-              <span id="tx-speed" class="value">-- MB/s</span>
+          <div class="rt-timeline">
+            <span>-60s</span><span>-45s</span><span>-30s</span><span>-15s</span
+            ><span>现在</span>
+          </div>
+
+          <div class="metric-bar">
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">60s 上行均值</div>
+              <div class="metric-bar-value is-up">
+                <span id="avg-tx">--</span>
+                <span id="avg-tx-unit" class="metric-bar-unit"></span>
+              </div>
             </div>
-            <div class="realtime-metric is-down">
-              <span class="label">下行速度</span>
-              <span id="rx-speed" class="value">-- MB/s</span>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">60s 下行均值</div>
+              <div class="metric-bar-value is-down">
+                <span id="avg-rx">--</span>
+                <span id="avg-rx-unit" class="metric-bar-unit"></span>
+              </div>
             </div>
-            <div class="realtime-metric is-avg">
-              <span class="label">平均速率</span>
-              <div class="avg-pair">
-                <span id="avg-tx" class="avg-val avg-up"
-                  ><span>↑</span><span>--</span><span></span
-                ></span>
-                <span id="avg-rx" class="avg-val avg-down"
-                  ><span>↓</span><span>--</span><span></span
-                ></span>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">上行峰值</div>
+              <div class="metric-bar-value">
+                <span id="peak-tx">--</span>
+                <span id="peak-tx-unit" class="metric-bar-unit"></span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">下行峰值</div>
+              <div class="metric-bar-value">
+                <span id="peak-rx">--</span>
+                <span id="peak-rx-unit" class="metric-bar-unit"></span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">窗口累计</div>
+              <div class="metric-bar-value">
+                <span id="rt-window-total">--</span>
+                <span id="rt-window-total-unit" class="metric-bar-unit"></span>
               </div>
             </div>
           </div>

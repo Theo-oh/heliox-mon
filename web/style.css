@@ -24,8 +24,12 @@
   --speed-down: #4dd4ff;
   --speed-up: #b66cff;
   --speed-grid: rgba(255, 255, 255, 0.08);
+  /* 镜像图的 0 轴：比普通网格重，用来把上下行两半分开 */
+  --speed-grid-axis: rgba(255, 255, 255, 0.18);
   /* 比 --muted 更弱一档，用于轴标签与超小说明文字 */
   --axis-faint: #5c5c61;
+  /* 卡内分栏线：比 --card-border 再淡一档，避免密集分栏喧宾夺主 */
+  --divider-faint: rgba(255, 255, 255, 0.06);
 
   --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
   --radius-lg: 24px;
@@ -48,6 +52,8 @@ body.theme-light {
   --item-bg: rgba(240, 240, 244, 0.9);
   --shadow-lg: 0 20px 60px rgba(20, 20, 30, 0.12);
   --speed-grid: rgba(0, 0, 0, 0.08);
+  --speed-grid-axis: rgba(0, 0, 0, 0.16);
+  --divider-faint: rgba(0, 0, 0, 0.07);
   --track-bg: rgba(0, 0, 0, 0.09);
   --stat-bar: #8b5cf6;
   /* 上下行语义色在浅底上要降亮度，否则 #4dd4ff 这类高亮度色几乎看不见 */
@@ -259,11 +265,116 @@ body.theme-light .hero h1 {
    ========================================================================== */
 /* Section */
 .section {
-  margin-bottom: 60px;
+  margin-bottom: 48px;
 }
 
 .section:last-child {
   margin-bottom: 0;
+}
+
+/* 区块标题行：左标题、右控件/元信息同处一行，省掉控件独占的那一行高度 */
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+/* 渐变标题靠 background-clip:text 上色，一旦换行/贴边会把末字裁掉，
+   所以进了 .section-head 必须 nowrap 并留出右侧空白 */
+.section-head .section-title {
+  margin-bottom: 0;
+  white-space: nowrap;
+  padding-right: 14px;
+}
+
+.head-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-bottom: 6px;
+}
+
+.head-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--item-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+.head-pill.is-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.head-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  animation: trendPulse 2s ease-in-out infinite;
+}
+
+/* 指标条：卡内一行多个「标签 + 值」，各栏左侧一道分隔线（首栏无）。
+   auto-fit 让窄屏整格换行，而不是格内断字 */
+.metric-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px 0;
+  border-top: 1px solid var(--divider-faint);
+  padding-top: 14px;
+}
+
+.metric-bar-item {
+  padding: 0 14px;
+  border-left: 1px solid var(--divider-faint);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.metric-bar-item:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.metric-bar-item:last-child {
+  padding-right: 0;
+}
+
+.metric-bar-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+
+.metric-bar-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-bar-value.is-up {
+  color: var(--speed-up);
+}
+
+.metric-bar-value.is-down {
+  color: var(--speed-down);
+}
+
+.metric-bar-unit {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
 }
 
 .section-title {
@@ -641,100 +752,118 @@ body.theme-light .section-title {
 .realtime-panel {
   background: var(--card-bg);
   border-radius: var(--radius-md);
-  padding: 24px;
+  padding: 20px 22px 18px;
   border: 1px solid var(--card-border);
   position: relative;
+}
+
+/* 实时读数行：当前上下行为主，右侧合计/峰值为辅 */
+.rt-readout {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+
+.rt-read {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.rt-read-label {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rt-read-value {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.rt-read.is-up .rt-read-label,
+.rt-read.is-up .rt-read-value {
+  color: var(--speed-up);
+}
+
+.rt-read.is-down .rt-read-label,
+.rt-read.is-down .rt-read-value {
+  color: var(--speed-down);
+}
+
+.rt-read-unit {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.rt-read-sep {
+  width: 1px;
+  height: 30px;
+  background: var(--card-border);
+}
+
+.rt-read-aside {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
   gap: 18px;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rt-read-aside b {
+  color: var(--text);
+  font-weight: 600;
 }
 
 .realtime-chart {
   position: relative;
-  height: 220px;
+  height: 190px;
+  margin-top: 16px;
 }
 
-.realtime-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.realtime-metric {
-  background: var(--item-bg);
-  border-radius: var(--radius-sm);
-  padding: 16px 18px;
-  border: 1px solid var(--card-border);
-  text-align: center;
-  min-height: 86px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 6px;
-}
-
-.realtime-metric .label {
-  font-size: 11px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  display: block;
-  margin-bottom: 6px;
-}
-
-.realtime-metric .value {
-  font-size: 22px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-}
-
-.realtime-metric.is-up .value {
-  color: var(--speed-up);
-}
-
-.realtime-metric.is-down .value {
-  color: var(--speed-down);
-}
-
-/* 平均速率双值 */
-.avg-pair {
-  display: grid;
-  grid-template-columns: 0.8em auto auto;
-  gap: 2px 3px;
-  width: 100%;
-  justify-content: center;
-}
-
-.avg-val {
-  display: contents;
-}
-
-.avg-val > span {
-  font-size: 16px;
+/* 上下两半的方向注记：画在 canvas 外层，省一套 Chart.js 插件 */
+.rt-chart-tag {
+  position: absolute;
+  left: 6px;
+  font-size: 10px;
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.3;
+  letter-spacing: 0.4px;
+  pointer-events: none;
 }
 
-.avg-val > span:nth-child(2) {
-  text-align: left;
-}
-
-.avg-val > span:nth-child(3) {
-  text-align: left;
-  font-weight: 400;
-  font-size: 12px;
-  color: var(--muted);
-  align-self: center;
-}
-
-.avg-up {
+.rt-chart-tag.is-up {
+  top: 4px;
   color: var(--speed-up);
 }
 
-.avg-down {
+.rt-chart-tag.is-down {
+  bottom: 4px;
   color: var(--speed-down);
+}
+
+/* X 轴刻度用静态文本而非 Chart.js 轴：右侧留白必须与 realtimeAxisWidth 一致 */
+.rt-timeline {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--axis-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding-right: 62px;
+  margin-top: 2px;
+}
+
+.realtime-panel .metric-bar {
+  margin-top: 16px;
 }
 
 /* ==========================================================================
@@ -1258,8 +1387,9 @@ body.theme-light .threshold-marker {
   .uptime-label {
     display: none;
   }
-  .realtime-metrics {
-    grid-template-columns: 1fr;
+  /* 窄屏读数换行后，合计/峰值不再靠 auto 顶到右侧，改为跟随左对齐 */
+  .rt-read-aside {
+    margin-left: 0;
   }
   .month-grid {
     grid-template-columns: 1fr;
@@ -1312,9 +1442,33 @@ body.theme-light .threshold-marker {
   }
 }
 
+/* 指标条在 auto-fit 换行时，第二行首格会挂着一条无处可依的左分隔线。
+   窄屏改为锁定列数，才能用 nth-child 精确认出「每行第一格」并去掉那道线。
+   两段区间互斥，避免后一段还要把前一段的 nth-child 规则再重置回来。 */
+@media (min-width: 561px) and (max-width: 768px) {
+  .metric-bar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .metric-bar-item:nth-child(3n + 1) {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
 @media (max-width: 560px) {
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+  .metric-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .metric-bar-item:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+  /* 上下行读数换行后这条竖线会飘到行尾，28px 的 gap 已经够分隔了 */
+  .rt-read-sep {
+    display: none;
   }
 }
 

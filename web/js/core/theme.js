@@ -55,6 +55,8 @@ export function palette() {
     muted: getCssVar("--muted") || "#86868b",
     axis: getCssVar("--axis-faint") || "#5c5c61",
     grid: getCssVar("--speed-grid") || "rgba(255, 255, 255, 0.08)",
+    gridAxis: getCssVar("--speed-grid-axis") || "rgba(255, 255, 255, 0.18)",
+    divider: getCssVar("--divider-faint") || "rgba(255, 255, 255, 0.06)",
     card: getCssVar("--card-bg"),
     border: getCssVar("--card-border"),
   };
