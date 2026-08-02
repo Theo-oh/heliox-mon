@@ -402,33 +402,69 @@
 
       <!-- 历史趋势 -->
       <div class="section">
-        <div class="section-title">历史趋势</div>
-        <div class="chart-container">
-          <div class="chart-header">
-            <h3 id="trend-title" class="card-title" style="margin: 0">
-              近6个月流量
-            </h3>
-            <div class="chart-actions">
-              <div class="view-toggle" id="trend-range-toggle">
-                <button id="trend-range-month" class="btn btn-sm active">
-                  近6个月
-                </button>
-                <button id="trend-range-30d" class="btn btn-sm btn-secondary">
-                  近30天
-                </button>
-                <button id="trend-range-cycle" class="btn btn-sm btn-secondary">
-                  计费周期
-                </button>
-              </div>
-              <div class="view-toggle" id="trend-view-toggle">
-                <button id="trend-total" class="btn btn-sm active">总计</button>
-                <button id="trend-detail" class="btn btn-sm btn-secondary">
-                  详细
-                </button>
-              </div>
+        <div class="section-head">
+          <div class="section-title">历史趋势</div>
+          <div class="head-tools">
+            <!-- 范围与视图合成一条分段控件；视图组只对月度柱状图有意义，
+                 切到日视图时连同分隔线一起隐藏 -->
+            <div class="seg-control">
+              <button id="trend-range-month" class="seg-item" type="button">
+                近6个月
+              </button>
+              <button id="trend-range-30d" class="seg-item" type="button">
+                近30天
+              </button>
+              <button id="trend-range-cycle" class="seg-item" type="button">
+                计费周期
+              </button>
+              <span id="trend-view-sep" class="seg-sep"></span>
+              <button id="trend-total" class="seg-item" type="button">
+                总计
+              </button>
+              <button id="trend-detail" class="seg-item" type="button">
+                详细
+              </button>
             </div>
           </div>
-          <div style="height: 250px; position: relative">
+        </div>
+        <div class="chart-container trend-card">
+          <div class="metric-bar is-inline">
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">区间总量</div>
+              <div class="metric-bar-value is-lead">
+                <span id="trend-sum">--</span>
+                <span id="trend-sum-unit" class="metric-bar-unit"></span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">上行 / 下行</div>
+              <div class="metric-bar-value">
+                <span id="trend-tx" class="stat-up">--</span>
+                <span class="metric-bar-sep">/</span>
+                <span id="trend-rx" class="stat-down">--</span>
+                <span id="trend-txrx-unit" class="metric-bar-unit"></span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div id="trend-avg-label" class="metric-bar-label">日均</div>
+              <div class="metric-bar-value">
+                <span id="trend-avg">--</span>
+                <span id="trend-avg-unit" class="metric-bar-unit"></span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div id="trend-peak-label" class="metric-bar-label">峰值</div>
+              <div class="metric-bar-value is-danger">
+                <span id="trend-peak">--</span>
+                <span id="trend-peak-unit" class="metric-bar-unit"></span>
+              </div>
+            </div>
+            <span id="trend-today-badge" class="trend-today-badge" hidden>
+              <span class="trend-today-pulse"></span>
+              <span id="trend-today">今日 --</span>
+            </span>
+          </div>
+          <div class="trend-chart-wrap">
             <canvas id="trend-chart"></canvas>
           </div>
           <div id="trend-legend" class="chart-legend"></div>

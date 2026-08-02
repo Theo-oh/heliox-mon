@@ -72,6 +72,13 @@ body.theme-light {
   box-sizing: border-box;
 }
 
+/* UA 样式表里的 [hidden]{display:none} 属于 user-agent 源，任何作者侧的
+   `display: inline-flex` 都能压过它——于是 JS 设了 hidden 元素照样显示，且不报错。
+   在这里统一兜住，各处就不用再写一条 .foo[hidden] */
+[hidden] {
+  display: none !important;
+}
+
 body {
   font-family:
     -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue",
@@ -141,10 +148,6 @@ body {
   padding: 6px 14px 6px 11px;
   font-size: 12px;
   color: var(--muted);
-}
-
-.uptime-pill[hidden] {
-  display: none;
 }
 
 .uptime-dot {
@@ -323,6 +326,54 @@ body.theme-light .hero h1 {
   animation: trendPulse 2s ease-in-out infinite;
 }
 
+/* 分段控件：一条控件里放一到多组互斥选项，组间用 1px 竖线隔开，
+   取代原先右上角堆两行按钮的做法 */
+.seg-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--item-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.seg-item {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.seg-item:hover {
+  color: var(--text);
+}
+
+.seg-item.is-active {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  font-weight: 600;
+}
+
+body.theme-light .seg-item.is-active {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.seg-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--card-border);
+  margin: 0 4px;
+}
+
 /* 指标条：卡内一行多个「标签 + 值」，各栏左侧一道分隔线（首栏无）。
    auto-fit 让窄屏整格换行，而不是格内断字 */
 .metric-bar {
@@ -331,6 +382,34 @@ body.theme-light .hero h1 {
   gap: 14px 0;
   border-top: 1px solid var(--divider-faint);
   padding-top: 14px;
+}
+
+/* 行内变体：各栏宽度贴合内容而非等分，尾部元素靠 margin-left:auto 顶到右侧。
+   用在指标条位于卡片顶部、上方没有内容可分隔的场合（故无 border-top）。
+   窄屏在响应式一节退回 grid 形态，复用那边的 nth-child 去边规则 */
+.metric-bar.is-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 0;
+  border-top: 0;
+  padding-top: 0;
+  margin-bottom: 6px;
+}
+
+.metric-bar.is-inline .metric-bar-item {
+  flex: 0 0 auto;
+  padding: 0 18px;
+}
+
+/* 这条比通用的 .metric-bar-item:first-child 多一个类，不补就压不掉上面的 18px */
+.metric-bar.is-inline .metric-bar-item:first-child {
+  padding-left: 0;
+}
+
+/* :not(.is-lead) 而不是靠声明顺序压过 .is-lead——那样调换分区位置就会静默失效 */
+.metric-bar.is-inline .metric-bar-value:not(.is-lead) {
+  font-size: 14px;
 }
 
 .metric-bar-item {
@@ -354,6 +433,17 @@ body.theme-light .hero h1 {
   color: var(--muted);
   margin-bottom: 4px;
   white-space: nowrap;
+}
+
+/* 领衔指标：同一条指标条里最该被先看到的那一格 */
+.metric-bar-value.is-lead {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.metric-bar-sep {
+  color: var(--axis-faint);
 }
 
 .metric-bar-value {
@@ -1008,9 +1098,9 @@ body.theme-light .pt-share {
 }
 
 /* ==========================================================================
-   8. 模块：历史趋势（图表容器 / 图例 / 视图切换）
+   8. 模块：历史趋势（图表容器 / 图例）
    ========================================================================== */
-/* Chart Container */
+/* Chart Container（延迟监控也用这一个外壳） */
 .chart-container {
   background: var(--card-bg);
   border-radius: var(--radius-md);
@@ -1021,36 +1111,29 @@ body.theme-light .pt-share {
   min-height: 320px;
 }
 
-.chart-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 20px;
+.trend-card {
+  padding: 20px 22px 16px;
+  min-height: 0;
 }
 
-.chart-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: flex-end;
-}
-
-.view-toggle {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.trend-chart-wrap {
+  position: relative;
+  height: 230px;
+  margin-top: 8px;
 }
 
 .chart-legend {
   display: flex;
   justify-content: center;
   gap: 20px;
-  margin-top: 20px;
+  margin-top: 14px;
   font-size: 13px;
   color: var(--muted);
+}
+
+/* 日视图的图例信息已并进指标条，legendHtml 为空串；不收掉这段间距会多出一条空白 */
+.chart-legend:empty {
+  display: none;
 }
 
 .legend-item {
@@ -1063,6 +1146,37 @@ body.theme-light .pt-share {
   width: 10px;
   height: 10px;
   border-radius: 3px;
+}
+
+/* 今日徽标：坐在指标条右端，靠 margin-left:auto 与左侧指标拉开。
+   必须定义在「响应式断点」一节之前——窄屏那两段要把 margin-left 清成 0，
+   同特异度下后写的赢，放到断点之后就再也覆盖不掉了 */
+.trend-today-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  background: rgba(0, 122, 255, 0.12);
+  padding: 5px 11px 5px 9px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--speed-down);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+body.theme-light .trend-today-badge {
+  background: rgba(0, 122, 255, 0.1);
+}
+
+.trend-today-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--speed-down);
+  animation: trendPulse 2s ease-in-out infinite;
+  box-shadow: 0 0 0 2px rgba(77, 212, 255, 0.25);
 }
 
 /* ==========================================================================
@@ -1246,12 +1360,6 @@ body.theme-light .pt-share {
   background: var(--card-bg);
   color: var(--text);
   border: 1px solid var(--card-border);
-}
-
-.btn-secondary.active {
-  background: var(--accent-blue);
-  border-color: var(--accent-blue);
-  color: #fff;
 }
 
 .btn-secondary.is-active {
@@ -1439,16 +1547,6 @@ body.theme-light .latency-chart-wrap {
     flex-direction: column;
     align-items: stretch;
   }
-  .chart-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .chart-actions {
-    align-items: flex-start;
-  }
-  .view-toggle {
-    justify-content: flex-start;
-  }
   .control-actions {
     justify-content: flex-end;
   }
@@ -1462,14 +1560,33 @@ body.theme-light .latency-chart-wrap {
 
 /* 指标条在 auto-fit 换行时，第二行首格会挂着一条无处可依的左分隔线。
    窄屏改为锁定列数，才能用 nth-child 精确认出「每行第一格」并去掉那道线。
-   两段区间互斥，避免后一段还要把前一段的 nth-child 规则再重置回来。 */
+   两段区间互斥，避免后一段还要把前一段的 nth-child 规则再重置回来。
+   .is-inline 是 flex 排的，换行位置随内容浮动，nth-child 认不出行首，
+   所以窄屏直接退回 grid 形态，复用同一套 nth-child 规则。 */
 @media (min-width: 561px) and (max-width: 768px) {
   .metric-bar {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+  .metric-bar.is-inline {
+    display: grid;
+    gap: 14px 0;
+  }
   .metric-bar-item:nth-child(3n + 1) {
     padding-left: 0;
     border-left: 0;
+  }
+  .metric-bar.is-inline .metric-bar-item {
+    padding: 0 14px;
+  }
+  .metric-bar.is-inline .metric-bar-item:nth-child(3n + 1) {
+    padding-left: 0;
+    border-left: 0;
+  }
+  /* margin-left:auto 在 grid 里会盖过 justify-self，不清掉徽标仍然贴右 */
+  .trend-today-badge {
+    justify-self: start;
+    grid-column: 1 / -1;
+    margin-left: 0;
   }
 }
 
@@ -1480,9 +1597,26 @@ body.theme-light .latency-chart-wrap {
   .metric-bar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .metric-bar.is-inline {
+    display: grid;
+    gap: 14px 0;
+  }
   .metric-bar-item:nth-child(odd) {
     padding-left: 0;
     border-left: 0;
+  }
+  .metric-bar.is-inline .metric-bar-item {
+    padding: 0 14px;
+  }
+  .metric-bar.is-inline .metric-bar-item:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+  /* margin-left:auto 在 grid 里会盖过 justify-self，不清掉徽标仍然贴右 */
+  .trend-today-badge {
+    justify-self: start;
+    grid-column: 1 / -1;
+    margin-left: 0;
   }
   /* 上下行读数换行后这条竖线会飘到行尾，28px 的 gap 已经够分隔了 */
   .rt-read-sep {
@@ -1562,30 +1696,7 @@ body.theme-light .latency-chart-wrap {
   }
 }
 
-.trend-today-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(0, 122, 255, 0.12);
-  padding: 4px 10px 4px 8px;
-  border-radius: 12px;
-  font-weight: 500;
-  color: #007aff;
-}
-
-body.theme-light .trend-today-badge {
-  background: rgba(0, 122, 255, 0.1);
-}
-
-.trend-today-pulse {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #007aff;
-  animation: trendPulse 2s ease-in-out infinite;
-  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.25);
-}
-
+/* 今日徽标：坐在指标条右端，靠 margin-left:auto 与左侧指标拉开 */
 /* ==========================================================================
    12. 通知弹层
    ========================================================================== */
@@ -1612,9 +1723,6 @@ body.theme-light .trend-today-badge {
   border-radius: 14px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
   text-align: left;
-}
-.notify-popover[hidden] {
-  display: none;
 }
 .notify-pop-row {
   display: flex;
