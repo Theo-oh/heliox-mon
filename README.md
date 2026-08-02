@@ -252,7 +252,7 @@ MON_URL=http://<vps-ip>:9100 CLIENT_NAME=home-mac REPORT_TOKEN=xxx ./latency-cli
 | `internal/api`        | HTTP API、认证、SSE                                          |
 | `internal/notifier`   | Telegram 通知（预警 / 日报 / 测试发送）                      |
 | `internal/config`     | 环境变量解析、计费周期计算                                   |
-| `web/`                | 前端（含 `vendor/` 本地化图表库），`go:embed` 内嵌           |
+| `web/`                | 前端（`js/` 原生 ES Modules，`vendor/` 本地化图表库），`go:embed` 内嵌 |
 
 ## 🛠️ 开发
 

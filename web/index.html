@@ -422,9 +422,19 @@
       </div>
     </div>
 
-    <script src="vendor/chart.umd.min.js"></script>
-    <script src="vendor/chartjs-plugin-annotation.min.js"></script>
-    <script src="vendor/echarts.min.js"></script>
-    <script src="app.js"></script>
+    <!-- vendor 用 defer 而非 async：defer 的经典脚本与 module script 共用同一条
+         有序执行队列，按文档顺序执行，所以 window.Chart / window.echarts 一定先于
+         main.js 就绪。改成 async 会打破这个顺序。 -->
+    <script defer src="vendor/chart.umd.min.js"></script>
+    <script defer src="vendor/chartjs-plugin-annotation.min.js"></script>
+    <script defer src="vendor/echarts.min.js"></script>
+    <!-- 预声明 core 层，把模块发现的瀑布从 3 层压到 1 层 -->
+    <link rel="modulepreload" href="js/core/format.js" />
+    <link rel="modulepreload" href="js/core/dom.js" />
+    <link rel="modulepreload" href="js/core/http.js" />
+    <link rel="modulepreload" href="js/core/stream.js" />
+    <link rel="modulepreload" href="js/core/theme.js" />
+    <link rel="modulepreload" href="js/core/vendor.js" />
+    <script type="module" src="js/main.js"></script>
   </body>
 </html>
