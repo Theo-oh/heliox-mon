@@ -3,7 +3,7 @@
 
 import { startStream } from "./core/stream.js";
 import { initTheme } from "./core/theme.js";
-import { initLatency, refreshLatency } from "./modules/latency.js";
+import { initLatency, refreshLatency } from "./modules/latency/index.js";
 import { initNotify } from "./modules/notify.js";
 import { initRealtime } from "./modules/realtime.js";
 import { initSystem, refreshSystem } from "./modules/system.js";

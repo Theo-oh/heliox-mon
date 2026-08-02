@@ -283,6 +283,8 @@ body.theme-light .hero h1 {
   gap: 20px;
   flex-wrap: wrap;
   margin-bottom: 18px;
+  /* 窄屏时延迟的「更多」弹层要改挂在整行上（见响应式一节），需要这个定位祖先 */
+  position: relative;
 }
 
 /* 渐变标题靠 background-clip:text 上色，一旦换行/贴边会把末字裁掉，
@@ -1180,162 +1182,211 @@ body.theme-light .trend-today-badge {
 }
 
 /* ==========================================================================
-   9. 模块：延迟监控（控制栏 / 筛选 / 统计 / 图表）
+   9. 模块：延迟监控（标题行控件 / 状态横幅 / 图表 / 图例）
    ========================================================================== */
-/* New Latency Controls */
-.latency-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 14px;
-  background: var(--item-bg);
-  padding: 12px 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--card-border);
-}
-
-.latency-row {
-  display: flex;
+/* 目标筛选胶囊：点一下切换该目标是否参与统计与绘图 */
+.lat-target-pills {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
-.latency-row-top {
-  justify-content: flex-start;
+.lat-target-pill {
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 8px;
+  background: var(--item-bg);
+  border: 1px solid var(--card-border);
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
-.latency-row-mid {
-  justify-content: space-between;
+.lat-target-pill.is-active {
+  background: rgba(10, 132, 255, 0.16);
+  border-color: rgba(10, 132, 255, 0.35);
+  color: var(--text);
+}
+
+body.theme-light .lat-target-pill.is-active {
+  background: rgba(10, 132, 255, 0.12);
+  border-color: rgba(10, 132, 255, 0.28);
+}
+
+/* 未选中的目标把圆点也压灰，否则一枚亮色圆点看着仍像在图上 */
+.lat-target-pill:not(.is-active) .lat-dot {
+  opacity: 0.4;
+}
+
+.lat-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+/* 「更多 ▾」：head-pill 的可点变体 */
+.head-pill.is-btn {
+  font-family: inherit;
+  cursor: pointer;
+  gap: 5px;
+  padding: 5px 11px;
+}
+
+.head-pill.is-btn:hover,
+.head-pill.is-btn.is-open {
+  color: var(--text);
+  border-color: var(--card-hover-border);
+}
+
+.lat-caret {
+  font-size: 9px;
+}
+
+.lat-more-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.lat-more-pop {
+  width: 320px;
+  max-width: calc(100vw - 40px);
+  gap: 14px;
+}
+
+.lat-pop-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lat-pop-title {
+  font-size: 11px;
+  color: var(--axis-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.lat-pop-actions,
+.lat-pop-opts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.lat-pop-note {
+  font-size: 11px;
+  color: var(--axis-faint);
+  border-top: 1px solid var(--divider-faint);
+  padding-top: 10px;
 }
 
 .date-nav {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .btn-icon {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   color: var(--muted);
-  width: 28px;
-  height: 28px;
+  font-family: inherit;
+  width: 26px;
+  height: 26px;
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .btn-icon:hover {
-  background: var(--card-hover-border);
+  background: var(--item-bg);
   color: var(--text);
 }
 
+/* 起止日期竖排：弹层只有 320px 宽，两个 date input 并排时浏览器会把原生
+   yyyy/mm/dd 挤成两三个字符，看不出该填什么 */
 .date-range {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
   background: rgba(10, 10, 10, 0.28);
-  padding: 6px 10px;
+  padding: 6px 8px;
   border-radius: 10px;
   border: 1px solid var(--card-border);
+}
+
+body.theme-light .date-range {
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .date-field {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  min-width: 0;
 }
 
 .date-label {
   font-size: 11px;
   color: var(--muted);
-}
-
-.date-sep {
-  color: var(--muted);
-  font-size: 12px;
+  white-space: nowrap;
 }
 
 .date-field input {
   background: var(--bg);
   border: 1px solid var(--card-border);
   color: var(--text);
-  padding: 6px 10px;
+  padding: 4px 6px;
   border-radius: 8px;
   font-family: inherit;
   font-size: 12px;
+  /* 低于这个宽度 Chrome 会截断原生日期占位符 */
+  min-width: 122px;
   outline: none;
 }
 
-/* Filters & Pills */
-.filter-group,
-.display-options {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.filter-group {
-  flex: 1 1 auto;
-}
-
-.display-options {
-  flex: 0 0 auto;
-}
-
-.opt-label {
-  font-size: 12px;
-  color: var(--muted);
-  margin-right: 4px;
-}
-
-.filter-pill,
 .opt-pill {
   font-size: 12px;
   color: var(--muted);
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   padding: 4px 10px;
-  border-radius: 20px;
-  display: flex;
+  border-radius: 999px;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-.filter-pill:hover,
 .opt-pill:hover {
   background: var(--item-bg);
   color: var(--text);
   border-color: var(--card-hover-border);
 }
 
-.filter-pill input,
 .opt-pill input {
   margin: 0;
   accent-color: var(--accent-blue);
-}
-
-.control-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-left: auto;
-}
-
-.granularity-tag {
-  font-size: 11px;
-  color: var(--muted);
-  padding: 4px 8px;
-  background: var(--bg);
-  border-radius: 4px;
-  margin-left: 8px;
 }
 
 .btn {
@@ -1344,6 +1395,7 @@ body.theme-light .trend-today-badge {
   border: none;
   padding: 6px 16px;
   border-radius: 6px;
+  font-family: inherit;
   font-size: 13px;
   cursor: pointer;
   transition: opacity 0.2s;
@@ -1362,140 +1414,223 @@ body.theme-light .trend-today-badge {
   border: 1px solid var(--card-border);
 }
 
-.btn-secondary.is-active {
-  background: rgba(10, 132, 255, 0.18);
-  border-color: rgba(10, 132, 255, 0.35);
-  color: var(--text);
-}
-
-body.theme-light .btn-secondary.is-active {
-  background: rgba(10, 132, 255, 0.12);
-  border-color: rgba(10, 132, 255, 0.28);
-}
-
 .btn-sm {
-  padding: 6px 12px;
+  padding: 5px 12px;
+  height: 28px;
   font-size: 12px;
 }
 
-/* Latency Card Layout */
+/* Latency Card */
 .latency-card {
-  padding-bottom: 22px;
+  padding: 20px 22px 18px;
+  min-height: 0;
 }
 
-.latency-stats {
+/* 链路状态横幅：整块的底色/边框/圆点色由 .is-ok|.is-warn|.is-down 决定，
+   三档只差颜色与呼吸节奏，结构完全一致 */
+.lat-banner {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.latency-chart-wrap {
-  height: 300px;
-  position: relative;
-  margin-bottom: 14px;
-  background: linear-gradient(
-    180deg,
-    rgba(20, 20, 22, 0.2),
-    rgba(10, 10, 10, 0)
-  );
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
   border-radius: 12px;
-  padding: 10px;
-  border: 1px solid var(--card-border);
+  padding: 14px 18px;
+  border: 1px solid transparent;
 }
 
-.latency-chart-wrap #latency-chart {
+.lat-banner.is-ok {
+  background: linear-gradient(
+    90deg,
+    rgba(48, 209, 88, 0.12),
+    rgba(48, 209, 88, 0.02)
+  );
+  border-color: rgba(48, 209, 88, 0.28);
+  --lat-status: var(--accent-green);
+  --lat-pulse: 2.4s;
+}
+
+.lat-banner.is-warn {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 159, 10, 0.14),
+    rgba(255, 159, 10, 0.02)
+  );
+  border-color: rgba(255, 159, 10, 0.32);
+  --lat-status: var(--accent-orange);
+  --lat-pulse: 1.6s;
+}
+
+.lat-banner.is-down {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 69, 58, 0.14),
+    rgba(255, 69, 58, 0.02)
+  );
+  border-color: rgba(255, 69, 58, 0.34);
+  --lat-status: var(--accent-red);
+  --lat-pulse: 1.2s;
+}
+
+.lat-banner-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.lat-banner-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--lat-status);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--lat-status) 18%, transparent);
+  animation: trendPulse var(--lat-pulse) ease-in-out infinite;
+}
+
+.lat-banner-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--lat-status);
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+}
+
+.lat-banner-cell {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-left: 20px;
+  border-left: 1px solid var(--card-border);
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.lat-banner-label {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* 当前延迟：链路正常时保持中性色，劣化/中断才跟着状态变色 */
+.lat-banner-lead {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.lat-banner.is-warn .lat-banner-lead,
+.lat-banner.is-down .lat-banner-lead {
+  color: var(--lat-status);
+}
+
+.lat-banner-val {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 丢包读数：只要状态不是「正常」，它就是那个需要被看见的数字 */
+.lat-banner:not(.is-ok) #lat-loss-now {
+  color: var(--lat-status);
+}
+
+.lat-banner-unit {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.lat-banner-meta {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 指标条位于横幅与图表之间，分隔线要画在下方而不是上方 */
+.metric-bar.lat-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  border-top: 0;
+  border-bottom: 1px solid var(--divider-faint);
+  margin-top: 16px;
+  padding-top: 0;
+  padding-bottom: 14px;
+}
+
+.metric-bar.lat-metrics .metric-bar-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.lat-chart-wrap {
+  position: relative;
+  height: 220px;
+  margin-top: 14px;
+}
+
+.lat-chart-wrap #latency-chart {
   width: 100%;
   height: 100%;
 }
 
-/* Latency Summary */
-.latency-summary {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.latency-metric {
-  background: var(--item-bg);
-  border-radius: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--card-border);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.latency-metric .label {
-  font-size: 12px;
-  color: var(--muted);
-  letter-spacing: 0.4px;
-}
-
-.latency-metric .value {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.latency-metric .value small {
-  font-size: 12px;
-  color: var(--muted);
-  margin-left: 6px;
-}
-
-.latency-targets {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-}
-
-.latency-target-card {
-  background: var(--card-bg);
-  border-radius: 12px;
-  padding: 8px 10px;
-  border: 1px solid var(--card-border);
-}
-
-body.theme-light .date-range {
-  background: rgba(255, 255, 255, 0.7);
-}
-
-body.theme-light .latency-chart-wrap {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.7),
-    rgba(255, 255, 255, 0)
-  );
-}
-
-.latency-target-header {
+.lat-legend {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--divider-faint);
   font-size: 12px;
   color: var(--muted);
-  margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
 }
 
-.latency-target-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.latency-target-values {
-  display: flex;
-  gap: 10px;
-  font-size: 12px;
-  color: var(--muted);
+.lat-legend-targets {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
-.latency-target-values strong {
+.lat-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.lat-legend-item.is-target {
   color: var(--text);
   font-weight: 600;
+}
+
+.lat-legend-item .lat-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.lat-legend-bar {
+  width: 8px;
+  height: 2px;
+  background: var(--accent-red);
+  opacity: 0.75;
+}
+
+.lat-legend-block {
+  width: 10px;
+  height: 8px;
+  border-radius: 2px;
+  background: rgba(134, 134, 139, 0.25);
+}
+
+.lat-legend-meta {
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 /* ==========================================================================
@@ -1527,34 +1662,18 @@ body.theme-light .latency-chart-wrap {
   .hero h1 {
     font-size: 28px;
   }
-  .latency-controls {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 12px;
+  /* 横幅四栏在窄屏必定换行，换行后那道左分隔线会挂在行首无处可依，
+     和指标条是同一个问题；这里格数少，直接把分隔线全撤掉最省事 */
+  .lat-banner {
+    gap: 12px 18px;
   }
-  .granularity-tag {
-    display: none;
+  .lat-banner-cell {
+    padding-left: 0;
+    border-left: 0;
   }
-  .date-nav {
-    width: 100%;
-    justify-content: space-between;
-  }
-  .date-range {
-    flex: 1;
-    justify-content: center;
-  }
-  .latency-row-top {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .control-actions {
-    justify-content: flex-end;
-  }
-  .latency-summary {
-    grid-template-columns: 1fr;
-  }
-  .latency-chart-wrap {
-    height: 240px;
+  .lat-banner-meta {
+    margin-left: 0;
+    flex-basis: 100%;
   }
 }
 
@@ -1564,7 +1683,10 @@ body.theme-light .latency-chart-wrap {
    .is-inline 是 flex 排的，换行位置随内容浮动，nth-child 认不出行首，
    所以窄屏直接退回 grid 形态，复用同一套 nth-child 规则。 */
 @media (min-width: 561px) and (max-width: 768px) {
-  .metric-bar {
+  .metric-bar,
+  /* .lat-metrics 自带 auto-fit 列定义且特异度更高，不点名就压不住它，
+     窄屏会退回 auto-fit 并把去边的 nth-child 规则全部错位 */
+  .metric-bar.lat-metrics {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .metric-bar.is-inline {
@@ -1594,7 +1716,8 @@ body.theme-light .latency-chart-wrap {
   .stats-grid {
     grid-template-columns: 1fr;
   }
-  .metric-bar {
+  .metric-bar,
+  .metric-bar.lat-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .metric-bar.is-inline {
@@ -1622,6 +1745,24 @@ body.theme-light .latency-chart-wrap {
   .rt-read-sep {
     display: none;
   }
+  .lat-chart-wrap {
+    height: 200px;
+  }
+  .lat-legend-meta {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+  /* 「更多」弹层比触发它的胶囊宽得多，贴着胶囊右缘展开会把左半边顶出屏幕。
+     窄屏改为对齐整条标题行（定位祖先由 .section-head 提供） */
+  .lat-more-wrap {
+    position: static;
+  }
+  .lat-more-pop {
+    left: 0;
+    right: 0;
+    width: auto;
+    max-width: none;
+  }
   .tf-hero-value {
     font-size: 40px;
     letter-spacing: -1.5px;
@@ -1647,6 +1788,11 @@ body.theme-light .latency-chart-wrap {
    靠断点算死列宽迟早会被某台机器的数量级打脸，所以给表格兜一个横向滚动：
    真撑不下时是这张表自己滚，而不是顶破整页布局 */
 @media (max-width: 440px) {
+  /* 历史趋势那条分段控件有 5 格，375px 下按默认内边距要 336px、比可用宽多 1px，
+     整页因此横向滚动。收窄格内留白比断行/滚动都便宜 */
+  .seg-item {
+    padding: 5px 9px;
+  }
   .tf-card {
     padding: 18px;
   }
@@ -1698,15 +1844,15 @@ body.theme-light .latency-chart-wrap {
 
 /* 今日徽标：坐在指标条右端，靠 margin-left:auto 与左侧指标拉开 */
 /* ==========================================================================
-   12. 通知弹层
+   12. 弹层（通知铃铛 / 延迟「更多」共用同一副外壳，开合逻辑见 core/dom.js
+       的 bindPopover）
    ========================================================================== */
-/* 通知弹层（挂在主机名胶囊下方） */
 .notify-wrap {
   position: relative;
   display: inline-flex;
 }
 
-.notify-popover {
+.popover {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
@@ -1724,6 +1870,7 @@ body.theme-light .latency-chart-wrap {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
   text-align: left;
 }
+
 .notify-pop-row {
   display: flex;
   align-items: center;

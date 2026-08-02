@@ -23,6 +23,41 @@ export function on(id, type, fn) {
   return el;
 }
 
+/**
+ * 弹层开合：点击触发器切换、点击外部或 Esc 关闭。通知铃铛与延迟「更多」共用。
+ * 全局已有 `[hidden] { display:none !important }`，所以只切 hidden 即可。
+ * @param {string} triggerId @param {string} popId
+ * @param {(open: boolean) => void} [onToggle] 每次开合后的回调（如清空上次结果）
+ * @returns {{ setOpen: (open: boolean) => void, isOpen: () => boolean } | null}
+ */
+export function bindPopover(triggerId, popId, onToggle) {
+  const trigger = $(triggerId);
+  const pop = $(popId);
+  if (!trigger || !pop) return null;
+
+  const setOpen = (open) => {
+    pop.hidden = !open;
+    trigger.setAttribute("aria-expanded", String(open));
+    trigger.classList.toggle("is-open", open);
+    if (onToggle) onToggle(open);
+  };
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setOpen(pop.hidden);
+  });
+  // 弹层内部的点击不能冒泡到 document，否则会被下面的「点外部关闭」立刻收掉
+  pop.addEventListener("click", (e) => e.stopPropagation());
+  document.addEventListener("click", () => {
+    if (!pop.hidden) setOpen(false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !pop.hidden) setOpen(false);
+  });
+
+  return { setOpen, isOpen: () => !pop.hidden };
+}
+
 // 转义用户/配置可控字符串，避免拼接进 innerHTML 时产生注入
 /** @param {any} value */
 export function escapeHtml(value) {

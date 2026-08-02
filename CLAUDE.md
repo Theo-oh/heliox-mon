@@ -46,11 +46,13 @@ HELIOX_MON_PASS=test go run ./cmd/heliox-mon
 - **改完务必跨平台编译验证**：本机多为 Darwin，Linux-only 代码不会被本机 `go build` 检查到。提交前跑 `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build ./...`。
 - **带 `_linux` 后缀的测试仅在 Linux 构建**（如 `latency_linux_test.go`、`network_linux_test.go`），Mac 上 `go test` 不会执行它们，依赖 CI 覆盖。
 - **前端通过 `go:embed` 内嵌**（`web/embed.go`，含 `js/` 与 `vendor/` 目录）：改动 `web/` 下任何前端文件后必须重新构建二进制才生效。**图表库（Chart.js / annotation / ECharts）已本地化到 `web/vendor/`，不走 CDN**——升级版本需替换 `vendor/` 下文件并重建。
-- **前端是浏览器原生 ES Modules，无构建步骤、无 npm**。`web/js/core/` 是横切能力（格式化、DOM、HTTP、SSE 总线、主题、图表库出口），`web/js/modules/` 一个文件对应页面一个区块。**硬约束：`core/` 不得 import `modules/`**，否则主题模块与图表模块会形成循环依赖，命中 TDZ 且只在特定加载顺序下复现。
+- **前端是浏览器原生 ES Modules，无构建步骤、无 npm**。`web/js/core/` 是横切能力（格式化、DOM、HTTP、SSE 总线、主题、图表库出口），`web/js/modules/` 一个文件对应页面一个区块；区块太大时拆成同名子目录（`modules/latency/{index,chart,stats,palette}.js`，入口固定叫 `index.js`）。**硬约束：`core/` 不得 import `modules/`**，否则主题模块与图表模块会形成循环依赖，命中 TDZ 且只在特定加载顺序下复现。**子目录内同理：`chart.js` / `stats.js` 不得反向 import `index.js`**——它们要的口径由 `index.js` 算好当参数传入（渲染函数的副产品被别处读取，一旦渲染早返回就会拿到上一轮的值，画面与数字对不上且不报错）。
   - 相对 import **必须写 `.js` 后缀**（浏览器不做扩展名补全）；新增模块文件要同步改三处：`web/embed.go` 的 embed 列表（漏了编译期不报错、运行时 404）、`web/sw.js` 的 `ASSETS_TO_CACHE` 并 bump `CACHE_NAME`、必要时 `web/index.html` 的 `modulepreload`。
   - **模块图失败是静默的**：任何一个 js 文件 404 或语法出错，整个入口都不执行，页面停在骨架且界面上没有任何提示。排查第一步永远是看 Network 找 404，`main.js` 顶部的 `console.info("heliox ui booted")` 是「模块跑起来了」的信标。
   - 图表模块的**颜色一律在 render 函数体内现取**（`getCssVar`），不能在模块顶层求值；主题切换靠 `core/theme.js` 的 `onThemeChange` 注册重绘回调，不要退回成在 `applyTheme` 里硬编码调用列表（那份列表历史上漏过趋势图）。
   - 实时网速的 `txSeries`/`rxSeries` 引用被 Chart.js dataset 持有，**只能原地 `shift`/`push`**；整体赋值会让图表静止而读数继续跳，不报错且极难查。
+  - **窄屏要覆盖的 CSS 属性，其基础规则不能比响应式断点更"特异"**：`.metric-bar.lat-metrics`（0,2,0）会压过断点里的 `.metric-bar`（0,1,0），指标条锁列数的规则失效、去分隔线的 `nth-child` 全部错位。给模块专属类加列定义时，断点一节要同时点名它。
+  - 弹层开合（点外部 / Esc 关闭）统一走 `core/dom.js` 的 `bindPopover`，外壳样式统一用 `.popover`。
   - ES module 不能用 `file://` 打开（CORS 拒绝，报错与真实故障无关），调试一律跑 `HELIOX_MON_PASS=test go run ./cmd/heliox-mon`。
   - 类型检查由根目录 `jsconfig.json`（`checkJs` + JSDoc）提供，只作用于编辑器，不进 CI、不引入 npm 依赖。`jsconfig.json` 刻意放在仓库根而非 `web/` 下，避免被 `go:embed js` 打进二进制。
 - **HTTP 响应统一用 `writeJSON` 辅助函数**（`internal/api/router.go`）输出 JSON；写出失败记日志而非静默忽略。

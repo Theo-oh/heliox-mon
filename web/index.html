@@ -68,7 +68,7 @@
 
             <div
               id="notify-popover"
-              class="notify-popover"
+              class="popover notify-popover"
               role="dialog"
               hidden
             >
@@ -473,66 +473,168 @@
 
       <!-- 延迟监控 -->
       <div class="section">
-        <div class="section-title">延迟监控</div>
-        <div class="chart-container latency-card">
-          <div class="latency-controls">
-            <div class="latency-row latency-row-top">
-              <div class="date-nav">
-                <button id="date-prev" class="btn btn-icon" title="前一天">
-                  ❮
-                </button>
-                <div class="date-range">
-                  <div class="date-field">
-                    <span class="date-label">开始</span>
-                    <input type="date" id="latency-start" />
+        <div class="section-head">
+          <div class="section-title">延迟监控</div>
+          <div class="head-tools">
+            <div id="lat-target-pills" class="lat-target-pills"></div>
+            <div class="seg-control">
+              <button id="lat-range-24h" class="seg-item" type="button">
+                24h
+              </button>
+              <button id="lat-range-7d" class="seg-item" type="button">
+                7 天
+              </button>
+              <button id="lat-range-custom" class="seg-item" type="button">
+                自定义
+              </button>
+            </div>
+            <!-- 日期输入、查询/重置、三个显示开关都收进这个弹层，
+                 让标题行只剩「看什么范围」这一个决策 -->
+            <div class="lat-more-wrap">
+              <button id="lat-more" class="head-pill is-btn" type="button">
+                更多 <span class="lat-caret">▾</span>
+              </button>
+              <div id="lat-more-pop" class="popover lat-more-pop" hidden>
+                <div class="lat-pop-section">
+                  <div class="lat-pop-title">自定义区间</div>
+                  <div class="date-nav">
+                    <button id="date-prev" class="btn-icon" title="前一天">
+                      ❮
+                    </button>
+                    <div class="date-range">
+                      <div class="date-field">
+                        <span class="date-label">开始</span>
+                        <input type="date" id="latency-start" />
+                      </div>
+                      <div class="date-field">
+                        <span class="date-label">结束</span>
+                        <input type="date" id="latency-end" />
+                      </div>
+                    </div>
+                    <button id="date-next" class="btn-icon" title="后一天">
+                      ❯
+                    </button>
                   </div>
-                  <span class="date-sep">—</span>
-                  <div class="date-field">
-                    <span class="date-label">结束</span>
-                    <input type="date" id="latency-end" />
+                  <div class="lat-pop-actions">
+                    <button id="latency-query" class="btn btn-sm">查询</button>
+                    <button
+                      id="latency-recent"
+                      class="btn btn-sm btn-secondary"
+                      type="button"
+                    >
+                      最近 24h
+                    </button>
+                    <button
+                      id="latency-reset"
+                      class="btn btn-sm btn-secondary"
+                      type="button"
+                    >
+                      重置
+                    </button>
                   </div>
                 </div>
-                <button id="date-next" class="btn btn-icon" title="后一天">
-                  ❯
-                </button>
+                <div class="lat-pop-section">
+                  <div class="lat-pop-title">图表元素</div>
+                  <div class="lat-pop-opts">
+                    <label class="opt-pill"
+                      ><input type="checkbox" id="show-loss" checked />
+                      丢包</label
+                    >
+                    <label class="opt-pill"
+                      ><input type="checkbox" id="show-max" /> 极值</label
+                    >
+                    <label class="opt-pill"
+                      ><input type="checkbox" id="show-avg" /> 平均线</label
+                    >
+                  </div>
+                </div>
+                <div id="lat-pop-note" class="lat-pop-note">--</div>
               </div>
-
-              <div class="control-actions">
-                <button id="latency-query" class="btn">查询</button>
-                <button id="latency-recent" class="btn btn-secondary">
-                  最近24h
-                </button>
-                <button id="latency-reset" class="btn btn-secondary">
-                  重置
-                </button>
-              </div>
-              <span id="latency-granularity" class="granularity-tag"></span>
             </div>
+          </div>
+        </div>
 
-            <div class="latency-row latency-row-mid">
-              <div id="target-filters" class="filter-group">
-                <!-- JS生成的复选框 -->
+        <div class="chart-container latency-card">
+          <!-- 链路状态横幅：本模块唯一回答「现在是否正常」的位置 -->
+          <div id="lat-banner" class="lat-banner is-ok">
+            <div class="lat-banner-head">
+              <span class="lat-banner-dot"></span>
+              <span id="lat-banner-title" class="lat-banner-title">--</span>
+            </div>
+            <div class="lat-banner-cell">
+              <span class="lat-banner-label">当前延迟</span>
+              <span id="lat-now" class="lat-banner-lead">--</span>
+              <span class="lat-banner-unit">ms</span>
+            </div>
+            <div class="lat-banner-cell">
+              <span id="lat-second-label" class="lat-banner-label">抖动</span>
+              <span id="lat-second" class="lat-banner-val">--</span>
+              <span id="lat-second-unit" class="lat-banner-unit">ms</span>
+            </div>
+            <div class="lat-banner-cell">
+              <span class="lat-banner-label">丢包</span>
+              <span id="lat-loss-now" class="lat-banner-val">--</span>
+            </div>
+            <span id="lat-banner-meta" class="lat-banner-meta">--</span>
+          </div>
+
+          <div class="metric-bar lat-metrics">
+            <div class="metric-bar-item">
+              <div id="lat-avg-label" class="metric-bar-label">平均</div>
+              <div class="metric-bar-value">
+                <span id="lat-avg">--</span>
+                <span class="metric-bar-unit">ms</span>
               </div>
-
-              <div class="display-options">
-                <span class="opt-label">显示</span>
-                <label class="opt-pill"
-                  ><input type="checkbox" id="show-loss" checked /> 丢包</label
-                >
-                <label class="opt-pill"
-                  ><input type="checkbox" id="show-max" /> 极值</label
-                >
-                <label class="opt-pill"
-                  ><input type="checkbox" id="show-avg" /> 平均线</label
-                >
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">P95</div>
+              <div class="metric-bar-value">
+                <span id="lat-p95">--</span>
+                <span class="metric-bar-unit">ms</span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">最小</div>
+              <div class="metric-bar-value">
+                <span id="lat-min">--</span>
+                <span class="metric-bar-unit">ms</span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">最大</div>
+              <div id="lat-max-value" class="metric-bar-value">
+                <span id="lat-max">--</span>
+                <span class="metric-bar-unit">ms</span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">丢包率</div>
+              <div id="lat-loss-value" class="metric-bar-value">
+                <span id="lat-loss">--</span>
+              </div>
+            </div>
+            <div class="metric-bar-item">
+              <div class="metric-bar-label">异常时长</div>
+              <div id="lat-anomaly-value" class="metric-bar-value">
+                <span id="lat-anomaly">--</span>
+                <span class="metric-bar-unit">分钟</span>
               </div>
             </div>
           </div>
 
-          <div id="latency-stats" class="latency-stats"></div>
-
-          <div class="latency-chart-wrap">
+          <div class="lat-chart-wrap">
             <div id="latency-chart"></div>
+          </div>
+
+          <div class="lat-legend">
+            <span id="lat-legend-targets" class="lat-legend-targets"></span>
+            <span id="lat-legend-loss" class="lat-legend-item"
+              ><span class="lat-legend-bar"></span>丢包</span
+            >
+            <span class="lat-legend-item"
+              ><span class="lat-legend-block"></span>无数据</span
+            >
+            <span id="lat-legend-meta" class="lat-legend-meta">--</span>
           </div>
         </div>
       </div>

@@ -130,6 +130,23 @@ export function formatPercent(value) {
   return `${value.toFixed(1)}%`;
 }
 
+// formatSpanParts 把毫秒跨度格式化为中文「值 + 单位」两段，供「大字号数值 +
+// 小字号单位」的排版复用（异常时长、链路中断已持续时长、无数据区间标签）
+/** @param {number} ms @returns {[string, string]} */
+export function formatSpanParts(ms) {
+  const minutes = Number(ms) / 60000;
+  if (!(minutes > 0)) return ["0", "分钟"];
+  if (minutes < 60) return [String(Math.max(1, Math.round(minutes))), "分钟"];
+  const hours = minutes / 60;
+  if (hours < 24) return [hours.toFixed(1), "小时"];
+  return [(hours / 24).toFixed(1), "天"];
+}
+
+/** @param {number} ms */
+export function formatSpan(ms) {
+  return formatSpanParts(ms).join(" ");
+}
+
 /** @param {number|null|undefined} minutes */
 export function formatDuration(minutes) {
   if (minutes === null || minutes === undefined || Number.isNaN(minutes))

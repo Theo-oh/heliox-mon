@@ -1,6 +1,6 @@
 // 通知设置：主机名胶囊 + Telegram 弹层
 
-import { $ } from "../core/dom.js";
+import { $, bindPopover } from "../core/dom.js";
 import { getJSON, logFetchError, postJSON } from "../core/http.js";
 
 export function initNotify() {
@@ -62,31 +62,13 @@ async function fetchNotifyStatus() {
 
 // 主机名胶囊：点击开合通知弹层（点击外部 / Esc 关闭），弹层内「发送测试消息」即时验证
 function setupNotifyPill() {
-  const pill = $("server-name");
-  const pop = $("notify-popover");
-  if (!pill || !pop) return;
-
   const result = $("notify-test-result");
-  const setOpen = (open) => {
-    pop.hidden = !open;
-    pill.setAttribute("aria-expanded", String(open));
-    // 每次重新打开清掉上次的测试结果，避免残留旧的成功/失败提示
+  // 每次重新打开清掉上次的测试结果，避免残留旧的成功/失败提示
+  bindPopover("server-name", "notify-popover", (open) => {
     if (open && result) {
       result.textContent = "";
       result.className = "notify-result";
     }
-  };
-
-  pill.addEventListener("click", (e) => {
-    e.stopPropagation();
-    setOpen(pop.hidden);
-  });
-  pop.addEventListener("click", (e) => e.stopPropagation());
-  document.addEventListener("click", () => {
-    if (!pop.hidden) setOpen(false);
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !pop.hidden) setOpen(false);
   });
 
   wireNotifyButton("notify-test-btn", "/api/notify/test", result);
