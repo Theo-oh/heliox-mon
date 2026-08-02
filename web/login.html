@@ -245,11 +245,9 @@
         background-image: linear-gradient(135deg, #1c1c1e 0%, #4b4b52 100%);
       }
     </style>
-    <script
-      src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-      async
-      defer
-    ></script>
+    <!-- Turnstile 的脚本与部件由服务端按配置注入（buildLoginPage）：
+         没配 HELIOX_TURNSTILE_SECRET 时两处都是空，页面不会去连 Cloudflare -->
+    <!--HELIOX_TURNSTILE_SCRIPT-->
   </head>
   <body>
     <script>
@@ -354,13 +352,7 @@
             placeholder=" "
           />
         </div>
-        <!-- Cloudflare Turnstile -->
-        <div
-          class="cf-turnstile"
-          data-sitekey="0x4AAAAAACOhRkua9joDOJiB"
-          data-theme="auto"
-          style="margin: 0 auto"
-        ></div>
+        <!--HELIOX_TURNSTILE_WIDGET-->
         <button type="submit" class="btn-login">登录</button>
         <div id="error-msg" class="login-error"></div>
       </form>

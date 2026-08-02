@@ -124,6 +124,7 @@ done
 | `DAILY_REPORT_ENABLED`    | 每日流量报告推送开关          | false                             |
 | `DAILY_REPORT_HOUR`       | 每日报告推送时刻（0-23 整点） | 9                                 |
 | `HELIOX_TURNSTILE_SECRET` | Cloudflare Turnstile 密钥     | 空（设置后启用人机验证）          |
+| `HELIOX_TURNSTILE_SITEKEY`| Turnstile 站点公钥            | 内置默认值（换自己的站点时才需改）|
 | `PING_TARGETS`            | 延迟监控目标 (`TAG:IP`)       | Google:8.8.8.8,Cloudflare:1.1.1.1 |
 | `PING_COUNT`              | 每次 ping 发包数              | 5                                 |
 | `PING_TIMEOUT_MS`         | 单次 ping 超时(ms)            | 1000                              |
@@ -266,6 +267,33 @@ make lint     # golangci-lint（本机建议 GOOS=linux 跑，避免跨平台假
 # 本地运行（必须设置密码；Mac 上自动产生 mock 数据）
 HELIOX_MON_PASS=test go run ./cmd/heliox-mon
 ```
+
+### 前端调试
+
+改 `web/` 下的页面时用这条命令，五个模块都能看到数据：
+
+```bash
+HELIOX_MON_PASS=test HELIOX_MON_DEV_NO_AUTH=1 HELIOX_MON_DATA_DIR=/tmp/heliox-data \
+  go run ./cmd/heliox-mon
+# → http://127.0.0.1:9100
+```
+
+- **`HELIOX_MON_DEV_NO_AUTH=1` 跳过登录**，省掉每次调试都要过一遍登录页。
+  这个开关只存在于 **darwin 构建**（见 `internal/config/devauth_darwin.go`），生产的 Linux
+  二进制里没有对应分支；即便如此，服务端仍只对**回环地址**放行，同网段的其他机器进不来。
+- **Turnstile 本地自动消失**：没配 `HELIOX_TURNSTILE_SECRET` 时，服务端不会把 Cloudflare
+  的脚本与部件注入登录页（`buildLoginPage`），离线/内网环境不会再卡在一个连不上的验证框。
+- **改完前端必须重启进程**：前端是 `go:embed` 内嵌的，**编译期快照**——只在浏览器里刷新
+  永远看的是上次启动时的那份文件。这是本地调试最容易反复踩的坑。校验方式：
+  ```bash
+  curl -s localhost:9100/style.css | grep -c <你刚加的类名>   # 0 就是没重启
+  ```
+- ES module **不能用 `file://` 打开**（CORS 拒绝，报错与真实故障无关），只能走上面的服务。
+- **模块图失败是静默的**：任何一个 js 文件 404 或语法出错，整个入口都不执行，页面停在骨架
+  且界面上没有任何提示。排查第一步永远是看 Network 找 404；控制台里的
+  `heliox ui booted` 是「模块跑起来了」的信标。
+- 改动前端后自查：DOM id 交叉验证、相对 import 的 `.js` 后缀、`web/embed.go` 与 `web/sw.js`
+  的清单是否补齐（新增模块文件三处都要改），详见 [`CLAUDE.md`](CLAUDE.md)。
 
 跨平台采集逻辑按 build tag 分离（`*_linux.go` 真实采集 / `collector_darwin.go` mock），
 改采集代码需同步两端，并跑 `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build ./...` 验证。

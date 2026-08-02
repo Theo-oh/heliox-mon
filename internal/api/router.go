@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"io/fs"
 	"log"
@@ -41,6 +42,7 @@ type Server struct {
 	notifier         Notifier
 	sessions         sync.Map // token -> expireTime(int64)
 	stopCleanup      chan struct{}
+	loginPage        []byte // 登录页按配置渲染一次（Turnstile 有无），避免每个未授权请求都重建
 
 	// iptables 规则检测结果缓存（避免每个请求都 fork iptables）
 	iptablesMu      sync.Mutex
@@ -74,6 +76,7 @@ func NewServer(cfg *config.Config, db *storage.DB, realtimeProvider RealtimeData
 		systemProvider:   systemProvider,
 		notifier:         notifier,
 		stopCleanup:      make(chan struct{}),
+		loginPage:        buildLoginPage(cfg),
 	}
 
 	mux := http.NewServeMux()
@@ -216,6 +219,17 @@ var publicAssets = map[string]bool{
 	"/icon-512-maskable.png": true,
 }
 
+// isLoopbackRequest 判断请求是否来自本机。只取 RemoteAddr（TCP 对端），
+// 不看 X-Forwarded-For —— 那是客户端可伪造的头，用它判断会让免登录形同虚设。
+func isLoopbackRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 // auth 认证中间件 (Cookie + Basic Fallback)
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -224,6 +238,13 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 		// 但为了保险起见，style.css 等静态资源如果是通过 "/" handleStatic 服务的，
 		// 必须在这里放行。
 		if publicAssets[r.URL.Path] {
+			next(w, r)
+			return
+		}
+
+		// 1.5 本地开发免登录。cfg.DevNoAuth 只可能在 darwin 构建里为 true（见 config/devauth_darwin.go），
+		// 这里再叠一道回环地址检查：即使本机开着调试实例，同网段的其他人也进不来。
+		if s.cfg.DevNoAuth && isLoopbackRequest(r) {
 			next(w, r)
 			return
 		}
@@ -254,6 +275,28 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// buildLoginPage 把 login.html 里的 Turnstile 占位符按配置替换掉。
+// 没配 HELIOX_TURNSTILE_SECRET（本地开发的常态）时两处都替换成空串：后端本来就不校验 token，
+// 再去加载 challenges.cloudflare.com 只会在离线/内网环境留下一个"连接失败"的空框。
+func buildLoginPage(cfg *config.Config) []byte {
+	data, err := fs.ReadFile(web.Assets, "login.html")
+	if err != nil {
+		log.Printf("读取登录页失败: %v", err)
+		return nil
+	}
+
+	script, widget := "", ""
+	if cfg.TurnstileSecretKey != "" {
+		script = `<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>`
+		widget = `<div class="cf-turnstile" data-sitekey="` +
+			html.EscapeString(cfg.TurnstileSiteKey) +
+			`" data-theme="auto" style="margin: 0 auto"></div>`
+	}
+	data = bytes.ReplaceAll(data, []byte("<!--HELIOX_TURNSTILE_SCRIPT-->"), []byte(script))
+	data = bytes.ReplaceAll(data, []byte("<!--HELIOX_TURNSTILE_WIDGET-->"), []byte(widget))
+	return data
+}
+
 // handleLoginView 登录页面
 func (s *Server) handleLoginView(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -267,13 +310,12 @@ func (s *Server) handleLoginView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := fs.ReadFile(web.Assets, "login.html")
-	if err != nil {
+	if s.loginPage == nil {
 		http.Error(w, "Login page not found", http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if _, err := w.Write(data); err != nil {
+	if _, err := w.Write(s.loginPage); err != nil {
 		log.Printf("写出登录页失败: %v", err)
 	}
 }

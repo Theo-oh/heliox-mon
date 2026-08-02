@@ -5,7 +5,22 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **本地开发免登录**：设 `HELIOX_MON_DEV_NO_AUTH=1` 后跳过登录页，专供调试前端。
+  开关只存在于 **darwin 构建**（`internal/config/devauth_darwin.go`），生产的 Linux 二进制里
+  没有对应分支；即便开着，服务端也只对**回环地址**放行（只认 `RemoteAddr`，不看可伪造的
+  `X-Forwarded-For`）。启动时会打印告警。
+- README 补「前端调试」小节：本地起服务的命令、`go:embed` 是编译期快照（**改完前端必须重启
+  进程**，只刷新浏览器永远看的是上次启动的那份）、模块图失败是静默的、排查顺序。
+
 ### 变更
+
+- **登录页按需加载 Turnstile**：Cloudflare 的脚本与验证部件改为由服务端在
+  `HELIOX_TURNSTILE_SECRET` 非空时才注入（`buildLoginPage`）。此前无论有没有配置都会去连
+  `challenges.cloudflare.com`，本地/内网/离线环境下登录页会挂着一个连不上的验证框。
+  站点公钥同时提取为 `HELIOX_TURNSTILE_SITEKEY`，默认值即原先硬编码的那个，已部署实例
+  无需新增配置。
 
 - **全站统一上下行语义色**：上行 / 上传 / TX 一律用紫（深色 `#b66cff`、浅色 `#8b5cf6`），
   下行 / 下载 / RX 一律用青（深色 `#4dd4ff`、浅色 `#0aa2c0`）。此前流量统计用绿/蓝、
