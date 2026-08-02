@@ -3,7 +3,13 @@
 import { $, setHtml, setText } from "../core/dom.js";
 import { niceCeil } from "../core/format.js";
 import { getJSON, logFetchError } from "../core/http.js";
-import { isLight, onThemeChange } from "../core/theme.js";
+import {
+  hexToRgba,
+  isLight,
+  onThemeChange,
+  palette,
+  tooltipColors,
+} from "../core/theme.js";
 import { Chart } from "../core/vendor.js";
 
 /** @type {any} */
@@ -98,6 +104,7 @@ async function fetchDailyTrend(rangeType) {
 }
 
 function renderTrendChart() {
+  const pal = palette();
   let labels = [];
   let datasets = [];
   let legendHtml = "";
@@ -123,42 +130,46 @@ function renderTrendChart() {
     const totalLabels = trendMonthlyData.map((d) => d.total_gb);
 
     if (trendView === "detail") {
-      // 详细视图：2根柱子（snell/vless），每根柱子堆叠上传下载
+      // 详细视图：2根柱子（snell/vless），每根柱子堆叠上传下载。
+      // 颜色首先编码方向（上行紫 / 下行青），协议靠透明度区分——方向语义全站一致，
+      // 不能像以前那样按协议分蓝紫两族，否则「蓝色是上传还是 snell」永远说不清。
+      const upDim = hexToRgba(pal.up, 0.55);
+      const downDim = hexToRgba(pal.down, 0.55);
       datasets = [
         {
           label: "snell 下载",
           data: trendMonthlyData.map((d) => d.snell_rx / 1024 / 1024 / 1024),
-          backgroundColor: "#4DD4FF", // Neon cyan
+          backgroundColor: pal.down,
           borderRadius: { bottomLeft: 4, bottomRight: 4 },
           stack: "snell",
         },
         {
           label: "snell 上传",
           data: trendMonthlyData.map((d) => d.snell_tx / 1024 / 1024 / 1024),
-          backgroundColor: "#3B82F6", // Electric blue
+          backgroundColor: pal.up,
           borderRadius: { topLeft: 4, topRight: 4 },
           stack: "snell",
         },
         {
           label: "vless 下载",
           data: trendMonthlyData.map((d) => d.vless_rx / 1024 / 1024 / 1024),
-          backgroundColor: "#9B8CFF", // Neon lavender
+          backgroundColor: downDim,
           borderRadius: { bottomLeft: 4, bottomRight: 4 },
           stack: "vless",
         },
         {
           label: "vless 上传",
           data: trendMonthlyData.map((d) => d.vless_tx / 1024 / 1024 / 1024),
-          backgroundColor: "#6D28D9", // Deep violet
+          backgroundColor: upDim,
           borderRadius: { topLeft: 4, topRight: 4 },
           stack: "vless",
         },
       ];
       legendHtml = `
-        <span class="legend-item"><span class="dot" style="background:#3B82F6"></span>snell 上传</span>
-        <span class="legend-item"><span class="dot" style="background:#4DD4FF"></span>snell 下载</span>
-        <span class="legend-item"><span class="dot" style="background:#6D28D9"></span>vless 上传</span>
-        <span class="legend-item"><span class="dot" style="background:#9B8CFF"></span>vless 下载</span>
+        <span class="legend-item"><span class="dot" style="background:${pal.up}"></span>snell 上传</span>
+        <span class="legend-item"><span class="dot" style="background:${pal.down}"></span>snell 下载</span>
+        <span class="legend-item"><span class="dot" style="background:${upDim}"></span>vless 上传</span>
+        <span class="legend-item"><span class="dot" style="background:${downDim}"></span>vless 下载</span>
       `;
     } else {
       // 总计视图：2根柱子（上传/下载）
@@ -166,19 +177,19 @@ function renderTrendChart() {
         {
           label: "上传",
           data: trendMonthlyData.map((d) => d.total_tx / 1024 / 1024 / 1024),
-          backgroundColor: "#4F7DF7", // Cobalt blue
+          backgroundColor: pal.up,
           borderRadius: 4,
         },
         {
           label: "下载",
           data: trendMonthlyData.map((d) => d.total_rx / 1024 / 1024 / 1024),
-          backgroundColor: "#39D0C3", // Tech teal
+          backgroundColor: pal.down,
           borderRadius: 4,
         },
       ];
       legendHtml = `
-        <span class="legend-item"><span class="dot" style="background:#4F7DF7"></span>上传</span>
-        <span class="legend-item"><span class="dot" style="background:#39D0C3"></span>下载</span>
+        <span class="legend-item"><span class="dot" style="background:${pal.up}"></span>上传</span>
+        <span class="legend-item"><span class="dot" style="background:${pal.down}"></span>下载</span>
       `;
     }
 
@@ -210,19 +221,19 @@ function renderTrendChart() {
     const maxValue = Math.max(...totals, avgValue);
     const yMax = niceCeil(maxValue * 1.15); // 留出 15% 空间
 
-    // 生成渐变填充（40% → 5%）
+    // 生成渐变填充（34% → 2%）
     const makeTrendGradient = (context) => {
       const chart = context.chart;
       const { chartArea } = chart;
-      if (!chartArea) return "rgba(10, 132, 255, 0.2)";
+      if (!chartArea) return hexToRgba(pal.down, 0.2);
       const gradient = chart.ctx.createLinearGradient(
         0,
         chartArea.top,
         0,
         chartArea.bottom,
       );
-      gradient.addColorStop(0, "rgba(10, 132, 255, 0.40)");
-      gradient.addColorStop(1, "rgba(10, 132, 255, 0.05)");
+      gradient.addColorStop(0, hexToRgba(pal.down, 0.34));
+      gradient.addColorStop(1, hexToRgba(pal.down, 0.02));
       return gradient;
     };
 
@@ -230,9 +241,9 @@ function renderTrendChart() {
     const pointRadii = totals.map((_, i) => (i === totals.length - 1 ? 6 : 0));
     const pointHoverRadii = totals.map(() => 6); // 悬停时所有点都高亮
     const pointBgColors = totals.map((_, i) =>
-      i === totals.length - 1 ? "#007AFF" : "transparent",
+      i === totals.length - 1 ? pal.down : "transparent",
     );
-    const pointHoverBgColors = totals.map(() => "#007AFF"); // 悬停时蓝色
+    const pointHoverBgColors = totals.map(() => pal.down);
     const pointBorderColors = totals.map((_, i) =>
       i === totals.length - 1 ? "#fff" : "transparent",
     );
@@ -249,7 +260,7 @@ function renderTrendChart() {
       {
         label: "总流量",
         data: totals,
-        borderColor: "#007AFF", // macOS System Blue
+        borderColor: pal.down,
         backgroundColor: makeTrendGradient,
         borderWidth: 2.5,
         pointRadius: pointRadii,
@@ -266,13 +277,13 @@ function renderTrendChart() {
       {
         label: "上传",
         data: txData,
-        borderColor: "rgba(79, 125, 247, 0.6)",
+        borderColor: hexToRgba(pal.up, 0.75),
         backgroundColor: "transparent",
         borderWidth: 1.5,
         borderDash: [4, 3],
         pointRadius: 0,
         pointHoverRadius: 4,
-        pointHoverBackgroundColor: "#4F7DF7",
+        pointHoverBackgroundColor: pal.up,
         tension: 0.4,
         cubicInterpolationMode: "monotone",
         fill: false,
@@ -280,13 +291,13 @@ function renderTrendChart() {
       {
         label: "下载",
         data: rxData,
-        borderColor: "rgba(57, 208, 195, 0.6)",
+        borderColor: hexToRgba(pal.down, 0.55),
         backgroundColor: "transparent",
         borderWidth: 1.5,
         borderDash: [4, 3],
         pointRadius: 0,
         pointHoverRadius: 4,
-        pointHoverBackgroundColor: "#39D0C3",
+        pointHoverBackgroundColor: pal.down,
         tension: 0.4,
         cubicInterpolationMode: "monotone",
         fill: false,
@@ -305,10 +316,10 @@ function renderTrendChart() {
         : `${(todayValue * 1024).toFixed(0)} MB`;
 
     legendHtml = `
-      <span class="legend-item"><span class="dot" style="background:#007AFF"></span>总流量 ${fmtSum(sumTotal)}</span>
-      <span class="legend-item"><span class="dot" style="background:#4F7DF7; opacity:0.6"></span>↑ ${fmtSum(sumTx)}</span>
-      <span class="legend-item"><span class="dot" style="background:#39D0C3; opacity:0.6"></span>↓ ${fmtSum(sumRx)}</span>
-      <span class="legend-item"><span class="dot" style="background:#86868b; opacity:0.6"></span>日均 ${avgValue.toFixed(2)} GB</span>
+      <span class="legend-item"><span class="dot" style="background:${pal.down}"></span>总流量 ${fmtSum(sumTotal)}</span>
+      <span class="legend-item"><span class="dot" style="background:${pal.up}; opacity:0.75"></span>↑ ${fmtSum(sumTx)}</span>
+      <span class="legend-item"><span class="dot" style="background:${pal.down}; opacity:0.55"></span>↓ ${fmtSum(sumRx)}</span>
+      <span class="legend-item"><span class="dot" style="background:${pal.muted}; opacity:0.6"></span>日均 ${avgValue.toFixed(2)} GB</span>
       <span class="legend-item trend-today-badge"><span class="trend-today-pulse"></span>今日 ${todayLabel}</span>
     `;
     chartType = "line";
@@ -352,8 +363,8 @@ function renderTrendChart() {
         return `  ${arrow} 较均值 ${sign}${diff.toFixed(0)}%`;
       },
       labelColor: (ctx) => {
-        const colors = { "总流量": "#007AFF", "上传": "#4F7DF7", "下载": "#39D0C3" };
-        const c = colors[ctx.dataset.label] || "#888";
+        const colors = { 总流量: pal.down, 上传: pal.up, 下载: pal.down };
+        const c = colors[ctx.dataset.label] || pal.muted;
         return { borderColor: c, backgroundColor: c };
       },
     };
@@ -363,14 +374,14 @@ function renderTrendChart() {
       type: "line",
       yMin: avgValue,
       yMax: avgValue,
-      borderColor: "rgba(134, 134, 139, 0.5)",
+      borderColor: hexToRgba(pal.muted, 0.55),
       borderWidth: 1.5,
       borderDash: [6, 4],
       label: {
         display: true,
         content: "Avg",
         position: "start",
-        backgroundColor: "rgba(134, 134, 139, 0.7)",
+        backgroundColor: hexToRgba(pal.muted, 0.75),
         color: "#fff",
         font: { size: 10, weight: "500" },
         padding: { top: 2, bottom: 2, left: 4, right: 4 },
@@ -383,15 +394,15 @@ function renderTrendChart() {
       type: "point",
       xValue: maxIdx,
       yValue: maxVal,
-      backgroundColor: "rgba(255, 69, 58, 0.15)",
-      borderColor: "#FF453A",
+      backgroundColor: hexToRgba(pal.danger, 0.15),
+      borderColor: pal.danger,
       borderWidth: 2,
       radius: 8,
       label: {
         display: true,
         content: `Max ${maxVal.toFixed(1)}G`,
         position: "top",
-        backgroundColor: "rgba(255, 69, 58, 0.85)",
+        backgroundColor: hexToRgba(pal.danger, 0.85),
         color: "#fff",
         font: { size: 10, weight: "600" },
         padding: { top: 3, bottom: 3, left: 6, right: 6 },
@@ -410,7 +421,8 @@ function renderTrendChart() {
   const isLineChart = chartType === "line";
   const light = isLight();
   const gridColor = light ? "rgba(0, 0, 0, 0.1)" : "rgba(255, 255, 255, 0.1)"; // 10% 透明度
-  const tickColor = "#8E8E93"; // System Gray 2
+  const tickColor = pal.axis;
+  const tip = tooltipColors();
 
   // 构建 annotations 配置
   const annotationsConfig = {};
@@ -435,13 +447,11 @@ function renderTrendChart() {
         mode: "index",
         intersect: false,
         callbacks: tooltipCallbacks,
-        backgroundColor: light
-          ? "rgba(255, 255, 255, 0.95)"
-          : "rgba(28, 28, 30, 0.95)",
-        titleColor: light ? "#1c1c1e" : "#f5f5f7",
-        bodyColor: light ? "#1c1c1e" : "#f5f5f7",
-        footerColor: light ? "#86868b" : "#8E8E93",
-        borderColor: light ? "rgba(0, 0, 0, 0.1)" : "rgba(255, 255, 255, 0.1)",
+        backgroundColor: tip.bg,
+        titleColor: tip.text,
+        bodyColor: tip.text,
+        footerColor: tip.footer,
+        borderColor: tip.border,
         borderWidth: 1,
         cornerRadius: 8,
         padding: 12,

@@ -9,7 +9,12 @@ import {
   getSpeedScale,
 } from "../core/format.js";
 import { onStreamEvent } from "../core/stream.js";
-import { getCssVar, hexToRgba, isLight, onThemeChange } from "../core/theme.js";
+import {
+  hexToRgba,
+  onThemeChange,
+  palette,
+  tooltipColors,
+} from "../core/theme.js";
 import { Chart } from "../core/vendor.js";
 
 const realtimeWindowSize = 60;
@@ -39,27 +44,14 @@ function onSpeedFrame(data) {
   pushRealtimePoint(txSpeed, rxSpeed);
 }
 
-function getRealtimePalette() {
-  const light = isLight();
-  return {
-    down: getCssVar("--speed-down") || "#4dd4ff",
-    up: getCssVar("--speed-up") || "#b66cff",
-    grid: getCssVar("--speed-grid") || "rgba(255, 255, 255, 0.08)",
-    muted: getCssVar("--muted") || "#6e6e80",
-    text: getCssVar("--text") || "#f5f5f7",
-    tooltipBg: light ? "rgba(255, 255, 255, 0.95)" : "rgba(28, 28, 30, 0.95)",
-    tooltipText: light ? "#1c1c1e" : "#f5f5f7",
-    tooltipBorder: light ? "rgba(0, 0, 0, 0.1)" : "rgba(255, 255, 255, 0.1)",
-  };
-}
-
-function buildRealtimeTooltip(palette) {
+function buildRealtimeTooltip() {
+  const tip = tooltipColors();
   return {
     enabled: true,
-    backgroundColor: palette.tooltipBg,
-    titleColor: palette.tooltipText,
-    bodyColor: palette.tooltipText,
-    borderColor: palette.tooltipBorder,
+    backgroundColor: tip.bg,
+    titleColor: tip.text,
+    bodyColor: tip.text,
+    borderColor: tip.border,
     borderWidth: 1,
     cornerRadius: 8,
     padding: 12,
@@ -92,13 +84,13 @@ function makeSpeedFill(color) {
   };
 }
 
-function buildRealtimeDatasets(palette) {
+function buildRealtimeDatasets(pal) {
   return [
     {
       label: "上传",
       data: realtimeTxSeries,
-      borderColor: palette.up,
-      backgroundColor: makeSpeedFill(palette.up),
+      borderColor: pal.up,
+      backgroundColor: makeSpeedFill(pal.up),
       borderWidth: 2,
       borderJoinStyle: "round",
       borderCapStyle: "round",
@@ -110,8 +102,8 @@ function buildRealtimeDatasets(palette) {
     {
       label: "下载",
       data: realtimeRxSeries,
-      borderColor: palette.down,
-      backgroundColor: makeSpeedFill(palette.down),
+      borderColor: pal.down,
+      backgroundColor: makeSpeedFill(pal.down),
       borderWidth: 2,
       borderJoinStyle: "round",
       borderCapStyle: "round",
@@ -134,14 +126,14 @@ function applyRealtimeTicks(scale) {
 function initRealtimeChart() {
   const canvas = $("realtime-chart");
   if (!canvas) return;
-  const palette = getRealtimePalette();
+  const pal = palette();
   const ctx = /** @type {HTMLCanvasElement} */ (canvas).getContext("2d");
 
   realtimeChart = new Chart(ctx, {
     type: "line",
     data: {
       labels: realtimeLabels,
-      datasets: buildRealtimeDatasets(palette),
+      datasets: buildRealtimeDatasets(pal),
     },
     options: {
       responsive: true,
@@ -155,13 +147,13 @@ function initRealtimeChart() {
           position: "bottom",
           align: "center",
           labels: {
-            color: palette.muted,
+            color: pal.muted,
             usePointStyle: true,
             pointStyle: "line",
             boxWidth: 28,
           },
         },
-        tooltip: buildRealtimeTooltip(palette),
+        tooltip: buildRealtimeTooltip(),
       },
       scales: {
         x: {
@@ -176,9 +168,9 @@ function initRealtimeChart() {
           max: realtimeScale.maxBytes,
           position: "right",
           grace: "5%",
-          grid: { color: palette.grid },
+          grid: { color: pal.grid },
           ticks: {
-            color: palette.muted,
+            color: pal.muted,
             padding: 12,
             callback: (value) => formatAxisSpeed(value),
           },
@@ -195,23 +187,23 @@ function initRealtimeChart() {
 
 function applyRealtimeTheme() {
   if (!realtimeChart) return;
-  const palette = getRealtimePalette();
+  const pal = palette();
   const datasets = realtimeChart.data.datasets;
   if (datasets[0]) {
-    datasets[0].borderColor = palette.up;
-    datasets[0].backgroundColor = makeSpeedFill(palette.up);
+    datasets[0].borderColor = pal.up;
+    datasets[0].backgroundColor = makeSpeedFill(pal.up);
   }
   if (datasets[1]) {
-    datasets[1].borderColor = palette.down;
-    datasets[1].backgroundColor = makeSpeedFill(palette.down);
+    datasets[1].borderColor = pal.down;
+    datasets[1].backgroundColor = makeSpeedFill(pal.down);
   }
-  realtimeChart.options.scales.x.ticks.color = palette.muted;
-  realtimeChart.options.scales.y.ticks.color = palette.muted;
-  realtimeChart.options.scales.y.grid.color = palette.grid;
+  realtimeChart.options.scales.x.ticks.color = pal.muted;
+  realtimeChart.options.scales.y.ticks.color = pal.muted;
+  realtimeChart.options.scales.y.grid.color = pal.grid;
   if (realtimeChart.options.plugins?.legend?.labels) {
-    realtimeChart.options.plugins.legend.labels.color = palette.muted;
+    realtimeChart.options.plugins.legend.labels.color = pal.muted;
   }
-  realtimeChart.options.plugins.tooltip = buildRealtimeTooltip(palette);
+  realtimeChart.options.plugins.tooltip = buildRealtimeTooltip();
   realtimeChart.update("none");
 }
 

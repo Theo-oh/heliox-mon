@@ -8,7 +8,13 @@ import {
   formatPercent,
 } from "../core/format.js";
 import { getJSON, logFetchError } from "../core/http.js";
-import { getCssVar, isLight, onThemeChange } from "../core/theme.js";
+import {
+  hexToRgba,
+  isLight,
+  onThemeChange,
+  palette,
+  tooltipColors,
+} from "../core/theme.js";
 import { echarts } from "../core/vendor.js";
 
 /** @type {any} */
@@ -19,15 +25,19 @@ let latencyRange = null;
 let latencyStatsRaf = null;
 let latencyLossSeries = [];
 const latencyLossThreshold = 1.0;
-const latencyColors = [
-  { border: "#0A84FF", bg: "rgba(10, 132, 255, 0.16)" }, // Blue
-  { border: "#30D158", bg: "rgba(48, 209, 88, 0.16)" }, // Green
-  { border: "#FF9F0A", bg: "rgba(255, 159, 10, 0.16)" }, // Orange
-  { border: "#BF5AF2", bg: "rgba(191, 90, 242, 0.16)" }, // Purple
-  { border: "#64D2FF", bg: "rgba(100, 210, 255, 0.16)" }, // Cyan
-  { border: "#FF375F", bg: "rgba(255, 55, 95, 0.16)" }, // Pink
-];
-const latencyLossColor = { border: "#FF453A", bg: "rgba(255, 69, 58, 0.12)" };
+
+// 多目标的分类色板。首色是设计稿指定的延迟序列色（--accent-blue），
+// 其余为增补目标准备；末两色不在语义 token 里，属纯分类用途。
+// ⚠️ 必须在渲染时调用，不能在模块顶层求值——主题切换后要拿到新色。
+function latencyPalette() {
+  const pal = palette();
+  return [pal.info, pal.ok, pal.warn, pal.purple, "#64d2ff", "#ff375f"];
+}
+
+/** @param {string[]} colors @param {number} idx */
+function targetColor(colors, idx) {
+  return colors[idx % colors.length];
+}
 
 // 延迟查询参数
 let latencyStartDate = null;
@@ -222,6 +232,7 @@ function renderFilterCheckboxes(targets) {
   const container = $("target-filters");
   if (!container) return;
 
+  const colors = latencyPalette();
   container.innerHTML = "";
   targets.forEach((t, idx) => {
     // 默认全选
@@ -231,7 +242,7 @@ function renderFilterCheckboxes(targets) {
     label.className = "filter-pill";
     const dot = document.createElement("span");
     dot.className = "latency-target-dot";
-    dot.style.background = latencyColors[idx % latencyColors.length].border;
+    dot.style.background = targetColor(colors, idx);
 
     const input = document.createElement("input");
     input.type = "checkbox";
@@ -275,25 +286,21 @@ function renderLatencyChart() {
     });
   }
 
-  const textColor = getCssVar("--text");
-  const mutedColor = getCssVar("--muted");
-  const borderColor = getCssVar("--card-border");
-  const tooltipBg = getCssVar("--card-bg");
+  const pal = palette();
+  const colors = latencyPalette();
+  const tip = tooltipColors();
+  const textColor = pal.text;
+  const mutedColor = pal.muted;
+  const borderColor = pal.border;
   const light = isLight();
   const gridLine = light ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.06)";
   const zoomBg = light ? "rgba(0, 0, 0, 0.08)" : "rgba(0, 0, 0, 0.2)";
-  const zoomFill = light
-    ? "rgba(10, 132, 255, 0.25)"
-    : "rgba(10, 132, 255, 0.2)";
-  const avgLabelBg = light
-    ? "rgba(100, 116, 139, 0.45)"
-    : "rgba(100, 116, 139, 0.5)"; // 蓝灰色 - 平均值
-  const maxLabelBg = light
-    ? "rgba(220, 104, 104, 0.45)"
-    : "rgba(220, 104, 104, 0.5)"; // 柔和红 - 最高值
-  const minLabelBg = light
-    ? "rgba(104, 180, 140, 0.45)"
-    : "rgba(104, 180, 140, 0.5)"; // 柔和绿 - 最低值
+  const zoomFill = hexToRgba(pal.info, light ? 0.25 : 0.2);
+  // markPoint 标签底色：均值中性、最高走危险色、最低走健康色，各自压到半透明避免抢戏
+  const labelAlpha = light ? 0.45 : 0.5;
+  const avgLabelBg = hexToRgba(pal.muted, labelAlpha);
+  const maxLabelBg = hexToRgba(pal.danger, labelAlpha);
+  const minLabelBg = hexToRgba(pal.ok, labelAlpha);
 
   // 无数据缺口判定：间隔超过「一个粒度桶 + 90s 余量」才算停采。
   // 余量用于吸收采集节奏漂移导致的单桶假空洞（采样未对齐整分钟，偶尔某分钟落 0
@@ -305,7 +312,7 @@ function renderLatencyChart() {
   const series = latencyData.targets
     .map((target, idx) => {
       if (!activeTags.has(target.tag)) return null;
-      const color = latencyColors[idx % latencyColors.length];
+      const color = targetColor(colors, idx);
       const points = target.points || [];
       // 缺口处插入 null 点让折线断开，避免直线跨越无数据时段造成误导
       const data = [];
@@ -330,11 +337,11 @@ function renderLatencyChart() {
         smooth: true,
         showSymbol: false,
         data,
-        itemStyle: { color: color.border },
-        lineStyle: { color: color.border, width: 2 },
+        itemStyle: { color },
+        lineStyle: { color, width: 2 },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: color.bg.replace("0.16", "0.28") },
+            { offset: 0, color: hexToRgba(color, 0.28) },
             { offset: 1, color: "rgba(0,0,0,0)" },
           ]),
         },
@@ -345,7 +352,7 @@ function renderLatencyChart() {
                 symbol: "none",
                 lineStyle: {
                   type: "dashed",
-                  color: color.border,
+                  color,
                   opacity: 0.65,
                 },
                 label: {
@@ -363,7 +370,7 @@ function renderLatencyChart() {
           ? {
               symbol: "circle",
               symbolSize: 6,
-              itemStyle: { color: color.border, opacity: 0.85 },
+              itemStyle: { color, opacity: 0.85 },
               label: {
                 color: textColor,
                 fontSize: 11,
@@ -396,7 +403,7 @@ function renderLatencyChart() {
     series[0].markArea = {
       silent: true,
       itemStyle: {
-        color: light ? "rgba(100, 116, 139, 0.10)" : "rgba(148, 163, 184, 0.08)",
+        color: hexToRgba(pal.muted, 0.1),
       },
       label: {
         show: true,
@@ -419,13 +426,13 @@ function renderLatencyChart() {
       data: latencyLossSeries.map((p) =>
         p.gap ? { value: [p.ts, null], isGap: true } : [p.ts, p.loss],
       ),
-      itemStyle: { color: latencyLossColor.border },
-      lineStyle: { color: latencyLossColor.border, width: 1.5 },
-      areaStyle: { color: latencyLossColor.bg },
+      itemStyle: { color: pal.danger },
+      lineStyle: { color: pal.danger, width: 1.5 },
+      areaStyle: { color: hexToRgba(pal.danger, 0.12) },
       emphasis: { focus: "series" },
       markArea: {
         silent: true,
-        itemStyle: { color: "rgba(255, 99, 71, 0.08)" },
+        itemStyle: { color: hexToRgba(pal.warn, 0.07) },
         data: buildLossMarkAreas(latencyLossSeries, latencyLossThreshold),
       },
     });
@@ -440,7 +447,7 @@ function renderLatencyChart() {
     grid: { left: 50, right: 24, top: 24, bottom: 54, containLabel: true },
     tooltip: {
       trigger: "axis",
-      backgroundColor: tooltipBg,
+      backgroundColor: tip.bg,
       borderColor: borderColor,
       textStyle: { color: textColor },
       axisPointer: { type: "cross", label: { color: textColor } },
@@ -505,7 +512,7 @@ function renderLatencyChart() {
         fillerColor: zoomFill,
         handleSize: "120%",
         handleStyle: {
-          color: "#0a84ff",
+          color: pal.info,
           borderColor: borderColor,
         },
         textStyle: { color: mutedColor },
@@ -547,6 +554,7 @@ function renderLatencyStats() {
     latencyData?.granularity,
   );
 
+  const colors = latencyPalette();
   const targetCards = latencyData.targets
     .filter((t) => activeTags.has(t.tag))
     .map((t, idx) => {
@@ -560,7 +568,7 @@ function renderLatencyStats() {
       totalSent += stats.sent;
       totalLost += stats.lost;
 
-      const color = latencyColors[idx % latencyColors.length].border;
+      const color = targetColor(colors, idx);
       return `
         <div class="latency-target-card">
           <div class="latency-target-header">

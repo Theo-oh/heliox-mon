@@ -38,6 +38,39 @@ export function hexToRgba(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+/**
+ * 全站语义色的唯一出口。各模块不再自己 getCssVar，也不再散写十六进制字面量。
+ * ⚠️ 必须在 render 函数体内调用，不能在模块顶层求值——那样主题切换后拿到的是旧色。
+ */
+export function palette() {
+  return {
+    up: getCssVar("--speed-up") || "#b66cff", // 上行 / 上传 / TX
+    down: getCssVar("--speed-down") || "#4dd4ff", // 下行 / 下载 / RX
+    ok: getCssVar("--accent-green") || "#30d158",
+    warn: getCssVar("--accent-orange") || "#ff9f0a",
+    danger: getCssVar("--accent-red") || "#ff453a",
+    info: getCssVar("--accent-blue") || "#0a84ff",
+    purple: getCssVar("--accent-purple") || "#bf5af2",
+    text: getCssVar("--text") || "#f5f5f7",
+    muted: getCssVar("--muted") || "#86868b",
+    axis: getCssVar("--axis-faint") || "#5c5c61",
+    grid: getCssVar("--speed-grid") || "rgba(255, 255, 255, 0.08)",
+    card: getCssVar("--card-bg"),
+    border: getCssVar("--card-border"),
+  };
+}
+
+/** Chart.js 与 ECharts 的 tooltip 配色一致，收在一处避免两边各写一份 */
+export function tooltipColors() {
+  const light = isLight();
+  return {
+    bg: light ? "rgba(255, 255, 255, 0.95)" : "rgba(28, 28, 30, 0.95)",
+    text: light ? "#1c1c1e" : "#f5f5f7",
+    border: light ? "rgba(0, 0, 0, 0.1)" : "rgba(255, 255, 255, 0.1)",
+    footer: light ? "#86868b" : "#8E8E93",
+  };
+}
+
 /** @param {string} theme */
 export function applyTheme(theme) {
   const light = theme === "light";
