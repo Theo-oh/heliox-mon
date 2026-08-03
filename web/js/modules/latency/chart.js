@@ -191,9 +191,10 @@ function buildSeries(model, opts, theme) {
     };
   });
 
+  // 多带的 lost/sent 两维只供 tooltip 读，encode 里没有它们，不参与渲染
   const lossBars = model.lossSeries
     .filter((p) => p.loss !== null && p.loss > 0)
-    .map((p) => [p.ts, p.loss]);
+    .map((p) => [p.ts, p.loss, p.lost, p.sent]);
   if (opts.showLoss && lossBars.length) {
     series.push(lossBandSeries(lossBars, model.stepMs, pal));
   }
@@ -365,19 +366,31 @@ function tooltipHtml(params) {
     .map((p) => {
       const value = Array.isArray(p.value) ? p.value[1] : p.value;
       const isGap = p.data && !Array.isArray(p.data) && p.data.isGap;
+      // 延迟为 null 说明这个桶一个包都没回来。此前这行写「丢包」，和下面的丢包
+      // 序列同名，一条 tooltip 里三个「丢包」反而看不出各自在说什么
       const text =
         value === null || value === undefined
           ? isGap
             ? "无数据"
-            : "丢包"
+            : "无回包"
           : p.seriesName === "丢包"
-            ? `${Number(value).toFixed(1)}%`
+            ? lossText(p)
             : `${Number(value).toFixed(1)} ms`;
       const dot = `<span style="display:inline-block;margin-right:6px;width:8px;height:8px;border-radius:50%;background:${p.color}"></span>`;
       return `${dot}${escapeHtml(p.seriesName)}: ${text}`;
     })
     .join("<br/>");
   return `${time}<br/>${rows}`;
+}
+
+// 丢包率后面缀上原始计数：1 分钟粒度的 40% 不过是 5 个包丢了 2 个，10 分钟粒度
+// 的 40% 背后是几十个包。没有分母就无从判断这个百分比值不值得当真
+function lossText(p) {
+  const pct = `${Number(p.value[1]).toFixed(1)}%`;
+  const lost = p.value[2];
+  const sent = p.value[3];
+  if (!Number.isFinite(sent) || sent <= 0) return pct;
+  return `${pct} · ${lost}/${sent} 包`;
 }
 
 // setOption(…, true) 会清空 series 但不会解绑事件，所以只绑一次；
