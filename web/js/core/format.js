@@ -77,17 +77,24 @@ export function getSpeedScale(maxBytesPerSec) {
   return { unit: "B/s", scale: 1, maxBytes: Math.round(max) };
 }
 
-/** @param {number} value */
+// 每一档都能被 4 整除成整数，配合调用方 `interval: yMax/4` 的四等分刻度才不会
+// 出现小数标签（1.2→0.3、2.4→0.6、3→0.75…）
+const NICE_STEPS = [1, 1.2, 1.6, 2, 2.4, 3, 4, 5, 6, 8, 10];
+
+/**
+ * 向上取整到「整齐」的刻度值。档位曾经只有 1/2/5：一个数量级三档太粗，316 会被
+ * 一路抬到 500——调用方本意是留 15% 顶部余量，实际留了 58%，图上一多半是空白。
+ * @param {number} value
+ */
 export function niceCeil(value) {
   if (!value || value <= 0) return 1;
   const exp = Math.floor(Math.log10(value));
   const base = Math.pow(10, exp);
   const f = value / base;
-  let nf = 10;
-  if (f <= 1) nf = 1;
-  else if (f <= 2) nf = 2;
-  else if (f <= 5) nf = 5;
-  return nf * base;
+  const nf = NICE_STEPS.find((s) => f <= s) ?? 10;
+  // 1.2 * 100 在 IEEE754 下是 120.00000000000001，直接返回会漏成轴标签上的一串
+  // 小数，也会让 trend.js 靠 `value === axisMax` 认顶格刻度的判断失效
+  return Number((nf * base).toPrecision(12));
 }
 
 /** @param {number} value */
