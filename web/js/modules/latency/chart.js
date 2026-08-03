@@ -10,6 +10,8 @@ import { latencyPalette, targetColor } from "./palette.js";
 /** @type {any} */
 let chart = null;
 let zoomBound = false;
+/** 供 rescaleAxis 在缩放回调里重建左轴用，每次 render 刷新 @type {any} */
+let axisCtx = null;
 
 // 丢包只占图高的下 1/4：100% 丢包若顶到天花板，一分钟的抖动就把延迟曲线
 // 拦腰切断，视觉权重远超它的实际信息量。右轴量程放到 4 倍，标签只标到 100%
@@ -39,8 +41,10 @@ export function renderLatencyChart(model, opts) {
   const gridLine = light ? "rgba(0, 0, 0, 0.06)" : "rgba(255, 255, 255, 0.05)";
   const labelBg = light ? "rgba(255, 255, 255, 0.92)" : "rgba(20, 20, 22, 0.9)";
 
-  const yMax = latencyAxisMax(model.series);
+  const yMax = latencyAxisMax(model.series, model.timeRange, opts.zoom);
   const series = buildSeries(model, opts, { pal, colors, light, labelBg });
+  // 缩放时要就地重算左轴，那一刻拿不到 render 的入参，只能在这里留一份
+  axisCtx = { model, pal, gridLine };
 
   const option = {
     animation: false,
@@ -83,23 +87,7 @@ export function renderLatencyChart(model, opts) {
       splitLine: { show: false },
     },
     yAxis: [
-      {
-        type: "value",
-        min: 0,
-        max: yMax,
-        interval: yMax / 4,
-        axisLine: { show: false },
-        axisTick: { show: false },
-        // 单位只挂在顶格刻度上（设计稿的「360 ms / 270 / 180…」）。轴 max 是自己
-        // 算的，所以这里能确定地认出顶格，不必猜 ECharts 会分几段
-        axisLabel: {
-          color: pal.axis,
-          fontSize: 10,
-          margin: 8,
-          formatter: (v) => (v >= yMax ? `${v} ms` : `${v}`),
-        },
-        splitLine: { lineStyle: { color: gridLine } },
-      },
+      latencyYAxis(yMax, pal, gridLine),
       {
         type: "value",
         show: opts.showLoss,
@@ -310,7 +298,9 @@ function buildMarkArea(model, pal, labelBg) {
     areas.push([
       {
         ...from,
-        itemStyle: { color: hexToRgba(pal.danger, 0.1) },
+        // 满幅色块在 24h 全景下是「找得到这一分钟」的唯一线索，所以保留；但同一层
+        // 淡红 2px 宽时是标记、150px 宽时就是一堵墙，浓度必须压到底色级别
+        itemStyle: { color: hexToRgba(pal.danger, 0.06) },
         label: {
           show: Boolean(from.name),
           position: "insideTop",
@@ -329,16 +319,58 @@ function buildMarkArea(model, pal, labelBg) {
   return { silent: true, data: areas };
 }
 
-/** 左轴上限取「留 15% 顶部余量」后的整齐值，好让顶格刻度带单位也是整数 */
-function latencyAxisMax(series) {
+function latencyYAxis(yMax, pal, gridLine) {
+  return {
+    type: "value",
+    min: 0,
+    max: yMax,
+    interval: yMax / 4,
+    axisLine: { show: false },
+    axisTick: { show: false },
+    // 单位只挂在顶格刻度上（设计稿的「360 ms / 270 / 180…」）。轴 max 是自己
+    // 算的，所以这里能确定地认出顶格，不必猜 ECharts 会分几段
+    axisLabel: {
+      color: pal.axis,
+      fontSize: 10,
+      margin: 8,
+      formatter: (v) => (v >= yMax ? `${v} ms` : `${v}`),
+    },
+    splitLine: { lineStyle: { color: gridLine } },
+  };
+}
+
+/**
+ * 左轴上限取「留 15% 顶部余量」后的整齐值，好让顶格刻度带单位也是整数。
+ * 只统计缩放窗口内的点：轴按整段数据定死时，白天一个 400ms 的尖峰会让夜里
+ * 那段 160ms 的曲线永远被压在图底三分之一，放大看细节这件事就白做了。
+ */
+function latencyAxisMax(series, timeRange, zoom) {
+  const win = zoomWindow(timeRange, zoom);
   let max = 0;
   series.forEach((s) =>
     s.points.forEach((p) => {
+      const ts = p.ts * 1000;
+      if (win && (ts < win.start || ts > win.end)) return;
       if (p.rtt_ms > max) max = p.rtt_ms;
     }),
   );
+  // 窗口里一个有效点都没有（整段全丢）时给个兜底量程，否则 interval 会算成 0
   if (max <= 0) return 100;
   return niceCeil(max * 1.15);
+}
+
+/** dataZoom 的 start/end 是相对数据全长的百分比，与 index.js 的 zoomRange 同源 */
+function zoomWindow(timeRange, zoom) {
+  if (!timeRange || !zoom) return null;
+  const span = timeRange.max - timeRange.min;
+  if (span <= 0) return null;
+  const start = zoom.start ?? 0;
+  const end = zoom.end ?? 100;
+  if (start <= 0 && end >= 100) return null;
+  return {
+    start: timeRange.min + (span * start) / 100,
+    end: timeRange.min + (span * end) / 100,
+  };
 }
 
 function averageRtt(points) {
@@ -404,8 +436,19 @@ function bindZoom(onZoom) {
   chart.on("dataZoom", (evt) => {
     const batch = evt?.batch?.[0] ?? evt;
     if (typeof batch?.start === "number" && typeof batch?.end === "number") {
-      zoomHandler?.({ start: batch.start, end: batch.end });
+      const zoom = { start: batch.start, end: batch.end };
+      rescaleAxis(zoom);
+      zoomHandler?.(zoom);
     }
   });
   zoomBound = true;
+}
+
+// 缩放时只 merge 左轴，不走整图 setOption：滚轮会连续触发，重建整张图既卡顿，
+// 又要和正在进行的手势抢 dataZoom 状态。yAxis 只给一项，右轴按下标保持不变
+function rescaleAxis(zoom) {
+  if (!chart || !axisCtx) return;
+  const { model, pal, gridLine } = axisCtx;
+  const yMax = latencyAxisMax(model.series, model.timeRange, zoom);
+  chart.setOption({ yAxis: [latencyYAxis(yMax, pal, gridLine)] });
 }
