@@ -4,7 +4,6 @@ package api
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"database/sql"
@@ -40,8 +39,7 @@ type Server struct {
 	realtimeProvider RealtimeDataProvider
 	systemProvider   SystemDataProvider
 	notifier         Notifier
-	sessions         sync.Map // token -> expireTime(int64)
-	stopCleanup      chan struct{}
+	sessionSecret    []byte // 会话 token 的 HMAC 签名密钥，持久化在库里（见 session.go）
 	loginPage        []byte // 登录页按配置渲染一次（Turnstile 有无），避免每个未授权请求都重建
 
 	// iptables 规则检测结果缓存（避免每个请求都 fork iptables）
@@ -68,14 +66,19 @@ type Notifier interface {
 
 // NewServer 创建服务器。realtimeProvider 与 systemProvider 实际都由采集器实现，
 // 分成两个接口是为了让各 handler 的依赖显式可见。
-func NewServer(cfg *config.Config, db *storage.DB, realtimeProvider RealtimeDataProvider, systemProvider SystemDataProvider, notifier Notifier) *Server {
+func NewServer(cfg *config.Config, db *storage.DB, realtimeProvider RealtimeDataProvider, systemProvider SystemDataProvider, notifier Notifier) (*Server, error) {
+	secret, err := loadSessionSecret(db)
+	if err != nil {
+		return nil, fmt.Errorf("初始化会话密钥失败: %w", err)
+	}
+
 	s := &Server{
 		cfg:              cfg,
 		db:               db,
 		realtimeProvider: realtimeProvider,
 		systemProvider:   systemProvider,
 		notifier:         notifier,
-		stopCleanup:      make(chan struct{}),
+		sessionSecret:    secret,
 		loginPage:        buildLoginPage(cfg),
 	}
 
@@ -114,19 +117,17 @@ func NewServer(cfg *config.Config, db *storage.DB, realtimeProvider RealtimeData
 		IdleTimeout:       60 * time.Second,
 	}
 
-	return s
+	return s, nil
 }
 
 // Start 启动服务器
 func (s *Server) Start() error {
 	log.Printf("HTTP 服务启动: %s", s.cfg.ListenAddr)
-	go s.cleanupSessions()
 	return s.server.ListenAndServe()
 }
 
 // Stop 停止服务器
 func (s *Server) Stop() {
-	close(s.stopCleanup)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := s.server.Shutdown(ctx); err != nil {
@@ -151,32 +152,6 @@ func writeJSONStatus(w http.ResponseWriter, status int, v interface{}) {
 		log.Printf("写出 JSON 响应失败: %v", err)
 	}
 }
-
-// cleanupSessions 定期清理过期会话，避免长期未访问的 token 永久滞留内存
-func (s *Server) cleanupSessions() {
-	ticker := time.NewTicker(1 * time.Hour)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-s.stopCleanup:
-			return
-		case <-ticker.C:
-			now := time.Now().Unix()
-			s.sessions.Range(func(key, value interface{}) bool {
-				if expire, ok := value.(int64); ok && now > expire {
-					s.sessions.Delete(key)
-				}
-				return true
-			})
-		}
-	}
-}
-
-const (
-	authCookieName = "heliox_auth"
-	authSessionTTL = 30 * 24 * time.Hour // 30 天
-	authTokenBytes = 32
-)
 
 // assetETags 内嵌静态资源的内容哈希（含首尾引号，符合 ETag 语法）。
 // 资源在编译期就固定了，启动时算一次即可；有强校验器后浏览器的重验证才能命中 304。
@@ -250,10 +225,16 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// 2. Cookie 验证
-		cookie, err := r.Cookie(authCookieName)
-		if err == nil && s.validateToken(cookie.Value) {
-			next(w, r)
-			return
+		if cookie, err := r.Cookie(authCookieName); err == nil {
+			if exp, ok := s.validateToken(cookie.Value); ok {
+				// 滑动续期：临近过期就重签，持续使用的浏览器不会在第 30 天被打回登录页。
+				// 必须赶在 next 写出响应体之前设置 header，SSE 长连接同理。
+				if time.Until(time.Unix(exp, 0)) < sessionRenewBefore {
+					setSessionCookie(w, r, s.issueToken(time.Now()))
+				}
+				next(w, r)
+				return
+			}
 		}
 
 		// 3. Basic Auth 验证 (API兼容性/旧脚本)
@@ -305,9 +286,11 @@ func (s *Server) handleLoginView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 如果已登录，跳转首页
-	if cookie, err := r.Cookie(authCookieName); err == nil && s.validateToken(cookie.Value) {
-		http.Redirect(w, r, "/", http.StatusFound)
-		return
+	if cookie, err := r.Cookie(authCookieName); err == nil {
+		if _, ok := s.validateToken(cookie.Value); ok {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
 	}
 
 	if s.loginPage == nil {
@@ -357,20 +340,7 @@ func (s *Server) handleLoginAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := s.generateToken()
-	if token == "" {
-		http.Error(w, "Internal error", http.StatusInternalServerError)
-		return
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     authCookieName,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   isHTTPS(r),
-		MaxAge:   int(authSessionTTL.Seconds()),
-		SameSite: http.SameSiteLaxMode,
-	})
+	setSessionCookie(w, r, s.issueToken(time.Now()))
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -388,35 +358,6 @@ func (s *Server) checkCredentials(user, pass string) bool {
 	userOK := subtle.ConstantTimeCompare([]byte(user), []byte(s.cfg.Username)) == 1
 	passOK := subtle.ConstantTimeCompare([]byte(pass), []byte(s.cfg.Password)) == 1
 	return userOK && passOK
-}
-
-// generateToken 生成加密安全的随机 session token
-func (s *Server) generateToken() string {
-	b := make([]byte, authTokenBytes)
-	if _, err := rand.Read(b); err != nil {
-		log.Printf("生成 session token 失败: %v", err)
-		return ""
-	}
-	token := hex.EncodeToString(b)
-	s.sessions.Store(token, time.Now().Add(authSessionTTL).Unix())
-	return token
-}
-
-// validateToken 验证 session token 是否有效
-func (s *Server) validateToken(token string) bool {
-	if token == "" {
-		return false
-	}
-	v, ok := s.sessions.Load(token)
-	if !ok {
-		return false
-	}
-	expire := v.(int64)
-	if time.Now().Unix() > expire {
-		s.sessions.Delete(token)
-		return false
-	}
-	return true
 }
 
 // verifyTurnstile 验证 Turnstile Token

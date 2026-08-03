@@ -4,6 +4,7 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -50,7 +51,21 @@ func NewDB(dataDir string) (*DB, error) {
 		return nil, fmt.Errorf("数据库迁移失败: %w", err)
 	}
 
+	// 库里存了会话签名密钥，同组/其他用户不该读得到；
+	// WAL 与 shm 是 SQLite 自己按 umask 创建的，一并收紧
+	restrictDBPerm(dbPath)
+
 	return &DB{db}, nil
+}
+
+// restrictDBPerm 把数据库及其 WAL/shm 文件权限收紧到 0600。
+// 失败只告警不阻断：权限没收紧不影响功能，且部分文件系统（如挂载的网络盘）本就不支持。
+func restrictDBPerm(dbPath string) {
+	for _, p := range []string{dbPath, dbPath + "-wal", dbPath + "-shm"} {
+		if err := os.Chmod(p, 0600); err != nil && !os.IsNotExist(err) {
+			log.Printf("收紧数据库文件权限失败 [%s]: %v", p, err)
+		}
+	}
 }
 
 // migrate 执行数据库迁移

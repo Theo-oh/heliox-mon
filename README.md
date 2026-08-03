@@ -160,7 +160,8 @@ done
 
 ## 🔐 认证与安全
 
-- **登录会话**：Web 登录使用加密随机 token + HttpOnly Cookie，过期会话定时清理。
+- **登录会话**：Web 登录签发 HMAC-SHA256 签名的 token，存 HttpOnly Cookie，有效期 30 天且会滑动续期。签名密钥随机生成后存在数据库里，**服务重启或升级不会让已登录的浏览器掉线**。
+- **数据库权限**：数据库文件（含 WAL）权限为 0600，仅运行用户可读。
 - **Basic Auth 回退**：`/api/*` 同时接受 Basic Auth，便于脚本与监控集成。
 - **常量时间比较**：用户名/密码校验使用 `crypto/subtle`，防时序攻击。
 - **Cloudflare Turnstile**（可选）：设置 `HELIOX_TURNSTILE_SECRET` 后登录需通过人机验证，校验失败按「拒绝」处理（fail-secure）。

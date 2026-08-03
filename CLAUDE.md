@@ -58,7 +58,7 @@ HELIOX_MON_PASS=test go run ./cmd/heliox-mon
 - **HTTP 响应统一用 `writeJSON` 辅助函数**（`internal/api/router.go`）输出 JSON；写出失败记日志而非静默忽略。
 - **SQLite 用纯 Go 驱动 `modernc.org/sqlite`（无需 CGO）**，WAL 模式；表结构与迁移集中在 `internal/storage/sqlite.go` 的 `migrate()`，启动时执行。
 - **配置全部来自环境变量**（`internal/config/config.go`），无配置文件；唯一例外是读取 heliox 的 `.env` 以获取 `SNELL_PORT`/`VLESS_PORT`。`HELIOX_MON_PASS` 必填，缺失则启动失败。
-- **认证**：Web 用随机 token + HttpOnly Cookie 会话，`/api/*` 同时兼容 Basic Auth；可选 Cloudflare Turnstile。
+- **认证**：Web 用 HMAC 签名的无状态 token + HttpOnly Cookie 会话（`internal/api/session.go`），`/api/*` 同时兼容 Basic Auth；可选 Cloudflare Turnstile。**签名密钥持久化在 `config` 表**，不要改回进程内存里的 session map——那样每次更新/重启都会把所有浏览器踢回登录页；也不要改成从 `HELIOX_MON_PASS` 派生密钥，那等于让持有合法 token 的人可以离线爆破管理员密码。
 - **数据流**：`collector` 每秒/每分钟采集 -> 写快照表 -> 每分钟降采样为日汇总(`*_daily`)；`api` 读库返回 JSON。**流量与系统资源两类实时数据不落库**，只在采集器内存里维护最新快照（`RealtimeSnapshot` / `SystemSnapshot`），都经 SSE (`/api/traffic/realtime`) 推送：默认消息是每秒的网速，具名事件 `system` 是系统资源（每秒检查 `SystemSnapshot.Ts` 是否变化，变了才推——**不要退回成独立的 5 秒 ticker**，那与采集周期不同相位，会让页面数据平白多陈旧最多 5 秒）；`/api/system` 保留为同一份快照的一次性拉取入口。
 - **通知（Telegram）** 集中在 `internal/notifier`：阈值流量预警（`alert_records` 表做 24h 冷却）、每日流量报告（`SendDailyReport`，采集器 `runDailyReport` 用定时器对齐到 `DAILY_REPORT_HOUR` 整点、重启不重发）、页面测试发送（`SendTest` ← `POST /api/notify/test`）。三类消息都带 `[SERVER_NAME]` 前缀以区分多机。新增相关配置项时同步更新 `.env.example` 与 README 环境变量表。
 
