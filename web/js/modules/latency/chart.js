@@ -11,6 +11,10 @@ import { latencyPalette, targetColor } from "./palette.js";
 let chart = null;
 let zoomBound = false;
 
+// 丢包只占图高的下 1/4：100% 丢包若顶到天花板，一分钟的抖动就把延迟曲线
+// 拦腰切断，视觉权重远超它的实际信息量。右轴量程放到 4 倍，标签只标到 100%
+const LOSS_AXIS_MAX = 400;
+
 /**
  * @param {any} model buildLatencyModel 的产物
  * @param {{showLoss: boolean, showMax: boolean, showAvg: boolean,
@@ -100,15 +104,16 @@ export function renderLatencyChart(model, opts) {
         type: "value",
         show: opts.showLoss,
         min: 0,
-        max: 100,
-        interval: 25,
+        max: LOSS_AXIS_MAX,
+        interval: 50,
         axisLine: { show: false },
         axisTick: { show: false },
+        // 量程 4 倍于实际值域，100% 以上是留白，不该标出来误导读数
         axisLabel: {
           color: pal.axis,
           fontSize: 10,
           margin: 8,
-          formatter: (v) => (v >= 100 ? "{hot|100%}" : `${v}`),
+          formatter: (v) => (v > 100 ? "" : v >= 100 ? "{hot|100%}" : `${v}`),
           rich: { hot: { color: hexToRgba(pal.danger, 0.7), fontSize: 10 } },
         },
         splitLine: { show: false },
@@ -190,18 +195,42 @@ function buildSeries(model, opts, theme) {
     .filter((p) => p.loss !== null && p.loss > 0)
     .map((p) => [p.ts, p.loss]);
   if (opts.showLoss && lossBars.length) {
-    series.push({
-      name: "丢包",
-      type: "bar",
-      yAxisIndex: 1,
-      barWidth: 2,
-      barMinHeight: 1,
-      large: true,
-      data: lossBars,
-      itemStyle: { color: pal.danger, opacity: 0.7 },
-    });
+    series.push(lossBandSeries(lossBars, model.stepMs, pal));
   }
   return series;
+}
+
+// 丢包画成「一个粒度桶那么宽的贴底色块」，而不是固定像素宽的柱子：柱宽不随
+// 缩放变化时，放大后一分钟的丢包看起来像一条把图切断的分隔线，而不是一段区间。
+// custom 直接按时间坐标算宽度，桶有多宽色块就有多宽。
+function lossBandSeries(data, stepMs, pal) {
+  return {
+    name: "丢包",
+    type: "custom",
+    yAxisIndex: 1,
+    z: 3,
+    data,
+    encode: { x: 0, y: 1 },
+    itemStyle: { color: pal.danger, opacity: 0.75 },
+    renderItem: (params, api) => {
+      const ts = api.value(0);
+      const top = api.coord([ts, api.value(1)]);
+      const base = api.coord([ts + stepMs, 0]);
+      const sys = params.coordSys;
+      const shape = echarts.graphic.clipRectByRect(
+        {
+          x: top[0],
+          y: top[1],
+          // 粒度桶窄于 1px 时（7 天视图）仍要看得见；留 1px 缝，避免连续丢包
+          // 糊成一整面红墙而看不出有几段
+          width: Math.max(2, base[0] - top[0] - 1),
+          height: base[1] - top[1],
+        },
+        { x: sys.x, y: sys.y, width: sys.width, height: sys.height },
+      );
+      return shape ? { type: "rect", shape, style: api.style() } : undefined;
+    },
+  };
 }
 
 // 末点小圆点标出「最新一次探测」；开了极值再叠加该目标的最高/最低点
@@ -274,16 +303,18 @@ function buildMarkArea(model, pal, labelBg) {
       to,
     ]);
   });
+  // 丢包用 danger 色而非 warn：100% 丢包时折线本来就断开，与灰色的「无数据」
+  // 缺口长得一模一样，只有颜色能说明「链路还在、但包全丢了」
   model.lossAreas.forEach(([from, to]) => {
     areas.push([
       {
         ...from,
-        itemStyle: { color: hexToRgba(pal.warn, 0.07) },
+        itemStyle: { color: hexToRgba(pal.danger, 0.1) },
         label: {
-          show: true,
+          show: Boolean(from.name),
           position: "insideTop",
           offset: [0, 20],
-          color: pal.warn,
+          color: pal.danger,
           backgroundColor: labelBg,
           padding: [2, 5],
           borderRadius: 4,

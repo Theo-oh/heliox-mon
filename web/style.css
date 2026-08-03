@@ -1614,9 +1614,11 @@ body.theme-light .date-range {
   height: 8px;
 }
 
+/* 图表里的丢包是贴底的桶宽色块，图例也得是块而不是线，否则读者会去图上找线 */
 .lat-legend-bar {
-  width: 8px;
-  height: 2px;
+  width: 9px;
+  height: 6px;
+  border-radius: 1px;
   background: var(--accent-red);
   opacity: 0.75;
 }

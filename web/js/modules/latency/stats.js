@@ -20,7 +20,7 @@ const STATUS_TEXT = { ok: "链路正常", warn: "链路劣化", down: "链路中
  * @param {any} model buildLatencyModel 的产物
  * @param {{start: number, end: number} | null} range 当前缩放窗口
  * @param {{rangeLabel: string, rangeText: string, showLoss: boolean,
- *          lossThreshold: number}} ctx
+ *          zoomed: boolean}} ctx
  */
 export function renderLatencyStats(model, range, ctx) {
   renderBanner(model, Date.now());
@@ -56,9 +56,13 @@ function renderBanner(model, now) {
   }
 
   setText("lat-loss-now", formatPercent(st.loss));
+  // 横幅的丢包取最近几个桶，指标条的丢包率取缩放窗口——同一张卡上两个「丢包」
+  // 数字差得很远时，不写明各自的窗口就只会被当成自相矛盾
+  const lossScope =
+    st.status === "down" ? "" : ` · 丢包近 ${RECENT_BUCKETS * model.granularity} 分钟`;
   setText(
     "lat-banner-meta",
-    `${st.status === "down" ? "探测失败" : formatAgo(st.ageMs)} · 粒度 ${model.granularity} 分钟`,
+    `${st.status === "down" ? "探测失败" : formatAgo(st.ageMs)} · 粒度 ${model.granularity} 分钟${lossScope}`,
   );
 }
 
@@ -129,7 +133,7 @@ function deriveLinkStatus(model, now) {
 function renderMetrics(model, range, ctx) {
   const agg = aggregate(model, range);
 
-  setText("lat-avg-label", `${ctx.rangeLabel} 平均`);
+  setText("lat-avg-label", ctx.zoomed ? "选区平均" : `${ctx.rangeLabel} 平均`);
   setText("lat-avg", formatNumber(agg.avg));
   setText("lat-p95", formatNumber(agg.p95));
   setText("lat-min", formatNumber(agg.min));
@@ -244,9 +248,12 @@ function renderLegend(model, ctx) {
   const loss = $("lat-legend-loss");
   if (loss) loss.hidden = !ctx.showLoss;
 
+  // 缩放后指标条只算窗口内的点，图例这行是唯一还写着完整查询范围的地方，
+  // 不点破就会被读成「这些数字是整段区间的」
+  const scope = ctx.zoomed ? " · 指标取自当前选区" : "";
   setText(
     "lat-legend-meta",
-    `采样 ${model.sampleCount} 点 · ${model.granularity} 分钟粒度 · ${ctx.rangeText}`,
+    `采样 ${model.sampleCount} 点 · ${model.granularity} 分钟粒度 · ${ctx.rangeText}${scope}`,
   );
 }
 

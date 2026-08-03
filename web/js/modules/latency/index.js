@@ -221,6 +221,9 @@ function buildCtx() {
     rangeLabel: rangeLabel(),
     rangeText: rangeText(),
     showLoss: checked("show-loss"),
+    // 指标条的口径跟着缩放窗口走（见 zoomRange），标签却写死查询范围时，
+    // 缩到 15 分钟仍显示「24h 平均」——数字对不上标题，只能是标签让步
+    zoomed: latencyZoom.start > 0.01 || latencyZoom.end < 99.99,
   };
 }
 
@@ -357,29 +360,47 @@ function buildGapAreas(series, stepMs, gapMs) {
   return areas;
 }
 
-// 连续超阈值的丢包段合并成一个色块，标签写明这段持续了多久
+// 连续超阈值的丢包段合并成一个色块，标签写明丢了多少、持续了多久
 function buildLossAreas(points, threshold, stepMs) {
   const areas = [];
   let start = null;
+  let peak = 0;
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
     const over = p.loss !== null && p.loss >= threshold;
-    if (over && start === null) start = p.ts;
+    if (over) {
+      if (start === null) start = p.ts;
+      if (p.loss > peak) peak = p.loss;
+    }
     const isLast = i === points.length - 1;
     if (start !== null && (!over || isLast)) {
       const end = over && isLast ? p.ts : points[i - 1].ts;
-      if (end > start) {
-        // 每个超阈值的桶各占一个粒度宽度，所以时长是「末桶 − 首桶 + 一个桶」，
-        // 与指标条的「异常时长」口径一致（少加这一格会比指标条少一分钟）
-        areas.push([
-          { xAxis: start, name: `异常 ${formatSpan(end - start + stepMs)}` },
-          { xAxis: end },
-        ]);
-      }
+      // 每个超阈值的桶各占一个粒度宽度，所以时长是「末桶 − 首桶 + 一个桶」，
+      // 与指标条的「异常时长」口径一致（少加这一格会比指标条少一分钟）。
+      // 右端同样要推到末桶的桶尾：此前区间画到 end（末桶的桶头），单桶丢包
+      // 宽度为 0，最严重的「整分钟全丢」反倒一个色块都画不出来
+      // 单桶丢包在 24h 视图里可能散落几十处，逐个挂标签会糊成一片文字；色块
+      // 本身已经点明位置，具体数值交给 tooltip，只有连续多桶才值得写出来
+      const sustained = end > start;
+      areas.push([
+        {
+          xAxis: start,
+          name: sustained
+            ? `丢包 ${formatLossPct(peak)} · ${formatSpan(end - start + stepMs)}`
+            : "",
+        },
+        { xAxis: end + stepMs },
+      ]);
       start = null;
+      peak = 0;
     }
   }
   return areas;
+}
+
+/** 色块标签里的丢包率：小数点只在个位数时有意义，100% 要写成整数 */
+function formatLossPct(pct) {
+  return `${pct >= 10 ? Math.round(pct) : pct.toFixed(1)}%`;
 }
 
 function buildTimeRange(series) {
