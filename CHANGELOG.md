@@ -3,6 +3,25 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.26.2] - 2026-08-08
+
+### 修复
+
+- **页面常驻占用约 25%~30% GPU**（M4 Mac mini 实测）：`.wrapper` 上的
+  `backdrop-filter: blur(40px)` 覆盖整个页面容器——桌面视口下是 1100×2500 CSS px，
+  DPR=2 即 1100 万物理像素。而 body 背景两套主题都是纯色（无渐变无图片），模糊一块
+  纯色输出还是同一块纯色，再被 0.95 不透明的 `--wrapper-bg` 盖住，渲染结果与不加
+  完全一致：整份开销换来零像素差异。代价却被两件事放大成常驻负载——页面有三个
+  `infinite` 的 trendPulse 圆点、外加每秒刷新一次的实时网速 canvas，容器区域持续变脏，
+  浏览器缓存不住 backdrop 快照，只能每帧重算这 1100 万像素的模糊。移除 `.wrapper`、
+  `.card`、`.popover` 三处 `backdrop-filter`（后两者背后同样是近乎不透明的纯色底），
+  GPU 占用降到个位数。三个脉冲动画保留：没有大面积模糊后它们只影响自身几百像素的
+  合成层。登录页的 `backdrop-filter` 不动——那里背景是动画渐变加浮动光斑，模糊有真实效果。
+- 弹层（通知 / 延迟「更多」）底色改用新增的不透明变量 `--popover-bg`：它浮在正文之上，
+  原先靠 `backdrop-filter` 打底，沿用半透明的 `--card-bg` 会让下面的文字直接透上来。
+- `.card` 的 `transition: all` 收窄为 `border-color, transform`，hover 不再牵动无关属性。
+- Service Worker `CACHE_NAME` 补到 v11。
+
 ## [0.26.1] - 2026-08-03
 
 ### 修复

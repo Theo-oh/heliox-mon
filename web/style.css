@@ -12,6 +12,9 @@
   --card-hover-border: rgba(255, 255, 255, 0.15);
   --wrapper-bg: rgba(18, 18, 18, 0.95);
   --item-bg: rgba(44, 44, 46, 0.5);
+  /* 弹层底色必须完全不透明：它浮在正文之上，而这里不再用 backdrop-filter 打底，
+     沿用半透明的 --card-bg 会让下面的文字直接透上来。 */
+  --popover-bg: #1c1c1e;
 
   /* 语义色：green 只表示「健康/正常」，不再兼任上行色 */
   --accent-blue: #0a84ff;
@@ -50,6 +53,7 @@ body.theme-light {
   --card-hover-border: rgba(0, 0, 0, 0.15);
   --wrapper-bg: rgba(255, 255, 255, 0.94);
   --item-bg: rgba(240, 240, 244, 0.9);
+  --popover-bg: #ffffff;
   --shadow-lg: 0 20px 60px rgba(20, 20, 30, 0.12);
   --speed-grid: rgba(0, 0, 0, 0.08);
   --speed-grid-axis: rgba(0, 0, 0, 0.16);
@@ -103,6 +107,12 @@ body {
    3. 布局骨架（wrapper / 页眉 / 顶栏控件）
    ========================================================================== */
 /* Wrapper Layout */
+/* 这里刻意没有 backdrop-filter：body 背景是纯色（--bg 两套主题都是纯色，无渐变无图片），
+   模糊一块纯色输出还是同一块纯色，再被 0.95 不透明的 --wrapper-bg 盖住——像素级零差异。
+   但代价不是零：本元素在 1100px 宽的桌面视口下高约 2500px，DPR=2 即 1100 万物理像素，
+   而页面有三个 infinite 的 trendPulse 圆点和每秒刷新的实时网速 canvas，区域持续变脏，
+   浏览器缓存不住 backdrop 快照，只能每帧重跑这 1100 万像素的模糊。实测这一条就占掉
+   M4 Mac mini 约 25% 的 GPU。要加毛玻璃，先给 body 换上真正有内容的背景再说。 */
 .wrapper {
   width: 100%;
   max-width: 1100px;
@@ -111,8 +121,6 @@ body {
   padding: 40px;
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--card-border);
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
   position: relative;
   transition:
     background-color 0.3s ease,
@@ -511,14 +519,18 @@ body.theme-light .section-title {
   gap: 16px;
 }
 
+/* 同 .wrapper，不加 backdrop-filter：卡片背后是 wrapper 那块近乎不透明的纯色底，
+   模糊出来没有差别；而它嵌套在 wrapper 内，采样前必须等外层先合成完，是串行开销。
+   transition 也不能写 all——那会把 border/background 之外的属性一并纳入过渡，
+   hover 时连带触发本可跳过的重绘。 */
 .card {
   background: var(--card-bg);
   border-radius: var(--radius-md);
   padding: 28px;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--card-border);
-  transition: all 0.3s ease;
+  transition:
+    border-color 0.3s ease,
+    transform 0.3s ease;
 }
 
 .card:hover {
@@ -1864,9 +1876,7 @@ body.theme-light .date-range {
   flex-direction: column;
   gap: 12px;
   padding: 14px;
-  background: var(--card-bg);
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
+  background: var(--popover-bg);
   border: 1px solid var(--card-border);
   border-radius: 14px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
