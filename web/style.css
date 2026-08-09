@@ -588,7 +588,7 @@ body.theme-light .section-title {
   margin-top: auto;
 }
 
-/* 本月总流量主数值 */
+/* 本周期总流量主数值 */
 .tf-hero {
   display: flex;
   align-items: baseline;
@@ -769,7 +769,7 @@ body.theme-light .tf-quota-mark {
   font-weight: 500;
 }
 
-/* 占比条：该协议占整机本月流量的比重。用配额条同款渐变而不按协议分色，
+/* 占比条：该协议占整机本周期流量的比重。用配额条同款渐变而不按协议分色，
    阶段②已把紫/青锁定为上下行语义，这里再拿它区分协议会冲突 */
 .pt-share {
   height: 4px;
@@ -1813,7 +1813,7 @@ body.theme-light .date-range {
   .pt-table {
     overflow-x: auto;
   }
-  /* 本月累计那一列的下限要顶到它自己的 min-content：写小了另外两列会用 1fr
+  /* 周期累计那一列的下限要顶到它自己的 min-content：写小了另外两列会用 1fr
      把余量抢光，把它按在下限上截断（先被截的正好是最大的那个总计数字） */
   .pt-row {
     grid-template-columns: 36px 1fr 1fr minmax(72px, 1fr);

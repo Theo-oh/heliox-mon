@@ -512,7 +512,7 @@ func (c *Collector) checkQuotaAndNotify(now time.Time) {
 
 	billingStart, billingEnd := c.cfg.GetBillingCycleDates(now)
 
-	// 查询本月已用流量（按 tx/rx 分开计算）
+	// 查询本计费周期已用流量（按 tx/rx 分开计算）
 	var tx, rx int64
 	row := c.db.QueryRow(`
 		SELECT COALESCE(SUM(tx_bytes), 0), COALESCE(SUM(rx_bytes), 0)

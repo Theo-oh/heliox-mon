@@ -300,12 +300,13 @@
           </div>
         </div>
         <div class="cards">
-          <!-- 左卡：本月总流量 + 计费配额。
+          <!-- 左卡：本周期总流量 + 计费配额。口径是计费周期（reset_day 起算）
+               而非自然月，所以标题不能写「本月」——历史趋势那边才是自然月。
                注意主数值与配额条不同源：前者是 this_month 双向总和，
                后者按 billing_mode 折算的 used_bytes，tx_only 下两者必然不等 -->
           <div class="card tf-card">
             <div class="tf-card-head">
-              <span class="tf-card-title">本月总流量</span>
+              <span class="tf-card-title">本周期总流量</span>
               <span id="cycle-start" class="tf-card-note"></span>
             </div>
             <div class="tf-hero">
@@ -371,7 +372,7 @@
             <div class="pt-table">
               <div class="pt-row pt-head">
                 <span>协议</span><span>今日</span><span>昨日</span>
-                <span class="pt-right">本月累计</span>
+                <span class="pt-right">周期累计</span>
               </div>
               <div id="port-rows">
                 <!-- JS 注入各协议行 -->

@@ -445,14 +445,14 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 	stats["yesterday"] = map[string]int64{"tx": yesterdayTx, "rx": yesterdayRx}
 
-	// 本月/当前周期流量（根据 ResetDay 计算）
+	// 本计费周期流量（根据 ResetDay 计算，非自然月；字段名 this_month 是历史遗留）
 	row = s.db.QueryRow(
 		"SELECT COALESCE(SUM(tx_bytes), 0), COALESCE(SUM(rx_bytes), 0) FROM traffic_daily WHERE date >= ? AND iface = 'total'",
 		billingStart.Format("2006-01-02"),
 	)
 	var monthTx, monthRx int64
 	if err := row.Scan(&monthTx, &monthRx); err != nil && err != sql.ErrNoRows {
-		log.Printf("查询本月流量失败: %v", err)
+		log.Printf("查询计费周期流量失败: %v", err)
 	}
 	stats["this_month"] = map[string]int64{"tx": monthTx, "rx": monthRx}
 
@@ -1258,7 +1258,7 @@ func (s *Server) handlePortTraffic(w http.ResponseWriter, r *http.Request) {
 		}
 		portData["yesterday"] = map[string]int64{"tx": yesterdayTx, "rx": yesterdayRx, "total": yesterdayTx + yesterdayRx}
 
-		// 本月流量（从日表查询，排除今日避免重复）
+		// 本计费周期流量（从日表查询，排除今日避免重复）
 		row = s.db.QueryRow(`
 			SELECT COALESCE(SUM(tx_bytes), 0), COALESCE(SUM(rx_bytes), 0)
 			FROM port_traffic_daily
@@ -1266,7 +1266,7 @@ func (s *Server) handlePortTraffic(w http.ResponseWriter, r *http.Request) {
 		`, p.Port, billingStart.Format("2006-01-02"), today)
 		var monthTx, monthRx int64
 		if err := row.Scan(&monthTx, &monthRx); err != nil && err != sql.ErrNoRows {
-			log.Printf("扫描端口本月流量失败: %v", err)
+			log.Printf("扫描端口计费周期流量失败: %v", err)
 		}
 		// 加上今日（从快照计算的实时数据）
 		monthTx += todayTx

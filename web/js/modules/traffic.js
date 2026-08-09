@@ -1,4 +1,5 @@
-// 流量统计：本月总量 + 计费配额进度、按协议明细表
+// 流量统计：本计费周期总量 + 计费配额进度、按协议明细表
+// this_month 这个字段名是历史遗留，后端实际按 reset_day 起算的计费周期聚合
 
 import { $, escapeHtml, setHtml, setText } from "../core/dom.js";
 import {
@@ -235,7 +236,7 @@ function renderPortRows(ports, monthTotalBytes) {
     ports
       .map((p) => {
         const [monthValue, monthUnit] = formatBytesParts(p.this_month.total);
-        // 占比条量的是该协议占整机本月流量的比重，所以分母用整机口径
+        // 占比条量的是该协议占整机本周期流量的比重，所以分母用整机口径
         const share =
           monthTotalBytes > 0
             ? (p.this_month.total / monthTotalBytes) * 100
