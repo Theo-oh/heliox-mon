@@ -1,5 +1,5 @@
 // 缓存名带版本号：升级前端资源时必须同步 bump，否则旧缓存不会被清理
-const CACHE_NAME = 'heliox-v12';
+const CACHE_NAME = 'heliox-v13';
 
 // 预缓存首屏渲染必需的资源。图表库缺一个页面就会因 Chart/echarts 未定义而报错，
 // 所以 vendor 三件套必须在列表里，否则离线打开只剩空壳。

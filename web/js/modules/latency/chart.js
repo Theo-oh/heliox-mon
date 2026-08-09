@@ -96,6 +96,9 @@ export function renderLatencyChart(model, opts) {
         interval: 50,
         axisLine: { show: false },
         axisTick: { show: false },
+        // 十字准星的横线只表示鼠标高度，与贴底的丢包色块顶端无关；且它走的是
+        // 另一套 formatter，会把下面 axisLabel 刻意抹掉的 100% 以上留白读数标回来
+        axisPointer: { label: { show: false } },
         // 量程 4 倍于实际值域，100% 以上是留白，不该标出来误导读数
         axisLabel: {
           color: pal.axis,
