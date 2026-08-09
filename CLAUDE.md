@@ -20,17 +20,27 @@ HELIOX_MON_PASS=test go run ./cmd/heliox-mon
 
 部署/运维（install/start/stop/update 等）由 heliox 仓库的 `deploy.sh monitor <cmd>` 驱动，不在本仓库内。
 
-## 发布流程（关键：push main ≠ 部署到 VPS）
+## 发布流程（关键：发版 ≠ 部署到 VPS）
 
 - **VPS 只认 GitHub Release。** heliox 仓库 `deploy.sh monitor install/update` 从
   `releases/latest/download/heliox-mon-linux-<amd64|arm64>` 下预编译二进制，**从不从源码构建**。
-  因此：**只 `git push` 到 main，VPS 永远拉不到新代码**——前端是 `go:embed` 内嵌的，必须重新发版。
-- **发新版就三步**：① 改 `CHANGELOG.md`（`[Unreleased]` → `[X.Y.Z] - 日期`）并 commit；
-  ② `git tag vX.Y.Z`；③ `git push --follow-tags`。tag 一推，`.github/workflows/release.yml`
-  自动 `make release` + 生成 `SHA256SUMS` + 发 Release（成为 `latest`）。**不要再手动
-  `gh release create`**，会和 CI 撞车。之后 VPS 上 `sudo ./deploy.sh monitor update`。
-- **版本号**由 `git describe --tags` 经 `-ldflags -X main.Version` 注入；release 工作流用
-  `fetch-depth: 0` 拿全 tag。新增功能走 minor，修复走 patch（语义化版本）。
+  前端是 `go:embed` 内嵌的，改了 `web/` 不重新发版线上就看不到。
+- **push main 即发版。** `.github/workflows/release.yml` 在 branch push 和 `v*` tag 上都会跑，
+  产物一致、都会成为 `releases/latest`：
+  - **push main** → 自动发版，Release 的 tag 名是 `build-<run_number>`，版本号取
+    `git describe`（形如 `v0.26.2-3-g40910b2`，能唯一定位 commit）。日常改完直接 push 即可。
+  - **push `vX.Y.Z` tag** → 正式发版，版本号是干净的 `vX.Y.Z`。发正式版仍是三步：
+    改 `CHANGELOG.md`（`[Unreleased]` → `[X.Y.Z] - 日期`）并 commit → `git tag vX.Y.Z` →
+    `git push --follow-tags`。新增功能走 minor，修复走 patch。
+  - 两种情况都**不要手动 `gh release create`**，会和 CI 撞车。
+- **自动发版的安全前提是 release.yml 里的 `go vet` + `go test` 门禁**（`ci.yml` 与它并行跑，
+  拦不住发布）。**不要为了省 CI 时间删掉这一步**——push 就发版是无人值守的，
+  没有门禁就等于把红着的构建直接推成 `latest`。
+- **`Makefile` 的 `git describe` 必须带 `--match 'v[0-9]*'`**：自动发版会在仓库里留下
+  `build-N` tag，不过滤的话下一次 describe 就以它为基准，版本号会一轮比一轮长。
+- **发版不等于线上更新。** `latest` 变了 VPS 也不会自己动，仍要 `sudo ./deploy.sh monitor update`
+  才生效——这道手动闸门是自动发版能成立的前提，不要改成定时自动拉取（监控服务自动更新
+  失败时，你恰好失去了发现它失败的手段）。
 - 验证线上二进制是否含改动：`curl -su admin:密码 http://127.0.0.1:9100/ | grep -c <新标记>`。
 
 ## 测试与质量门禁

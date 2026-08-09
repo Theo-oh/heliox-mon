@@ -3,7 +3,9 @@
 # 变量
 BINARY_NAME=heliox-mon
 BUILD_DIR=build
-VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+# --match 只认语义化 tag：自动发版会打 build-N 这类 tag，不过滤的话下一次
+# describe 就以它为基准，版本号会一轮比一轮长
+VERSION=$(shell git describe --tags --match 'v[0-9]*' --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS=-s -w -X main.Version=$(VERSION)
 
 # 目标平台

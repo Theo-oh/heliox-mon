@@ -5,6 +5,18 @@
 
 ## [Unreleased]
 
+### 变更
+
+- **push main 即发版**：`release.yml` 现在同时由 branch push 和 `v*` tag 触发，产物一致、
+  都会成为 `releases/latest`。push main 发的 Release tag 名为 `build-<run_number>`，
+  版本号取 `git describe`（形如 `v0.26.2-3-g40910b2`）；打 `vX.Y.Z` 仍发干净版本号的正式版。
+  理由是发版 ≠ 部署：VPS 上 `monitor update` 是手动执行的，`latest` 变了线上也不会自己动，
+  所以自动发版最坏只是多几个没人拉的 Release，而省掉了"每次都要为部署补一个 tag"的仪式。
+- **`release.yml` 增加 `go vet` + `go test` 门禁**：`ci.yml` 与发布工作流并行、拦不住发布，
+  而自动发版无人值守，没有门禁就等于把红着的构建推成 `latest`。
+- `Makefile` 的版本推导加 `--match 'v[0-9]*'`：自动发版会留下 `build-N` tag，
+  不过滤的话下一次 `git describe` 会以它为基准，版本号一轮比一轮长。
+
 ### 修复
 
 - **「本月总流量」文案与实际口径不符**：主卡数值和明细表「本月累计」取的是

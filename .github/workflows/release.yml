@@ -1,10 +1,18 @@
 name: Release
 
-# 推送 v* tag 时自动构建并发布 Release。
-# 注意：只有 tag 触发，push 到 main 不会发版——deploy.sh 的 `monitor update`
-# 只拉 releases/latest，因此发新版必须 `git tag vX.Y.Z && git push --follow-tags`。
+# 两条发版路径，产物完全一致，都会成为 releases/latest：
+#   - push main：自动发版，tag 名 build-<run_number>，版本号取 `git describe`
+#     （形如 v0.26.2-3-g40910b2，能唯一定位 commit）
+#   - push v* tag：正式发版，版本号就是干净的 vX.Y.Z
+# 之所以敢让 push 就发版：发版 ≠ 部署。VPS 上 `deploy.sh monitor update` 是手动敲的，
+# latest 变了线上也不会自己动，所以自动发版最坏只是多几个没人拉的 Release。
+# 但正因为没人把关，下面的质量门禁是硬前提——绝不能把红着的构建推成 latest。
+#
+# 没有配 paths-ignore：它对 branch 和 tag 两种触发同时生效，而正式发版的 commit
+# 往往只改 CHANGELOG.md，配了反而会让 tag 发版被静默跳过。
 on:
   push:
+    branches: [main]
     tags:
       - "v*"
 
@@ -30,6 +38,13 @@ jobs:
           go-version: "1.25"
           check-latest: true
 
+      # 质量门禁：ci.yml 只在 branch push 上跑，且与本工作流并行，不能替代这里。
+      # 自动发版无人值守，测试不过就必须停在这一步，不能让 latest 退化。
+      - name: Vet & Test
+        run: |
+          go vet ./...
+          go test ./...
+
       # 复用 Makefile release 目标，与本地手动发布产物完全一致（含 -X main.Version 版本注入）
       - name: Build release binaries
         run: make release
@@ -39,9 +54,25 @@ jobs:
         working-directory: build
         run: sha256sum heliox-mon-linux-amd64 heliox-mon-linux-arm64 > SHA256SUMS
 
+      # tag 触发时沿用 tag 名；branch 触发时自造一个不带 v 前缀的 build-N tag，
+      # 避免污染 Makefile 里 `git describe --match 'v[0-9]*'` 的版本推导
+      - name: Resolve release metadata
+        id: meta
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            name="${GITHUB_REF#refs/tags/}"
+            echo "tag=${name}" >> "$GITHUB_OUTPUT"
+            echo "name=${name}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=build-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+            echo "name=$(git describe --tags --match 'v[0-9]*' --always)" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.name }}
           files: |
             build/heliox-mon-linux-amd64
             build/heliox-mon-linux-arm64
