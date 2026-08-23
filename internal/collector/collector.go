@@ -2,6 +2,8 @@
 package collector
 
 import (
+	"database/sql"
+	"errors"
 	"log"
 	"math"
 	"sort"
@@ -452,41 +454,83 @@ const (
 )
 
 // aggregateLatencyData 延迟数据降采样
-// 将 7 天前的原始数据按 10 分钟桶聚合后写入（is_aggregated=1），再删除原始记录，
-// 避免历史数据被直接删光——既保留长期趋势，又控制数据库体积。
+// 将 7 天前的原始数据按 10 分钟桶聚合后写入（is_aggregated=1），再删除原始记录。
+// 有逐包样本时桶内 P95/max 按包计算，写完丢掉 rtts，避免历史被直接删光。
 func (c *Collector) aggregateLatencyData() {
 	cutoff := time.Now().Add(-latencyRawRetention).Unix()
 
-	// 1. 按 (target, 10分钟桶) 聚合 7 天前的原始数据
-	// AVG/MIN 自动忽略 NULL；min_rtt 取桶内真实最小，mdev 取均值近似抖动，
-	// sent/lost 求和保持丢包统计连续
-	if _, err := c.db.Exec(`
-		INSERT INTO latency_records (ts, target, rtt_ms, min_rtt, mdev, sent, lost, is_aggregated)
-		SELECT (ts / ?) * ?,
-		       target,
-		       AVG(rtt_ms),
-		       MIN(min_rtt),
-		       AVG(mdev),
-		       SUM(COALESCE(sent, 0)),
-		       SUM(COALESCE(lost, 0)),
-		       1
+	tx, err := c.db.Begin()
+	if err != nil {
+		log.Printf("延迟降采样开启事务失败: %v", err)
+		return
+	}
+	defer func() {
+		if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
+			log.Printf("延迟降采样回滚失败: %v", rbErr)
+		}
+	}()
+
+	rows, err := tx.Query(`
+		SELECT ts, target, rtt_ms, min_rtt, mdev, sent, lost,
+		       max_rtt, p95_rtt, sum_rtt, sum_sq, recv, rtts
 		FROM latency_records
 		WHERE is_aggregated = 0 AND ts < ?
-		GROUP BY target, (ts / ?)
-	`, latencyAggBucketSec, latencyAggBucketSec, cutoff, latencyAggBucketSec); err != nil {
-		log.Printf("延迟数据降采样失败: %v", err)
+		ORDER BY target, ts
+	`, cutoff)
+	if err != nil {
+		log.Printf("延迟降采样查询失败: %v", err)
 		return
 	}
 
-	// 2. 删除已聚合的原始数据
-	if _, err := c.db.Exec("DELETE FROM latency_records WHERE is_aggregated = 0 AND ts < ?", cutoff); err != nil {
-		log.Printf("清理延迟原始数据失败: %v", err)
+	type bucketKey struct {
+		target string
+		ts     int64
+	}
+	groups := make(map[bucketKey][]latencySummary)
+	for rows.Next() {
+		var ts int64
+		var target string
+		var rtt, minRtt, mdev, maxRtt, p95, sumRtt, sumSq sql.NullFloat64
+		var sent, lost, recv sql.NullInt64
+		var rtts sql.NullString
+		if err := rows.Scan(&ts, &target, &rtt, &minRtt, &mdev, &sent, &lost,
+			&maxRtt, &p95, &sumRtt, &sumSq, &recv, &rtts); err != nil {
+			log.Printf("延迟降采样扫描失败: %v", err)
+			rows.Close()
+			return
+		}
+		s := scanLatencySummary(rtt, minRtt, mdev, maxRtt, p95, sumRtt, sumSq, sent, lost, recv, rtts)
+		key := bucketKey{target: target, ts: (ts / latencyAggBucketSec) * latencyAggBucketSec}
+		groups[key] = append(groups[key], s)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		log.Printf("延迟降采样遍历失败: %v", err)
+		return
+	}
+	rows.Close()
+
+	for key, parts := range groups {
+		merged := mergeSummaries(parts)
+		if err := execLatencyInsert(tx, key.ts, key.target, merged, true); err != nil {
+			log.Printf("延迟降采样写入失败: %v", err)
+			return
+		}
 	}
 
-	// 3. 清理超过保留期的聚合数据
+	if _, err := tx.Exec("DELETE FROM latency_records WHERE is_aggregated = 0 AND ts < ?", cutoff); err != nil {
+		log.Printf("清理延迟原始数据失败: %v", err)
+		return
+	}
+
 	aggCutoff := time.Now().Add(-latencyAggRetention).Unix()
-	if _, err := c.db.Exec("DELETE FROM latency_records WHERE is_aggregated = 1 AND ts < ?", aggCutoff); err != nil {
+	if _, err := tx.Exec("DELETE FROM latency_records WHERE is_aggregated = 1 AND ts < ?", aggCutoff); err != nil {
 		log.Printf("清理过期聚合数据失败: %v", err)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("延迟降采样提交失败: %v", err)
 	}
 }
 

@@ -222,6 +222,47 @@ nothing useful here`,
 	}
 }
 
+func TestMergeSummaries_FromSamples(t *testing.T) {
+	a := summarizeSamples([]float64{10, 12, 11}, 3, 0)
+	b := summarizeSamples([]float64{20, 40}, 3, 1)
+	got := mergeSummaries([]latencySummary{a, b})
+	if got.Sent != 6 || got.Lost != 1 || got.Recv != 5 {
+		t.Fatalf("sent/lost/recv = %d/%d/%d, want 6/1/5", got.Sent, got.Lost, got.Recv)
+	}
+	if got.Min == nil || *got.Min != 10 {
+		t.Errorf("min = %v, want 10", formatFloatPtr(got.Min))
+	}
+	if got.Max == nil || *got.Max != 40 {
+		t.Errorf("max = %v, want 40", formatFloatPtr(got.Max))
+	}
+	// 5 包 P95 = max
+	if got.P95 == nil || *got.P95 != 40 {
+		t.Errorf("p95 = %v, want 40", formatFloatPtr(got.P95))
+	}
+	if got.Avg == nil || math.Abs(*got.Avg-18.6) > 0.001 {
+		t.Errorf("avg = %v, want 18.6", formatFloatPtr(got.Avg))
+	}
+}
+
+func TestMergeSummaries_LegacyNoSamples(t *testing.T) {
+	avg := 30.0
+	min := 25.0
+	mdev := 2.0
+	got := mergeSummaries([]latencySummary{
+		{Avg: &avg, Min: &min, Mdev: &mdev, Sent: 10, Lost: 0},
+		{Avg: &avg, Min: &min, Mdev: &mdev, Sent: 10, Lost: 0},
+	})
+	if got.Recv != 20 || got.Avg == nil || math.Abs(*got.Avg-30) > 0.001 {
+		t.Errorf("legacy 加权平均失败: recv=%d avg=%v", got.Recv, formatFloatPtr(got.Avg))
+	}
+	if got.P95 != nil {
+		t.Errorf("无逐包样本时 P95 应留空, got %v", formatFloatPtr(got.P95))
+	}
+	if got.Max == nil || *got.Max != 30 {
+		t.Errorf("legacy max 退回均值 = %v, want 30", formatFloatPtr(got.Max))
+	}
+}
+
 func TestParsePingOutput_EdgeCases(t *testing.T) {
 	output := `5 packets transmitted, 6 received, -20% packet loss`
 	got, ok := parsePingOutput(output)

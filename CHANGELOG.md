@@ -11,6 +11,9 @@
   `PING_GAP_MS`（此前该配置从未传给 `ping -i`，实际永远是 1 秒）。成功包 RTT 入库，
   并同时写下 min/avg/max/p95/标准差/`sum_rtt`/`sum_sq`，后续窗口统计不再对「均值的均值」
   求 P95。环境错误仍跳过、全丢包 RTT 仍为 NULL。
+- **延迟 7 天降采样按包计算桶 P95**：拼齐 10 分钟内的成功样本再写摘要，随后丢掉 `rtts`。
+  旧行没有样本时退回加权平均 / MIN / MAX，P95 留空而不是用均值冒充。降采样改走事务，
+  避免 INSERT 成功、DELETE 失败时下次再插出重复桶。
 
 - **push main 即发版**：`release.yml` 现在同时由 branch push 和 `v*` tag 触发，产物一致、
   都会成为 `releases/latest`。push main 发的 Release tag 名为 `build-<run_number>`，

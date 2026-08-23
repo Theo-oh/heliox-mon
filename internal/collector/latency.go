@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"math"
@@ -9,6 +10,10 @@ import (
 	"strconv"
 	"strings"
 )
+
+type latencyExecer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
 
 // latencySummary 一次探测（或一个时间桶）的摘要。
 // RTT 类指针：nil 表示该次无有效 RTT（如全丢包），与 0ms 区分。
@@ -38,14 +43,61 @@ var (
 const insertLatencySQL = `INSERT INTO latency_records
 	(ts, target, rtt_ms, min_rtt, mdev, sent, lost, is_aggregated,
 	 max_rtt, p95_rtt, sum_rtt, sum_sq, recv, rtts)
-	VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 func (c *Collector) insertLatency(ts int64, target string, s latencySummary) error {
-	_, err := c.db.Exec(insertLatencySQL,
-		ts, target, s.Avg, s.Min, s.Mdev, s.Sent, s.Lost,
+	return c.writeLatency(ts, target, s, false)
+}
+
+func (c *Collector) writeLatency(ts int64, target string, s latencySummary, aggregated bool) error {
+	return execLatencyInsert(c.db, ts, target, s, aggregated)
+}
+
+func execLatencyInsert(execer latencyExecer, ts int64, target string, s latencySummary, aggregated bool) error {
+	agg := 0
+	if aggregated {
+		agg = 1
+		s.RTTs = nil
+	}
+	_, err := execer.Exec(insertLatencySQL,
+		ts, target, s.Avg, s.Min, s.Mdev, s.Sent, s.Lost, agg,
 		s.Max, s.P95, s.SumRTT, s.SumSq, s.Recv, s.rttsJSON(),
 	)
 	return err
+}
+
+func scanLatencySummary(
+	rtt, minRtt, mdev, maxRtt, p95, sumRtt, sumSq sql.NullFloat64,
+	sent, lost, recv sql.NullInt64,
+	rtts sql.NullString,
+) latencySummary {
+	s := latencySummary{
+		Sent:   int(sent.Int64),
+		Lost:   int(lost.Int64),
+		Recv:   int(recv.Int64),
+		SumRTT: sumRtt.Float64,
+		SumSq:  sumSq.Float64,
+	}
+	if rtt.Valid {
+		s.Avg = floatPtr(rtt.Float64)
+	}
+	if minRtt.Valid {
+		s.Min = floatPtr(minRtt.Float64)
+	}
+	if mdev.Valid {
+		s.Mdev = floatPtr(mdev.Float64)
+	}
+	if maxRtt.Valid {
+		s.Max = floatPtr(maxRtt.Float64)
+	}
+	if p95.Valid {
+		s.P95 = floatPtr(p95.Float64)
+	}
+	if rtts.Valid {
+		s.RTTs = parseRTTsJSON(rtts.String)
+	}
+	s.fillLegacy()
+	return s
 }
 
 func (s latencySummary) rttsJSON() interface{} {
@@ -58,6 +110,84 @@ func (s latencySummary) rttsJSON() interface{} {
 		return nil
 	}
 	return string(b)
+}
+
+func parseRTTsJSON(raw string) []float64 {
+	if raw == "" {
+		return nil
+	}
+	var out []float64
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+// fillLegacy 补齐旧行：只有分钟均值、recv/sum 为空。
+func (s *latencySummary) fillLegacy() {
+	if s.Recv == 0 && s.Avg != nil && s.Sent > s.Lost {
+		s.Recv = s.Sent - s.Lost
+	}
+	if s.Recv > 0 && s.Avg != nil && s.SumRTT == 0 {
+		s.SumRTT = *s.Avg * float64(s.Recv)
+	}
+	if s.Recv > 0 && s.Avg != nil && s.Mdev != nil && s.SumSq == 0 {
+		s.SumSq = ((*s.Mdev)*(*s.Mdev) + (*s.Avg)*(*s.Avg)) * float64(s.Recv)
+	}
+	if s.Max == nil && s.Avg != nil {
+		s.Max = s.Avg
+	}
+}
+
+// mergeSummaries 合并多条探测/分钟行。有完整逐包样本时 P95/max 按包计算；
+// 否则退回可合并列（加权平均、MIN/MAX、sum_sq 标准差），P95 留空以免装准。
+func mergeSummaries(parts []latencySummary) latencySummary {
+	if len(parts) == 0 {
+		return latencySummary{}
+	}
+	var sent, lost, recv int
+	var sum, sumSq float64
+	var min, max *float64
+	var all []float64
+	allHaveSamples := true
+	for i := range parts {
+		p := parts[i]
+		p.fillLegacy()
+		sent += p.Sent
+		lost += p.Lost
+		recv += p.Recv
+		sum += p.SumRTT
+		sumSq += p.SumSq
+		if p.Min != nil && (min == nil || *p.Min < *min) {
+			min = floatPtr(*p.Min)
+		}
+		if p.Max != nil && (max == nil || *p.Max > *max) {
+			max = floatPtr(*p.Max)
+		}
+		if p.Recv > 0 && len(p.RTTs) == 0 {
+			allHaveSamples = false
+		}
+		if len(p.RTTs) > 0 {
+			all = append(all, p.RTTs...)
+		}
+	}
+	if allHaveSamples && len(all) > 0 {
+		s := summarizeSamples(all, sent, lost)
+		s.Sent = sent
+		s.Lost = lost
+		return s
+	}
+	out := latencySummary{Sent: sent, Lost: lost, Recv: recv, SumRTT: sum, SumSq: sumSq, Min: min, Max: max}
+	if recv > 0 && sum > 0 {
+		avg := sum / float64(recv)
+		out.Avg = floatPtr(avg)
+		variance := sumSq/float64(recv) - avg*avg
+		if variance < 0 {
+			variance = 0
+		}
+		out.Mdev = floatPtr(math.Sqrt(variance))
+	}
+	return out
 }
 
 // summarizeSamples 从成功包 RTT 计算可合并摘要。sent/lost 以探测统计为准，

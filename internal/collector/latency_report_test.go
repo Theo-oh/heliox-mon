@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"database/sql"
 	"testing"
 	"time"
 
@@ -50,5 +51,65 @@ func TestAggregateLatencyData_ClientTarget(t *testing.T) {
 	}
 	if rawCount != 0 {
 		t.Errorf("原始记录应已被清理, got %d", rawCount)
+	}
+}
+
+func TestAggregateLatencyData_PacketP95ThenDropRTTs(t *testing.T) {
+	db, err := storage.NewDB(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewDB 失败: %v", err)
+	}
+	defer db.Close()
+
+	c := &Collector{cfg: &config.Config{Timezone: time.UTC}, db: db}
+	old := time.Now().Add(-8 * 24 * time.Hour).Unix()
+	// 钉在桶头，避免 +30s 跨过 10 分钟边界被拆成两个桶
+	old = (old / latencyAggBucketSec) * latencyAggBucketSec
+
+	a := summarizeSamples([]float64{10, 11, 12, 13, 14}, 5, 0)
+	b := summarizeSamples([]float64{20, 30, 40, 50, 100}, 5, 0)
+	if err := c.insertLatency(old, "1.1.1.1", a); err != nil {
+		t.Fatalf("插入 a 失败: %v", err)
+	}
+	if err := c.insertLatency(old+30, "1.1.1.1", b); err != nil {
+		t.Fatalf("插入 b 失败: %v", err)
+	}
+
+	c.aggregateLatencyData()
+
+	var p95, max float64
+	var rtts sql.NullString
+	var recv, agg int
+	if err := db.QueryRow(`
+		SELECT p95_rtt, max_rtt, recv, rtts, is_aggregated
+		FROM latency_records WHERE target='1.1.1.1'`).
+		Scan(&p95, &max, &recv, &rtts, &agg); err != nil {
+		t.Fatalf("读聚合行失败: %v", err)
+	}
+	if agg != 1 {
+		t.Errorf("is_aggregated = %d, want 1", agg)
+	}
+	if rtts.Valid {
+		t.Errorf("聚合后 rtts 应丢掉, got %q", rtts.String)
+	}
+	if recv != 10 {
+		t.Errorf("recv = %d, want 10", recv)
+	}
+	if max != 100 {
+		t.Errorf("max = %v, want 100", max)
+	}
+	// 10 包 10..100，ceil(0.95*10)=10 → P95 = 100
+	if p95 != 100 {
+		t.Errorf("p95 = %v, want 100（10 包近邻秩）", p95)
+	}
+
+	// 再跑一轮不得重复插入
+	c.aggregateLatencyData()
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM latency_records WHERE target='1.1.1.1'`).Scan(&n); err != nil {
+		t.Fatalf("计数失败: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("幂等降采样后行数 = %d, want 1", n)
 	}
 }
