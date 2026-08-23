@@ -19,7 +19,7 @@ const LOSS_AXIS_MAX = 400;
 
 /**
  * @param {any} model buildLatencyModel 的产物
- * @param {{showLoss: boolean, showMax: boolean, showAvg: boolean,
+ * @param {{showLoss: boolean, showMax: boolean, showAvg: boolean, showP95: boolean,
  *          zoom: {start: number, end: number},
  *          onZoom: (zoom: {start: number, end: number}) => void}} opts
  */
@@ -41,10 +41,10 @@ export function renderLatencyChart(model, opts) {
   const gridLine = light ? "rgba(0, 0, 0, 0.06)" : "rgba(255, 255, 255, 0.05)";
   const labelBg = light ? "rgba(255, 255, 255, 0.92)" : "rgba(20, 20, 22, 0.9)";
 
-  const yMax = latencyAxisMax(model.series, model.timeRange, opts.zoom);
+  const yMax = latencyAxisMax(model.series, model.timeRange, opts);
   const series = buildSeries(model, opts, { pal, colors, light, labelBg });
   // 缩放时要就地重算左轴，那一刻拿不到 render 的入参，只能在这里留一份
-  axisCtx = { model, pal, gridLine };
+  axisCtx = { model, pal, gridLine, opts };
 
   const option = {
     animation: false,
@@ -140,10 +140,11 @@ export function renderLatencyChart(model, opts) {
 
 function buildSeries(model, opts, theme) {
   const { pal, colors, labelBg } = theme;
-  const series = model.series.map((s, i) => {
+  const series = [];
+  model.series.forEach((s, i) => {
     const color = targetColor(colors, s.idx);
     const avg = averageRtt(s.points);
-    return {
+    series.push({
       name: s.tag,
       type: "line",
       smooth: true,
@@ -176,10 +177,20 @@ function buildSeries(model, opts, theme) {
             }
           : undefined,
       markPoint: buildMarkPoint(s, color, opts, pal),
-      // 区间色块挂在第一条序列上即可覆盖全图；标签错开两行，避免缺口与异常
-      // 相邻时两个标签叠在一起
       markArea: i === 0 ? buildMarkArea(model, pal, labelBg) : undefined,
-    };
+    });
+    if (opts.showP95 && s.p95Line) {
+      series.push({
+        name: `${s.tag} P95`,
+        type: "line",
+        smooth: true,
+        showSymbol: false,
+        data: s.p95Line,
+        itemStyle: { color },
+        lineStyle: { color, width: 1.2, type: "dashed", opacity: 0.85 },
+        emphasis: { focus: "series" },
+      });
+    }
   });
 
   // 多带的 lost/sent 两维只供 tooltip 读，encode 里没有它们，不参与渲染
@@ -239,6 +250,7 @@ function buildMarkPoint(s, color, opts, pal) {
     });
   }
   if (opts.showMax) {
+    const extrema = packetExtrema(s.points);
     const label = {
       show: true,
       color: pal.text,
@@ -255,20 +267,28 @@ function buildMarkPoint(s, color, opts, pal) {
         return `${Number(v).toFixed(1)}ms`;
       },
     };
-    data.push({
-      type: "max",
-      symbol: "circle",
-      symbolSize: 6,
-      itemStyle: { color, opacity: 0.85 },
-      label: { ...label, backgroundColor: hexToRgba(pal.danger, 0.5) },
-    });
-    data.push({
-      type: "min",
-      symbol: "circle",
-      symbolSize: 6,
-      itemStyle: { color, opacity: 0.85 },
-      label: { ...label, backgroundColor: hexToRgba(pal.ok, 0.5) },
-    });
+    if (extrema.max) {
+      data.push({
+        coord: extrema.max,
+        symbol: "circle",
+        symbolSize: 6,
+        itemStyle: { color, opacity: 0.85 },
+        label: { ...label, backgroundColor: hexToRgba(pal.danger, 0.5) },
+      });
+    }
+    if (extrema.min) {
+      data.push({
+        coord: extrema.min,
+        symbol: "circle",
+        symbolSize: 6,
+        itemStyle: { color, opacity: 0.85 },
+        label: {
+          ...label,
+          position: "bottom",
+          backgroundColor: hexToRgba(pal.ok, 0.5),
+        },
+      });
+    }
   }
   if (!data.length) return undefined;
   return { silent: true, data };
@@ -347,14 +367,29 @@ function latencyYAxis(yMax, pal, gridLine) {
  * 只统计缩放窗口内的点：轴按整段数据定死时，白天一个 400ms 的尖峰会让夜里
  * 那段 160ms 的曲线永远被压在图底三分之一，放大看细节这件事就白做了。
  */
-function latencyAxisMax(series, timeRange, zoom) {
-  const win = zoomWindow(timeRange, zoom);
+function packetExtrema(points) {
+  let max = null;
+  let min = null;
+  points.forEach((p) => {
+    const ts = p.ts * 1000;
+    const hi = p.max_rtt ?? p.rtt_ms;
+    const lo = p.min_rtt ?? p.rtt_ms;
+    if (hi !== null && hi !== undefined && (!max || hi > max[1])) max = [ts, hi];
+    if (lo !== null && lo !== undefined && (!min || lo < min[1])) min = [ts, lo];
+  });
+  return { max, min };
+}
+
+function latencyAxisMax(series, timeRange, opts) {
+  const win = zoomWindow(timeRange, opts.zoom);
   let max = 0;
   series.forEach((s) =>
     s.points.forEach((p) => {
       const ts = p.ts * 1000;
       if (win && (ts < win.start || ts > win.end)) return;
       if (p.rtt_ms > max) max = p.rtt_ms;
+      if (opts.showP95 && p.p95 > max) max = p.p95;
+      if (opts.showMax && p.max_rtt > max) max = p.max_rtt;
     }),
   );
   // 窗口里一个有效点都没有（整段全丢）时给个兜底量程，否则 interval 会算成 0
@@ -451,7 +486,7 @@ function bindZoom(onZoom) {
 // 又要和正在进行的手势抢 dataZoom 状态。yAxis 只给一项，右轴按下标保持不变
 function rescaleAxis(zoom) {
   if (!chart || !axisCtx) return;
-  const { model, pal, gridLine } = axisCtx;
-  const yMax = latencyAxisMax(model.series, model.timeRange, zoom);
+  const { model, pal, gridLine, opts } = axisCtx;
+  const yMax = latencyAxisMax(model.series, model.timeRange, { ...opts, zoom });
   chart.setOption({ yAxis: [latencyYAxis(yMax, pal, gridLine)] });
 }

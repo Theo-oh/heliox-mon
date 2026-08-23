@@ -24,6 +24,8 @@ let statsRaf = null;
 
 /** 已选中的目标标签；空集合意味着「还没初始化过」，见 syncTargetPills */
 const activeTags = new Set();
+/** 指标条跟随的目标：多选时不把不同链路的 RTT 捏成一个 P95 */
+let statsFocusTag = "";
 let renderedTagKey = "";
 
 // 快捷范围：24h / 7d / custom。custom 时以下两个日期串生效
@@ -78,6 +80,7 @@ function bindControls() {
   on("show-loss", "change", renderAll);
   on("show-max", "change", renderAll);
   on("show-avg", "change", renderAll);
+  on("show-p95", "change", renderAll);
 }
 
 /** @param {"24h"|"7d"} mode */
@@ -167,6 +170,7 @@ function syncTargetPills(targets) {
       } else {
         activeTags.add(t.tag);
       }
+      statsFocusTag = t.tag;
       latencyZoom = { start: 0, end: 100 };
       renderAll();
     });
@@ -201,6 +205,7 @@ function renderAll() {
     showLoss: checked("show-loss"),
     showMax: checked("show-max"),
     showAvg: checked("show-avg"),
+    showP95: checked("show-p95"),
     zoom: latencyZoom,
     onZoom: (zoom) => {
       latencyZoom = zoom;
@@ -221,6 +226,7 @@ function buildCtx() {
     rangeLabel: rangeLabel(),
     rangeText: rangeText(),
     showLoss: checked("show-loss"),
+    showP95: checked("show-p95"),
     // 指标条的口径跟着缩放窗口走（见 zoomRange），标签却写死查询范围时，
     // 缩到 15 分钟仍显示「24h 平均」——数字对不上标题，只能是标签让步
     zoomed: latencyZoom.start > 0.01 || latencyZoom.end < 99.99,
@@ -271,9 +277,17 @@ function buildLatencyModel(data, tags) {
   const series = targets
     .map((t, idx) => ({ tag: t.tag, idx, points: t.points || [] }))
     .filter((t) => tags.has(t.tag))
-    .map((t) => ({ ...t, line: buildLine(t.points, stepMs, gapMs) }));
+    .map((t) => ({
+      ...t,
+      line: buildLine(t.points, stepMs, gapMs),
+      p95Line: buildLine(t.points, stepMs, gapMs, "p95"),
+    }));
 
   const lossSeries = buildLossSeries(series, stepMs, gapMs);
+  const statsTag =
+    statsFocusTag && series.some((s) => s.tag === statsFocusTag)
+      ? statsFocusTag
+      : series[0]?.tag || "";
 
   return {
     granularity,
@@ -282,6 +296,7 @@ function buildLatencyModel(data, tags) {
     lossThresholdPct: LOSS_THRESHOLD,
     targets,
     series,
+    statsTag,
     lossSeries,
     gapAreas: buildGapAreas(series, stepMs, gapMs),
     lossAreas: buildLossAreas(lossSeries, LOSS_THRESHOLD, stepMs),
@@ -291,7 +306,8 @@ function buildLatencyModel(data, tags) {
 }
 
 // 缺口处插入 null 点让折线断开，避免直线跨越无数据时段造成误导
-function buildLine(points, stepMs, gapMs) {
+/** @param {any[]} points @param {number} stepMs @param {number} gapMs @param {"rtt_ms"|"p95"} [field] */
+function buildLine(points, stepMs, gapMs, field = "rtt_ms") {
   const line = [];
   let prevTs = null;
   points.forEach((p) => {
@@ -299,7 +315,8 @@ function buildLine(points, stepMs, gapMs) {
     if (prevTs !== null && ts - prevTs > gapMs) {
       line.push({ value: [prevTs + stepMs, null], isGap: true });
     }
-    const rtt = p.rtt_ms === null || p.rtt_ms === undefined ? null : p.rtt_ms;
+    const raw = field === "p95" ? p.p95 : p.rtt_ms;
+    const rtt = raw === null || raw === undefined ? null : raw;
     line.push([ts, rtt]);
     prevTs = ts;
   });

@@ -17,6 +17,10 @@
 - **`GET /api/latency` 按包合并时间桶**：每个点带 `max_rtt` / `p95` / `recv` / `sum_rtt` /
   `sum_sq`，1 分钟粒度还附带 `rtts` 数组供前端缩放时重算真 P95。窗口 stats 改为包加权，
   日报延迟小节走同一套摘要。
+- **延迟指标条按真实样本计算**：24h 有 `rtts` 时平均 / P95 / 最大 / 最小都来自窗口内成功包；
+  多目标不再把不同链路捏成一个 P95（数字跟焦点目标走，点胶囊切换）。图上可叠加每桶 P95
+  虚线，极值点改标包级 min/max。粗粒度没有逐包时 P95 标「约」。横幅抖动改用最近一轮的
+  连续差均值。
 
 - **push main 即发版**：`release.yml` 现在同时由 branch push 和 `v*` tag 触发，产物一致、
   都会成为 `releases/latest`。push main 发的 Release tag 名为 `build-<run_number>`，
@@ -42,7 +46,7 @@
   走的是另一套 formatter，绕开了这个过滤，鼠标抬高就会显示「310.11」这种不存在的丢包率。
   且横向准星只表示鼠标高度，与贴底色块的顶端无关，读数本身也没有含义。现关闭右轴的
   准星标签，横线与左轴 ms 读数保留。
-- Service Worker `CACHE_NAME` 补到 v13。
+- Service Worker `CACHE_NAME` 补到 v14。
 
 ## [0.26.2] - 2026-08-08
 

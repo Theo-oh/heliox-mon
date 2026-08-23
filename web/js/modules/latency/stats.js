@@ -119,7 +119,7 @@ function deriveLinkStatus(model, now) {
   return {
     status: degraded ? "warn" : "ok",
     rtt: lastValid ? lastValid.rtt : recentAvg,
-    jitter: averageOf(recentValid.map((p) => p.jitter)),
+    jitter: lastValid?.succJitter ?? averageOf(recentValid.map((p) => p.jitter)),
     loss,
     ageMs,
     downMs: 0,
@@ -132,8 +132,14 @@ function deriveLinkStatus(model, now) {
 
 function renderMetrics(model, range, ctx) {
   const agg = aggregate(model, range);
+  const multi = model.series.length > 1;
+  const tag = multi && model.statsTag ? `${model.statsTag} · ` : "";
 
-  setText("lat-avg-label", ctx.zoomed ? "选区平均" : `${ctx.rangeLabel} 平均`);
+  setText("lat-avg-label", `${tag}${ctx.zoomed ? "选区平均" : `${ctx.rangeLabel} 平均`}`);
+  setText(
+    "lat-p95-label",
+    `${tag}${agg.p95 !== null && !agg.p95Exact ? "P95 约" : "P95"}`,
+  );
   setText("lat-avg", formatNumber(agg.avg));
   setText("lat-p95", formatNumber(agg.p95));
   setText("lat-min", formatNumber(agg.min));
@@ -172,45 +178,121 @@ function setState(id, cls) {
   if (cls) el.classList.add(cls);
 }
 
-/** 在缩放窗口内把所有选中目标折算成一组汇总指标 */
+/** 在缩放窗口内汇总：RTT 只取焦点目标（多选不混 P95），丢包仍按所选目标包加权 */
 function aggregate(model, range) {
-  const start = range?.start ?? null;
-  const end = range?.end ?? null;
-  /** @type {number[]} */
-  const rtts = [];
-  let min = Infinity;
-  let max = -Infinity;
+  const focus =
+    model.series.find((s) => s.tag === model.statsTag) || model.series[0];
+  const rtt = focus ? aggregateFocus(focus.points, range) : emptyRtt();
+
   let sent = 0;
   let lost = 0;
-
   model.series.forEach((s) => {
     s.points.forEach((p) => {
-      const ts = p.ts * 1000;
-      if (start !== null && ts < start) return;
-      if (end !== null && ts > end) return;
-      if (p.rtt_ms !== null && p.rtt_ms !== undefined) {
-        rtts.push(p.rtt_ms);
-        // min 优先用服务端记录的真实最小 RTT，旧数据无该字段时退回桶均值
-        const candidate =
-          p.min_rtt !== null && p.min_rtt !== undefined ? p.min_rtt : p.rtt_ms;
-        if (candidate < min) min = candidate;
-        if (p.rtt_ms > max) max = p.rtt_ms;
-      }
+      if (!inRange(p.ts * 1000, range)) return;
       sent += p.sent || 0;
       lost += p.lost || 0;
     });
   });
 
-  const sorted = rtts.slice().sort((a, b) => a - b);
   return {
-    avg: rtts.length ? rtts.reduce((a, b) => a + b, 0) / rtts.length : null,
-    p95: sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] : null,
-    median: median(sorted),
-    min: min === Infinity ? null : min,
-    max: max === -Infinity ? null : max,
+    ...rtt,
     loss: sent > 0 ? (lost / sent) * 100 : null,
     anomalyMs: anomalyMs(model, range),
   };
+}
+
+function emptyRtt() {
+  return {
+    avg: null,
+    p95: null,
+    p95Exact: true,
+    median: null,
+    min: null,
+    max: null,
+  };
+}
+
+/** @param {any[]} points @param {{start:number,end:number}|null} range */
+function aggregateFocus(points, range) {
+  /** @type {number[]} */
+  const samples = [];
+  /** @type {number[]} */
+  const bucketP95 = [];
+  /** @type {number[]} */
+  const bucketAvgs = [];
+  let completeSamples = true;
+  let min = Infinity;
+  let max = -Infinity;
+  let sumRtt = 0;
+  let recv = 0;
+
+  points.forEach((p) => {
+    if (!inRange(p.ts * 1000, range)) return;
+    const minC = num(p.min_rtt) ?? num(p.rtt_ms);
+    const maxC = num(p.max_rtt) ?? num(p.rtt_ms);
+    if (minC !== null && minC < min) min = minC;
+    if (maxC !== null && maxC > max) max = maxC;
+
+    const rtts = Array.isArray(p.rtts) ? p.rtts.filter((v) => num(v) !== null) : [];
+    const rec = p.recv || rtts.length;
+    if (rec > 0 && rtts.length === 0) completeSamples = false;
+    if (rtts.length) samples.push(...rtts);
+
+    if (typeof p.sum_rtt === "number") sumRtt += p.sum_rtt;
+    else if (rtts.length) sumRtt += rtts.reduce((a, b) => a + b, 0);
+    else if (num(p.rtt_ms) !== null && rec) sumRtt += num(p.rtt_ms) * rec;
+    recv += rec;
+
+    if (num(p.p95) !== null) bucketP95.push(/** @type {number} */ (num(p.p95)));
+    if (num(p.rtt_ms) !== null) bucketAvgs.push(/** @type {number} */ (num(p.rtt_ms)));
+  });
+
+  if (completeSamples && samples.length) {
+    const sorted = samples.slice().sort((a, b) => a - b);
+    const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+    return {
+      avg,
+      p95: percentileNearestRank(sorted, 0.95),
+      p95Exact: true,
+      median: median(sorted),
+      min: sorted[0],
+      max: sorted[sorted.length - 1],
+    };
+  }
+
+  let avg = null;
+  if (recv > 0 && sumRtt > 0) avg = sumRtt / recv;
+  else if (bucketAvgs.length) avg = bucketAvgs.reduce((a, b) => a + b, 0) / bucketAvgs.length;
+  const p95Sorted = bucketP95.slice().sort((a, b) => a - b);
+  return {
+    avg,
+    p95: p95Sorted.length ? percentileNearestRank(p95Sorted, 0.95) : null,
+    p95Exact: false,
+    median: median(bucketAvgs),
+    min: min === Infinity ? null : min,
+    max: max === -Infinity ? null : max,
+  };
+}
+
+/** @param {number} ts @param {{start:number,end:number}|null} range */
+function inRange(ts, range) {
+  if (range?.start != null && ts < range.start) return false;
+  if (range?.end != null && ts > range.end) return false;
+  return true;
+}
+
+function num(v) {
+  return v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v);
+}
+
+/** 近邻秩，与后端 percentileNearestRank 一致：rank = ceil(p*n) */
+function percentileNearestRank(sorted, p) {
+  const n = sorted.length;
+  if (!n) return null;
+  if (p <= 0) return sorted[0];
+  if (p >= 1) return sorted[n - 1];
+  const rank = Math.min(n, Math.max(1, Math.ceil(p * n)));
+  return sorted[rank - 1];
 }
 
 // 异常时长：连续超阈值的丢包桶各自占一个粒度宽度，累加即为总时长
@@ -247,6 +329,8 @@ function renderLegend(model, ctx) {
 
   const loss = $("lat-legend-loss");
   if (loss) loss.hidden = !ctx.showLoss;
+  const p95Leg = $("lat-legend-p95");
+  if (p95Leg) p95Leg.hidden = !ctx.showP95;
 
   // 缩放后指标条只算窗口内的点，图例这行是唯一还写着完整查询范围的地方，
   // 不点破就会被读成「这些数字是整段区间的」
@@ -263,14 +347,15 @@ function renderLegend(model, ctx) {
 
 /** 把多个目标压成一条按时间桶对齐的时间线，供状态判定使用 */
 function mergeByBucket(series) {
-  /** @type {Map<number, {ts: number, rtts: number[], jitters: number[], sent: number, lost: number}>} */
+  /** @type {Map<number, {ts: number, rtts: number[], jitters: number[], sampleLists: number[][], sent: number, lost: number}>} */
   const map = new Map();
   series.forEach((s) => {
     s.points.forEach((p) => {
       const ts = p.ts * 1000;
-      const row = map.get(ts) || { ts, rtts: [], jitters: [], sent: 0, lost: 0 };
+      const row = map.get(ts) || { ts, rtts: [], jitters: [], sampleLists: [], sent: 0, lost: 0 };
       if (p.rtt_ms !== null && p.rtt_ms !== undefined) row.rtts.push(p.rtt_ms);
       if (p.jitter !== null && p.jitter !== undefined) row.jitters.push(p.jitter);
+      if (Array.isArray(p.rtts) && p.rtts.length) row.sampleLists.push(p.rtts);
       row.sent += p.sent || 0;
       row.lost += p.lost || 0;
       map.set(ts, row);
@@ -284,9 +369,20 @@ function mergeByBucket(series) {
       jitter: row.jitters.length
         ? row.jitters.reduce((a, b) => a + b, 0) / row.jitters.length
         : null,
+      succJitter:
+        row.sampleLists.length === 1 ? meanSuccessiveDiff(row.sampleLists[0]) : null,
       sent: row.sent,
       lost: row.lost,
     }));
+}
+
+function meanSuccessiveDiff(values) {
+  if (!values || values.length < 2) return null;
+  let sum = 0;
+  for (let i = 1; i < values.length; i++) {
+    sum += Math.abs(values[i] - values[i - 1]);
+  }
+  return sum / (values.length - 1);
 }
 
 function findLastValid(merged) {

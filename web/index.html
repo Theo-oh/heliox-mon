@@ -547,6 +547,9 @@
                     <label class="opt-pill"
                       ><input type="checkbox" id="show-avg" /> 平均线</label
                     >
+                    <label class="opt-pill"
+                      ><input type="checkbox" id="show-p95" /> P95</label
+                    >
                   </div>
                 </div>
                 <div id="lat-pop-note" class="lat-pop-note">--</div>
@@ -588,7 +591,7 @@
               </div>
             </div>
             <div class="metric-bar-item">
-              <div class="metric-bar-label">P95</div>
+              <div id="lat-p95-label" class="metric-bar-label">P95</div>
               <div class="metric-bar-value">
                 <span id="lat-p95">--</span>
                 <span class="metric-bar-unit">ms</span>
@@ -631,6 +634,9 @@
             <span id="lat-legend-targets" class="lat-legend-targets"></span>
             <span id="lat-legend-loss" class="lat-legend-item"
               ><span class="lat-legend-bar"></span>丢包</span
+            >
+            <span id="lat-legend-p95" class="lat-legend-item" hidden
+              ><span class="lat-legend-dash"></span>P95</span
             >
             <span class="lat-legend-item"
               ><span class="lat-legend-block"></span>无数据</span
