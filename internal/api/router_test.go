@@ -103,6 +103,24 @@ func TestHandleLatencyReport_Valid(t *testing.T) {
 	}
 }
 
+func TestHandleLatencyReport_RttsRecomputed(t *testing.T) {
+	s, db := newTestServer(t, &config.Config{ReportToken: "secret"})
+	body := `{"client":"home","samples":[{"rtts":[10,11,12,13,20],"sent":6,"lost":1}]}`
+	rec := postReport(t, s, "secret", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("应 200, got %d %s", rec.Code, rec.Body.String())
+	}
+	var max, p95, avg float64
+	var recv, lost int
+	if err := db.QueryRow(`SELECT max_rtt, p95_rtt, rtt_ms, recv, lost FROM latency_records WHERE target='client:home'`).
+		Scan(&max, &p95, &avg, &recv, &lost); err != nil {
+		t.Fatalf("读回失败: %v", err)
+	}
+	if max != 20 || p95 != 20 || recv != 5 || lost != 1 {
+		t.Errorf("max=%v p95=%v recv=%d lost=%d avg=%v", max, p95, recv, lost, avg)
+	}
+}
+
 func TestHandleLatencyReport_InvalidInputs(t *testing.T) {
 	s, _ := newTestServer(t, &config.Config{ReportToken: "secret"})
 	now := time.Now().Unix()
@@ -115,6 +133,7 @@ func TestHandleLatencyReport_InvalidInputs(t *testing.T) {
 		{"空 samples", `{"client":"x","samples":[]}`},
 		{"rtt 越界", `{"client":"x","samples":[{"rtt_ms":99999,"sent":1,"lost":0}]}`},
 		{"lost 大于 sent", `{"client":"x","samples":[{"rtt_ms":1,"sent":1,"lost":5}]}`},
+		{"rtts+lost 大于 sent", `{"client":"x","samples":[{"rtts":[1,2],"sent":2,"lost":1}]}`},
 		{"ts 超窗", `{"client":"x","samples":[{"ts":` +
 			jsonInt(now-48*3600) + `,"rtt_ms":1,"sent":1,"lost":0}]}`},
 	}

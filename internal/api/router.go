@@ -983,12 +983,18 @@ var clientNameRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,32}$`)
 
 // latencySample 单条客户端上报样本。RTT 类字段用指针区分「无数据」与 0ms。
 type latencySample struct {
-	TS     *int64   `json:"ts"`
-	RttMs  *float64 `json:"rtt_ms"`
-	MinRtt *float64 `json:"min_rtt"`
-	Mdev   *float64 `json:"mdev"`
-	Sent   int      `json:"sent"`
-	Lost   int      `json:"lost"`
+	TS     *int64    `json:"ts"`
+	RttMs  *float64  `json:"rtt_ms"`
+	MinRtt *float64  `json:"min_rtt"`
+	MaxRtt *float64  `json:"max_rtt"`
+	P95    *float64  `json:"p95_rtt"`
+	Mdev   *float64  `json:"mdev"`
+	Sent   int       `json:"sent"`
+	Lost   int       `json:"lost"`
+	Recv   int       `json:"recv"`
+	SumRTT float64   `json:"sum_rtt"`
+	SumSq  float64   `json:"sum_sq"`
+	RTTs   []float64 `json:"rtts"`
 }
 
 // handleLatencyReport 接收客户端主动上报的延迟样本，写入 latency_records，
@@ -1063,28 +1069,13 @@ func (s *Server) handleLatencyReport(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	stmt, err := tx.Prepare(
-		`INSERT INTO latency_records (ts, target, rtt_ms, min_rtt, mdev, sent, lost, is_aggregated)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
-	)
-	if err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			log.Printf("回滚上报事务失败: %v", rbErr)
-		}
-		writeJSONStatus(w, http.StatusInternalServerError, map[string]interface{}{
-			"ok": false, "message": "数据库预处理失败",
-		})
-		return
-	}
-	defer stmt.Close()
-
 	for i := range req.Samples {
 		smp := &req.Samples[i]
 		ts := now
 		if smp.TS != nil {
 			ts = *smp.TS
 		}
-		if _, err := stmt.Exec(ts, target, smp.RttMs, smp.MinRtt, smp.Mdev, smp.Sent, smp.Lost); err != nil {
+		if err := collector.WriteLatency(tx, ts, target, summaryFromReport(smp)); err != nil {
 			if rbErr := tx.Rollback(); rbErr != nil {
 				log.Printf("回滚上报事务失败: %v", rbErr)
 			}
@@ -1114,9 +1105,9 @@ func validateLatencySample(smp *latencySample, now int64) string {
 		}
 	}
 	// RTT 类字段：null 或 [0, 60000) 毫秒
-	for _, v := range []*float64{smp.RttMs, smp.MinRtt, smp.Mdev} {
+	for _, v := range []*float64{smp.RttMs, smp.MinRtt, smp.MaxRtt, smp.P95, smp.Mdev} {
 		if v != nil && (*v < 0 || *v >= 60000) {
-			return "rtt/min_rtt/mdev 须为 null 或 [0,60000) 毫秒"
+			return "rtt/min_rtt/max_rtt/p95_rtt/mdev 须为 null 或 [0,60000) 毫秒"
 		}
 	}
 	if smp.Sent < 1 || smp.Sent > 1000 {
@@ -1125,7 +1116,38 @@ func validateLatencySample(smp *latencySample, now int64) string {
 	if smp.Lost < 0 || smp.Lost > smp.Sent {
 		return "lost 须在 0-sent 之间"
 	}
+	if len(smp.RTTs) > 1000 {
+		return "rtts 数量不能超过 1000"
+	}
+	for _, v := range smp.RTTs {
+		if v < 0 || v >= 60000 {
+			return "rtts 元素须在 [0,60000) 毫秒"
+		}
+	}
+	if len(smp.RTTs)+smp.Lost > smp.Sent {
+		return "rtts+lost 不能大于 sent"
+	}
 	return ""
+}
+
+func summaryFromReport(smp *latencySample) collector.LatencySummary {
+	if len(smp.RTTs) > 0 {
+		return collector.SummarizeSamples(smp.RTTs, smp.Sent, smp.Lost)
+	}
+	s := collector.LatencySummary{
+		Avg:    smp.RttMs,
+		Min:    smp.MinRtt,
+		Max:    smp.MaxRtt,
+		P95:    smp.P95,
+		Mdev:   smp.Mdev,
+		Sent:   smp.Sent,
+		Lost:   smp.Lost,
+		Recv:   smp.Recv,
+		SumRTT: smp.SumRTT,
+		SumSq:  smp.SumSq,
+	}
+	s.Normalize()
+	return s
 }
 
 // handlePortTraffic 端口流量统计

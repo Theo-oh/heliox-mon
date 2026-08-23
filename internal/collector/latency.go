@@ -235,6 +235,21 @@ func summarizeSamples(samples []float64, sent, lost int) LatencySummary {
 	return s
 }
 
+// SummarizeSamples 供 API 上报等包外调用方从成功包计算摘要。
+func SummarizeSamples(samples []float64, sent, lost int) LatencySummary {
+	return summarizeSamples(samples, sent, lost)
+}
+
+// Normalize 补齐旧摘要（只有均值、没有 recv/sum 的行）。
+func (s *LatencySummary) Normalize() { s.fillLegacy() }
+
+// WriteLatency 写入一条未聚合的延迟记录。
+func WriteLatency(execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}, ts int64, target string, s LatencySummary) error {
+	return execLatencyInsert(execer, ts, target, s, false)
+}
+
 // percentileNearestRank 近邻秩：1-based rank = ceil(p*n)。
 // n=20 时 P95 是第 19 小（不是 max）；n=5 时 P95 就是 max，样本量不够时理应如此。
 func percentileNearestRank(sorted []float64, p float64) float64 {

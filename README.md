@@ -215,14 +215,20 @@ NAT 后无法被反向探测。开启客户端上报后，客户端周期性测�
 
 ```json
 { "client": "home-mac",
-  "samples": [ { "rtt_ms": 45.2, "min_rtt": 42.1, "mdev": 3.4, "sent": 10, "lost": 0 } ] }
+  "samples": [ {
+    "rtt_ms": 45.2, "min_rtt": 42.1, "max_rtt": 52.0, "p95_rtt": 50.1,
+    "mdev": 3.4, "sent": 10, "lost": 1, "rtts": [42.1, 44.0, 45.2]
+  } ] }
 ```
+
+有 `rtts` 时服务端按成功包重算 min/avg/max/p95，摘要字段可省略。超时、非 204
+不得写进 `rtts`，应计入 `lost`（参考脚本已按 `http_code` 区分）。
 
 `client` 仅允许字母/数字/下划线/连字符（≤32 字符），作为图表序列名，需自行保证各客户端唯一。
 `ts` 可选（Unix 秒，须在 now-24h ~ now+5min 内），缺省用服务端当前时间。
 
 仓库 [`scripts/latency-client.sh`](scripts/latency-client.sh)（依赖 bash/curl/awk）已实现
-「预热丢弃握手 → keep-alive 串行测 N 次 → 取 min/avg/stddev → 上报」，配 cron/launchd
+「预热丢弃握手 → keep-alive 串行测 N 次 → 204 为成功、超时计丢包 → 取 min/avg/p95/max → 上报」，配 cron/launchd
 每 60s 一轮即可：
 
 ```bash
