@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hh/heliox-mon/internal/collector"
 	"github.com/hh/heliox-mon/internal/config"
 	"github.com/hh/heliox-mon/internal/storage"
 )
@@ -174,34 +175,27 @@ type latencyStat struct {
 }
 
 // dailyLatency 汇总 [startTs, endTs) 内各 PingTarget 的延迟。
-// 聚合口径与 API 层 handleLatency 保持一致：AVG(rtt_ms)/MIN(min_rtt)/SUM(sent)/SUM(lost)。
-// 存库以 IP 作 target 标识，展示用 Tag。
+// 口径与 API 相同：有逐包则包加权，否则退回旧行的均值/MIN。
 func (n *Notifier) dailyLatency(startTs, endTs int64) []latencyStat {
 	stats := make([]latencyStat, 0, len(n.cfg.PingTargets))
 	for _, pt := range n.cfg.PingTargets {
-		var avg, min sql.NullFloat64
-		var sent, lost int64
-		if err := n.db.QueryRow(
-			`SELECT AVG(rtt_ms), MIN(min_rtt), COALESCE(SUM(sent), 0), COALESCE(SUM(lost), 0)
-			 FROM latency_records WHERE target = ? AND ts >= ? AND ts < ?`,
-			pt.IP, startTs, endTs,
-		).Scan(&avg, &min, &sent, &lost); err != nil && err != sql.ErrNoRows {
+		s, err := collector.SummarizeLatencyRange(n.db, pt.IP, startTs, endTs)
+		if err != nil {
 			log.Printf("查询 %s 延迟失败: %v", pt.Tag, err)
 			continue
 		}
-
 		loss := 0.0
-		if sent > 0 {
-			loss = float64(lost) / float64(sent) * 100
+		if s.Sent > 0 {
+			loss = float64(s.Lost) / float64(s.Sent) * 100
 		}
-		stats = append(stats, latencyStat{
-			tag:    pt.Tag,
-			avgRTT: avg.Float64,
-			minRTT: min.Float64,
-			loss:   loss,
-			sent:   sent,
-			ok:     avg.Valid, // 全丢包时 AVG(rtt_ms) 为 NULL
-		})
+		st := latencyStat{tag: pt.Tag, loss: loss, sent: int64(s.Sent), ok: s.Avg != nil}
+		if s.Avg != nil {
+			st.avgRTT = *s.Avg
+		}
+		if s.Min != nil {
+			st.minRTT = *s.Min
+		}
+		stats = append(stats, st)
 	}
 	return stats
 }

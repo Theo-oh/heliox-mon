@@ -167,6 +167,60 @@ func TestHandleLatency_IncludesClientTargets(t *testing.T) {
 	}
 }
 
+func TestHandleLatency_PacketFields(t *testing.T) {
+	s, db := newTestServer(t, &config.Config{
+		PingTargets: []config.PingTarget{{Tag: "G", IP: "8.8.8.8"}},
+	})
+	now := time.Now().Unix()
+	if _, err := db.Exec(`INSERT INTO latency_records
+		(ts, target, rtt_ms, min_rtt, mdev, sent, lost, is_aggregated,
+		 max_rtt, p95_rtt, sum_rtt, sum_sq, recv, rtts)
+		VALUES (?, '8.8.8.8', 13.2, 10, 3.5, 5, 0, 0, 20, 20, 66, 900, 5, '[10,11,12,13,20]')`,
+		now); err != nil {
+		t.Fatalf("插入失败: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/latency", nil)
+	rec := httptest.NewRecorder()
+	s.handleLatency(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("状态码 = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Targets []struct {
+			Points []struct {
+				Max  *float64  `json:"max_rtt"`
+				P95  *float64  `json:"p95"`
+				Recv int       `json:"recv"`
+				RTTs []float64 `json:"rtts"`
+			} `json:"points"`
+			Stats struct {
+				Max *float64 `json:"max"`
+				P95 *float64 `json:"p95"`
+				Avg *float64 `json:"avg"`
+			} `json:"stats"`
+		} `json:"targets"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("解析失败: %v", err)
+	}
+	if len(resp.Targets) != 1 || len(resp.Targets[0].Points) != 1 {
+		t.Fatalf("targets/points 异常: %+v", resp.Targets)
+	}
+	p := resp.Targets[0].Points[0]
+	if p.Max == nil || *p.Max != 20 || p.P95 == nil || *p.P95 != 20 || p.Recv != 5 {
+		t.Errorf("point max/p95/recv = %v %v %d", p.Max, p.P95, p.Recv)
+	}
+	if len(p.RTTs) != 5 {
+		t.Errorf("rtts 长度 = %d, want 5", len(p.RTTs))
+	}
+	st := resp.Targets[0].Stats
+	if st.Max == nil || *st.Max != 20 || st.P95 == nil || *st.P95 != 20 {
+		t.Errorf("window stats max/p95 = %v %v", st.Max, st.P95)
+	}
+}
+
 // jsonInt 将 int64 转为 JSON 数字字面量字符串，供拼接测试请求体。
 func jsonInt(v int64) string {
 	b, _ := json.Marshal(v)

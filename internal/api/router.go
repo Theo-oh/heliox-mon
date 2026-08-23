@@ -874,129 +874,78 @@ func (s *Server) handleLatency(w http.ResponseWriter, r *http.Request) {
 
 	targetsData := make([]map[string]interface{}, 0, len(targets))
 	for _, pt := range targets {
-		// 按粒度聚合查询：按时间桶分组，计算平均 RTT
-		rows, err := s.db.Query(`
-			SELECT (ts / ?) * ? as bucket_ts,
-			       AVG(rtt_ms) as avg_rtt,
-			       MIN(min_rtt) as min_rtt,
-			       AVG(mdev) as jitter,
-			       SUM(COALESCE(sent, 0)) as sent,
-			       SUM(COALESCE(lost, 0)) as lost
-			FROM latency_records
-			WHERE target = ? AND ts >= ? AND ts <= ?
-			GROUP BY bucket_ts
-			ORDER BY bucket_ts
-		`, granularitySec, granularitySec, pt.IP, startTs, endTs)
+		pts, window, err := collector.QueryLatencyPoints(s.db, pt.IP, startTs, endTs, granularitySec)
 		if err != nil {
+			log.Printf("查询延迟数据失败 [%s]: %v", pt.Tag, err)
 			continue
 		}
-
-		var points []map[string]interface{}
-		var sum, max float64
-		var minRttOverall float64 = 999999
-		var jitterSum float64
-		var jitterCount int
-		var count int
-		var totalSent, totalLost int64
-
-		for rows.Next() {
-			var ts int64
-			var rtt, minRtt, jitter sql.NullFloat64
-			var sent sql.NullInt64
-			var lost sql.NullInt64
-			if err := rows.Scan(&ts, &rtt, &minRtt, &jitter, &sent, &lost); err != nil {
-				log.Printf("扫描延迟数据行失败: %v", err)
-				continue
-			}
-			sentVal := sent.Int64
-			lostVal := lost.Int64
-			if !sent.Valid {
-				sentVal = 0
-			}
-			if !lost.Valid {
-				lostVal = 0
-			}
-			totalSent += sentVal
-			totalLost += lostVal
-			lossRate := 0.0
-			if sentVal > 0 {
-				lossRate = float64(lostVal) / float64(sentVal) * 100
-			}
-
-			var rttVal interface{}
-			if rtt.Valid {
-				rttVal = rtt.Float64
-				sum += rtt.Float64
-				count++
-				if rtt.Float64 > max {
-					max = rtt.Float64
-				}
-			}
-
-			// min 取真实最小 RTT；旧数据无 min_rtt 时退化用平均值兜底
-			var minVal interface{}
-			if minRtt.Valid {
-				minVal = minRtt.Float64
-				if minRtt.Float64 < minRttOverall {
-					minRttOverall = minRtt.Float64
-				}
-			} else if rtt.Valid && rtt.Float64 < minRttOverall {
-				minRttOverall = rtt.Float64
-			}
-
-			var jitterVal interface{}
-			if jitter.Valid {
-				jitterVal = jitter.Float64
-				jitterSum += jitter.Float64
-				jitterCount++
-			}
-
-			points = append(points, map[string]interface{}{
-				"ts":      ts,
-				"rtt_ms":  rttVal,
-				"min_rtt": minVal,
-				"jitter":  jitterVal,
-				"loss":    lossRate,
-				"sent":    sentVal,
-				"lost":    lostVal,
-			})
+		points := make([]map[string]interface{}, 0, len(pts))
+		for _, p := range pts {
+			points = append(points, latencyPointJSON(p))
 		}
-		rows.Close()
-
-		avg := 0.0
-		if count > 0 {
-			avg = sum / float64(count)
-		}
-		if minRttOverall == 999999 {
-			minRttOverall = 0
-		}
-		avgJitter := 0.0
-		if jitterCount > 0 {
-			avgJitter = jitterSum / float64(jitterCount)
-		}
-		lossRate := 0.0
-		if totalSent > 0 {
-			lossRate = float64(totalLost) / float64(totalSent) * 100
-		}
-
-		targetData := map[string]interface{}{
+		targetsData = append(targetsData, map[string]interface{}{
 			"tag":    pt.Tag,
 			"ip":     pt.IP,
 			"points": points,
-			"stats": map[string]interface{}{
-				"avg":    avg,
-				"min":    minRttOverall,
-				"max":    max,
-				"jitter": avgJitter,
-				"count":  count,
-				"loss":   lossRate,
-			},
-		}
-		targetsData = append(targetsData, targetData)
+			"stats":  latencyWindowJSON(window, len(pts)),
+		})
 	}
 	result["targets"] = targetsData
 
 	writeJSON(w, result)
+}
+
+func latencyPointJSON(p collector.LatencyPoint) map[string]interface{} {
+	loss := 0.0
+	if p.Sent > 0 {
+		loss = float64(p.Lost) / float64(p.Sent) * 100
+	}
+	m := map[string]interface{}{
+		"ts":      p.TS,
+		"rtt_ms":  floatOrNil(p.Avg),
+		"min_rtt": floatOrNil(p.Min),
+		"max_rtt": floatOrNil(p.Max),
+		"p95":     floatOrNil(p.P95),
+		"jitter":  floatOrNil(p.Jitter),
+		"loss":    loss,
+		"sent":    p.Sent,
+		"lost":    p.Lost,
+		"recv":    p.Recv,
+		"sum_rtt": p.SumRTT,
+		"sum_sq":  p.SumSq,
+	}
+	if len(p.RTTs) > 0 {
+		m["rtts"] = p.RTTs
+	}
+	return m
+}
+
+func latencyWindowJSON(s collector.LatencySummary, buckets int) map[string]interface{} {
+	loss := 0.0
+	if s.Sent > 0 {
+		loss = float64(s.Lost) / float64(s.Sent) * 100
+	}
+	count := buckets
+	if s.Avg == nil {
+		count = 0
+	}
+	return map[string]interface{}{
+		"avg":    floatOrNil(s.Avg),
+		"min":    floatOrNil(s.Min),
+		"max":    floatOrNil(s.Max),
+		"p95":    floatOrNil(s.P95),
+		"jitter": floatOrNil(s.Mdev),
+		"count":  count,
+		"loss":   loss,
+		"recv":   s.Recv,
+	}
+}
+
+func floatOrNil(v *float64) interface{} {
+	if v == nil {
+		return nil
+	}
+	return *v
 }
 
 func chooseLatencyGranularity(duration time.Duration) int {

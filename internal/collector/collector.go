@@ -486,7 +486,7 @@ func (c *Collector) aggregateLatencyData() {
 		target string
 		ts     int64
 	}
-	groups := make(map[bucketKey][]latencySummary)
+	groups := make(map[bucketKey][]LatencySummary)
 	for rows.Next() {
 		var ts int64
 		var target string

@@ -5,6 +5,8 @@ import (
 	"math"
 	"strings"
 	"testing"
+
+	"github.com/hh/heliox-mon/internal/storage"
 )
 
 func TestPercentileNearestRank(t *testing.T) {
@@ -225,7 +227,7 @@ nothing useful here`,
 func TestMergeSummaries_FromSamples(t *testing.T) {
 	a := summarizeSamples([]float64{10, 12, 11}, 3, 0)
 	b := summarizeSamples([]float64{20, 40}, 3, 1)
-	got := mergeSummaries([]latencySummary{a, b})
+	got := mergeSummaries([]LatencySummary{a, b})
 	if got.Sent != 6 || got.Lost != 1 || got.Recv != 5 {
 		t.Fatalf("sent/lost/recv = %d/%d/%d, want 6/1/5", got.Sent, got.Lost, got.Recv)
 	}
@@ -248,7 +250,7 @@ func TestMergeSummaries_LegacyNoSamples(t *testing.T) {
 	avg := 30.0
 	min := 25.0
 	mdev := 2.0
-	got := mergeSummaries([]latencySummary{
+	got := mergeSummaries([]LatencySummary{
 		{Avg: &avg, Min: &min, Mdev: &mdev, Sent: 10, Lost: 0},
 		{Avg: &avg, Min: &min, Mdev: &mdev, Sent: 10, Lost: 0},
 	})
@@ -260,6 +262,54 @@ func TestMergeSummaries_LegacyNoSamples(t *testing.T) {
 	}
 	if got.Max == nil || *got.Max != 30 {
 		t.Errorf("legacy max 退回均值 = %v, want 30", formatFloatPtr(got.Max))
+	}
+}
+
+func TestQueryLatencyPoints_BucketsAndWindow(t *testing.T) {
+	db, err := storage.NewDB(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewDB 失败: %v", err)
+	}
+	defer db.Close()
+	c := &Collector{db: db}
+
+	a := summarizeSamples([]float64{10, 12, 11, 13, 14}, 5, 0)
+	b := summarizeSamples([]float64{20, 100}, 2, 0)
+	if err := c.insertLatency(100, "1.1.1.1", a); err != nil {
+		t.Fatalf("insert a: %v", err)
+	}
+	if err := c.insertLatency(400, "1.1.1.1", b); err != nil {
+		t.Fatalf("insert b: %v", err)
+	}
+
+	// 1 秒粒度：两点，各带 rtts
+	pts, window, err := QueryLatencyPoints(db, "1.1.1.1", 0, 1000, 1)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if len(pts) != 2 {
+		t.Fatalf("points = %d, want 2", len(pts))
+	}
+	if len(pts[0].RTTs) != 5 || len(pts[1].RTTs) != 2 {
+		t.Errorf("rtts len = %d, %d", len(pts[0].RTTs), len(pts[1].RTTs))
+	}
+	if window.Max == nil || *window.Max != 100 || window.P95 == nil || *window.P95 != 100 {
+		t.Errorf("window max/p95 = %v %v, want 100 100", window.Max, window.P95)
+	}
+
+	// 600 秒粒度：合成一桶，样本 7 个仍低于上限，JSON 仍带 rtts
+	pts, _, err = QueryLatencyPoints(db, "1.1.1.1", 0, 1000, 600)
+	if err != nil {
+		t.Fatalf("query 600: %v", err)
+	}
+	if len(pts) != 1 {
+		t.Fatalf("600s 桶数 = %d, want 1", len(pts))
+	}
+	if pts[0].Max == nil || *pts[0].Max != 100 {
+		t.Errorf("桶 max = %v, want 100", pts[0].Max)
+	}
+	if len(pts[0].RTTs) != 7 {
+		t.Errorf("合桶后仍应带 7 个样本, got %d", len(pts[0].RTTs))
 	}
 }
 

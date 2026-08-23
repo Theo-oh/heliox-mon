@@ -15,9 +15,9 @@ type latencyExecer interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }
 
-// latencySummary 一次探测（或一个时间桶）的摘要。
+// LatencySummary 一次探测（或一个时间桶）的摘要。
 // RTT 类指针：nil 表示该次无有效 RTT（如全丢包），与 0ms 区分。
-type latencySummary struct {
+type LatencySummary struct {
 	Avg    *float64
 	Min    *float64
 	Max    *float64
@@ -45,15 +45,15 @@ const insertLatencySQL = `INSERT INTO latency_records
 	 max_rtt, p95_rtt, sum_rtt, sum_sq, recv, rtts)
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-func (c *Collector) insertLatency(ts int64, target string, s latencySummary) error {
+func (c *Collector) insertLatency(ts int64, target string, s LatencySummary) error {
 	return c.writeLatency(ts, target, s, false)
 }
 
-func (c *Collector) writeLatency(ts int64, target string, s latencySummary, aggregated bool) error {
+func (c *Collector) writeLatency(ts int64, target string, s LatencySummary, aggregated bool) error {
 	return execLatencyInsert(c.db, ts, target, s, aggregated)
 }
 
-func execLatencyInsert(execer latencyExecer, ts int64, target string, s latencySummary, aggregated bool) error {
+func execLatencyInsert(execer latencyExecer, ts int64, target string, s LatencySummary, aggregated bool) error {
 	agg := 0
 	if aggregated {
 		agg = 1
@@ -70,8 +70,8 @@ func scanLatencySummary(
 	rtt, minRtt, mdev, maxRtt, p95, sumRtt, sumSq sql.NullFloat64,
 	sent, lost, recv sql.NullInt64,
 	rtts sql.NullString,
-) latencySummary {
-	s := latencySummary{
+) LatencySummary {
+	s := LatencySummary{
 		Sent:   int(sent.Int64),
 		Lost:   int(lost.Int64),
 		Recv:   int(recv.Int64),
@@ -100,7 +100,7 @@ func scanLatencySummary(
 	return s
 }
 
-func (s latencySummary) rttsJSON() interface{} {
+func (s LatencySummary) rttsJSON() interface{} {
 	if len(s.RTTs) == 0 {
 		return nil
 	}
@@ -124,7 +124,7 @@ func parseRTTsJSON(raw string) []float64 {
 }
 
 // fillLegacy 补齐旧行：只有分钟均值、recv/sum 为空。
-func (s *latencySummary) fillLegacy() {
+func (s *LatencySummary) fillLegacy() {
 	if s.Recv == 0 && s.Avg != nil && s.Sent > s.Lost {
 		s.Recv = s.Sent - s.Lost
 	}
@@ -141,9 +141,9 @@ func (s *latencySummary) fillLegacy() {
 
 // mergeSummaries 合并多条探测/分钟行。有完整逐包样本时 P95/max 按包计算；
 // 否则退回可合并列（加权平均、MIN/MAX、sum_sq 标准差），P95 留空以免装准。
-func mergeSummaries(parts []latencySummary) latencySummary {
+func mergeSummaries(parts []LatencySummary) LatencySummary {
 	if len(parts) == 0 {
-		return latencySummary{}
+		return LatencySummary{}
 	}
 	var sent, lost, recv int
 	var sum, sumSq float64
@@ -177,7 +177,7 @@ func mergeSummaries(parts []latencySummary) latencySummary {
 		s.Lost = lost
 		return s
 	}
-	out := latencySummary{Sent: sent, Lost: lost, Recv: recv, SumRTT: sum, SumSq: sumSq, Min: min, Max: max}
+	out := LatencySummary{Sent: sent, Lost: lost, Recv: recv, SumRTT: sum, SumSq: sumSq, Min: min, Max: max}
 	if recv > 0 && sum > 0 {
 		avg := sum / float64(recv)
 		out.Avg = floatPtr(avg)
@@ -192,11 +192,11 @@ func mergeSummaries(parts []latencySummary) latencySummary {
 
 // summarizeSamples 从成功包 RTT 计算可合并摘要。sent/lost 以探测统计为准，
 // 不从成功包数反推——ping 的 received 与解析到的 time= 行偶尔会对不上。
-func summarizeSamples(samples []float64, sent, lost int) latencySummary {
+func summarizeSamples(samples []float64, sent, lost int) LatencySummary {
 	if lost < 0 {
 		lost = 0
 	}
-	s := latencySummary{Sent: sent, Lost: lost, Recv: len(samples)}
+	s := LatencySummary{Sent: sent, Lost: lost, Recv: len(samples)}
 	if len(samples) == 0 {
 		return s
 	}
@@ -270,10 +270,10 @@ func roundRTTs(in []float64) []float64 {
 
 // parsePingOutput 解析系统 ping 输出。有逐包 time= 时以样本为准计算摘要；
 // 只有统计行（例如旧测试夹具 / -q 输出）时退回 min/avg/max/mdev 行。
-func parsePingOutput(output string) (latencySummary, bool) {
+func parsePingOutput(output string) (LatencySummary, bool) {
 	match := rePingStats.FindStringSubmatch(output)
 	if match == nil {
-		return latencySummary{}, false
+		return LatencySummary{}, false
 	}
 	transmitted, _ := strconv.Atoi(match[1])
 	received, _ := strconv.Atoi(match[2])
@@ -287,11 +287,11 @@ func parsePingOutput(output string) (latencySummary, bool) {
 		return summarizeSamples(samples, transmitted, lost), true
 	}
 	if received == 0 {
-		return latencySummary{Sent: transmitted, Lost: lost}, true
+		return LatencySummary{Sent: transmitted, Lost: lost}, true
 	}
 
 	min, avg, max, mdev := parseRTTLine(output)
-	s := latencySummary{Sent: transmitted, Lost: lost, Recv: received, Min: min, Avg: avg, Max: max, Mdev: mdev}
+	s := LatencySummary{Sent: transmitted, Lost: lost, Recv: received, Min: min, Avg: avg, Max: max, Mdev: mdev}
 	if avg != nil && received > 0 {
 		n := float64(received)
 		s.SumRTT = *avg * n

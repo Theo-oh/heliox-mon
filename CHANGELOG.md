@@ -14,6 +14,9 @@
 - **延迟 7 天降采样按包计算桶 P95**：拼齐 10 分钟内的成功样本再写摘要，随后丢掉 `rtts`。
   旧行没有样本时退回加权平均 / MIN / MAX，P95 留空而不是用均值冒充。降采样改走事务，
   避免 INSERT 成功、DELETE 失败时下次再插出重复桶。
+- **`GET /api/latency` 按包合并时间桶**：每个点带 `max_rtt` / `p95` / `recv` / `sum_rtt` /
+  `sum_sq`，1 分钟粒度还附带 `rtts` 数组供前端缩放时重算真 P95。窗口 stats 改为包加权，
+  日报延迟小节走同一套摘要。
 
 - **push main 即发版**：`release.yml` 现在同时由 branch push 和 `v*` tag 触发，产物一致、
   都会成为 `releases/latest`。push main 发的 Release tag 名为 `build-<run_number>`，

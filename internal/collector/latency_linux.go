@@ -30,7 +30,7 @@ func (c *Collector) doCollectLatency() {
 
 // pingStats 使用系统 ping 命令进行延迟测试。
 // 返回解析结果与是否成功；ok=false 表示本次因环境/执行错误失败，调用方应跳过记录。
-func (c *Collector) pingStats(target string) (latencySummary, bool) {
+func (c *Collector) pingStats(target string) (LatencySummary, bool) {
 	count := c.cfg.PingCount
 	if count <= 0 {
 		count = 20
@@ -64,7 +64,7 @@ func (c *Collector) pingStats(target string) (latencySummary, bool) {
 
 	if ctx.Err() == context.DeadlineExceeded {
 		log.Printf("警告：ping %s 超时被强制终止，跳过本次记录", target)
-		return latencySummary{}, false
+		return LatencySummary{}, false
 	}
 
 	// 无论退出码如何都先尝试解析：100% 丢包时 ping 退出码为 1，
@@ -75,10 +75,10 @@ func (c *Collector) pingStats(target string) (latencySummary, bool) {
 
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-		return latencySummary{Sent: count, Lost: count}, true
+		return LatencySummary{Sent: count, Lost: count}, true
 	}
 
 	log.Printf("警告：ping %s 执行失败，跳过本次记录: %v，输出: %s",
 		target, err, strings.TrimSpace(string(output)))
-	return latencySummary{}, false
+	return LatencySummary{}, false
 }
