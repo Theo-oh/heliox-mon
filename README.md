@@ -127,9 +127,9 @@ done
 | `HELIOX_TURNSTILE_SECRET` | Cloudflare Turnstile 密钥     | 空（设置后启用人机验证）          |
 | `HELIOX_TURNSTILE_SITEKEY`| Turnstile 站点公钥            | 内置默认值（换自己的站点时才需改）|
 | `PING_TARGETS`            | 延迟监控目标 (`TAG:IP`)       | Google:8.8.8.8,Cloudflare:1.1.1.1 |
-| `PING_COUNT`              | 每次 ping 发包数              | 5                                 |
+| `PING_COUNT`              | 每次 ping 发包数              | 20                                |
 | `PING_TIMEOUT_MS`         | 单次 ping 超时(ms)            | 1000                              |
-| `PING_GAP_MS`             | ping 发包间隔(ms)             | 200                               |
+| `PING_GAP_MS`             | ping 发包间隔(ms)，传给 `-i`  | 200（Linux 非 root 下限）         |
 | `HELIOX_MON_REPORT_TOKEN` | 客户端延迟上报令牌            | 空（设置后启用上报接口）          |
 
 ### 计费模式 (BILLING_MODE)

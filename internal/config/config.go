@@ -99,7 +99,7 @@ func Load() (*Config, error) {
 		BillingMode:        getEnv("BILLING_MODE", "bidirectional"),
 		ResetDay:           getEnvInt("RESET_DAY", 1),
 		ServerName:         getEnv("SERVER_NAME", "Heliox"),
-		PingCount:          getEnvInt("PING_COUNT", 5),
+		PingCount:          getEnvInt("PING_COUNT", 20),
 		PingTimeout:        time.Duration(getEnvInt("PING_TIMEOUT_MS", 1000)) * time.Millisecond,
 		PingGap:            time.Duration(getEnvInt("PING_GAP_MS", 200)) * time.Millisecond,
 		TurnstileSecretKey: getEnv("HELIOX_TURNSTILE_SECRET", ""),

@@ -76,3 +76,30 @@ func TestTrafficSnapshotRoundtrip(t *testing.T) {
 		t.Errorf("rx = %d, want 4000", rx)
 	}
 }
+
+func TestLatencyRecordNewColumns(t *testing.T) {
+	db, err := NewDB(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewDB 失败: %v", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`INSERT INTO latency_records
+		(ts, target, rtt_ms, min_rtt, mdev, sent, lost, is_aggregated,
+		 max_rtt, p95_rtt, sum_rtt, sum_sq, recv, rtts)
+		VALUES (1, '1.1.1.1', 13.2, 10, 3.5, 5, 0, 0, 20, 20, 66, 900, 5, '[10,12,11,20,13]')`)
+	if err != nil {
+		t.Fatalf("插入含新列的延迟记录失败: %v", err)
+	}
+
+	var maxRtt, p95, sumRtt, sumSq float64
+	var recv int
+	var rtts string
+	if err := db.QueryRow(`SELECT max_rtt, p95_rtt, sum_rtt, sum_sq, recv, rtts FROM latency_records`).
+		Scan(&maxRtt, &p95, &sumRtt, &sumSq, &recv, &rtts); err != nil {
+		t.Fatalf("读回新列失败: %v", err)
+	}
+	if maxRtt != 20 || p95 != 20 || recv != 5 || rtts != "[10,12,11,20,13]" {
+		t.Errorf("max=%v p95=%v recv=%d rtts=%q", maxRtt, p95, recv, rtts)
+	}
+}

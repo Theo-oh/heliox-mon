@@ -7,6 +7,11 @@
 
 ### 变更
 
+- **延迟采集改为逐包解析**：不再只把 ping 摘要均值当 RTT。默认 20 包，间隔走已有的
+  `PING_GAP_MS`（此前该配置从未传给 `ping -i`，实际永远是 1 秒）。成功包 RTT 入库，
+  并同时写下 min/avg/max/p95/标准差/`sum_rtt`/`sum_sq`，后续窗口统计不再对「均值的均值」
+  求 P95。环境错误仍跳过、全丢包 RTT 仍为 NULL。
+
 - **push main 即发版**：`release.yml` 现在同时由 branch push 和 `v*` tag 触发，产物一致、
   都会成为 `releases/latest`。push main 发的 Release tag 名为 `build-<run_number>`，
   版本号取 `git describe`（形如 `v0.26.2-3-g40910b2`）；打 `vX.Y.Z` 仍发干净版本号的正式版。

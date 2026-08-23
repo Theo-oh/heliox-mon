@@ -120,7 +120,13 @@ func migrate(db *sql.DB) error {
 			mdev REAL,
 			sent INTEGER DEFAULT 0,
 			lost INTEGER DEFAULT 0,
-			is_aggregated INTEGER DEFAULT 0
+			is_aggregated INTEGER DEFAULT 0,
+			max_rtt REAL,
+			p95_rtt REAL,
+			sum_rtt REAL,
+			sum_sq REAL,
+			recv INTEGER DEFAULT 0,
+			rtts TEXT
 		)`,
 		// 复合索引匹配查询条件 (target = ? AND ts BETWEEN ?) 及聚合清理
 		`CREATE INDEX IF NOT EXISTS idx_latency_target_ts ON latency_records(target, ts)`,
@@ -158,6 +164,13 @@ func migrate(db *sql.DB) error {
 	// 兼容旧版本（增加最小 RTT 与抖动字段，用于更准确的延迟参考）
 	_, _ = db.Exec("ALTER TABLE latency_records ADD COLUMN min_rtt REAL")
 	_, _ = db.Exec("ALTER TABLE latency_records ADD COLUMN mdev REAL")
+	// 逐包摘要：max/p95/可合并的 sum 与原始成功包数组
+	_, _ = db.Exec("ALTER TABLE latency_records ADD COLUMN max_rtt REAL")
+	_, _ = db.Exec("ALTER TABLE latency_records ADD COLUMN p95_rtt REAL")
+	_, _ = db.Exec("ALTER TABLE latency_records ADD COLUMN sum_rtt REAL")
+	_, _ = db.Exec("ALTER TABLE latency_records ADD COLUMN sum_sq REAL")
+	_, _ = db.Exec("ALTER TABLE latency_records ADD COLUMN recv INTEGER DEFAULT 0")
+	_, _ = db.Exec("ALTER TABLE latency_records ADD COLUMN rtts TEXT")
 
 	// 清理已被复合索引取代的旧单列索引（忽略不存在的情况）
 	for _, idx := range []string{

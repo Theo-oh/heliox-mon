@@ -143,22 +143,29 @@ func (c *Collector) doCollectSystemMetrics() {
 // doCollectLatency 模拟延迟采集
 func (c *Collector) doCollectLatency() {
 	now := time.Now().Unix()
+	count := c.cfg.PingCount
+	if count <= 0 {
+		count = 20
+	}
 
 	for _, target := range c.cfg.PingTargets {
-		// 模拟 10ms - 300ms 随机延迟，并据此派生最小 RTT 与抖动
-		avg := 10.0 + rand.Float64()*290.0
-		mdev := rand.Float64() * 5.0
-		min := avg - mdev
-		if min < 0 {
-			min = 0
+		// 模拟一条基线附近的逐包样本，偶发丢包，走与 Linux 相同的入库摘要
+		base := 20.0 + rand.Float64()*80.0
+		samples := make([]float64, 0, count)
+		lost := 0
+		for i := 0; i < count; i++ {
+			if rand.Float64() < 0.02 {
+				lost++
+				continue
+			}
+			v := base + rand.NormFloat64()*3
+			if v < 1 {
+				v = 1
+			}
+			samples = append(samples, v)
 		}
-
-		_, err := c.db.Exec(
-			`INSERT INTO latency_records (ts, target, rtt_ms, min_rtt, mdev, sent, lost, is_aggregated)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
-			now, target.IP, avg, min, mdev, 5, 0,
-		)
-		if err != nil {
+		s := summarizeSamples(samples, count, lost)
+		if err := c.insertLatency(now, target.IP, s); err != nil {
 			log.Printf("[Mock] 保存延迟数据失败: %v", err)
 		}
 	}
