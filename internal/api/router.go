@@ -3,6 +3,7 @@ package api
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -96,7 +97,7 @@ func NewServer(cfg *config.Config, db *storage.DB, realtimeProvider RealtimeData
 	mux.HandleFunc("/api/traffic/monthly", s.auth(s.handleTrafficMonthly))
 	mux.HandleFunc("/api/traffic/realtime", s.auth(s.handleTrafficRealtime))
 	mux.HandleFunc("/api/traffic/ports", s.auth(s.handlePortTraffic))
-	mux.HandleFunc("/api/latency", s.auth(s.handleLatency))
+	mux.HandleFunc("/api/latency", s.auth(gzipJSON(s.handleLatency)))
 	// 客户端测延与上报：echo 免认证，report 走独立 Bearer token（见各自 handler）
 	mux.HandleFunc("/api/echo", handleEcho)
 	mux.HandleFunc("/api/latency/report", s.handleLatencyReport)
@@ -137,6 +138,35 @@ func (s *Server) Stop() {
 
 // writeJSON 写出 JSON 响应；编码失败仅记录日志
 // （响应体已开始写出，无法再修改状态码）
+// gzipJSON 压缩响应体。延迟接口在 24h × 1 分钟粒度下每个桶都带逐包样本，
+// 单目标未压缩约 500KB，而前端每 60 秒全量重拉一次——走 Tunnel 或移动网络时
+// 这是持续的 MB 级流量。样本是数值文本，压缩比很高。
+// 注意：SSE（/api/traffic/realtime）不能套，压缩流会被缓冲，实时推送变成一次性吐出。
+func gzipJSON(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next(w, r)
+			return
+		}
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Add("Vary", "Accept-Encoding")
+		gz := gzip.NewWriter(w)
+		defer func() {
+			if err := gz.Close(); err != nil {
+				log.Printf("关闭 gzip 响应失败: %v", err)
+			}
+		}()
+		next(&gzipResponseWriter{ResponseWriter: w, gz: gz}, r)
+	}
+}
+
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	gz *gzip.Writer
+}
+
+func (w *gzipResponseWriter) Write(b []byte) (int, error) { return w.gz.Write(b) }
+
 func writeJSON(w http.ResponseWriter, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(v); err != nil {
@@ -982,6 +1012,9 @@ func handleEcho(w http.ResponseWriter, _ *http.Request) {
 var clientNameRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,32}$`)
 
 // latencySample 单条客户端上报样本。RTT 类字段用指针区分「无数据」与 0ms。
+// 单个 RTT 的上界（毫秒）。超过 1 分钟的「延迟」只可能是上报方算错了单位
+const maxRttMs = 60000
+
 type latencySample struct {
 	TS     *int64    `json:"ts"`
 	RttMs  *float64  `json:"rtt_ms"`
@@ -1104,9 +1137,9 @@ func validateLatencySample(smp *latencySample, now int64) string {
 			return "ts 超出允许时间窗（now-24h ~ now+5min）"
 		}
 	}
-	// RTT 类字段：null 或 [0, 60000) 毫秒
+	// RTT 类字段：null 或 [0, maxRttMs) 毫秒
 	for _, v := range []*float64{smp.RttMs, smp.MinRtt, smp.MaxRtt, smp.P95, smp.Mdev} {
-		if v != nil && (*v < 0 || *v >= 60000) {
+		if v != nil && (*v < 0 || *v >= maxRttMs) {
 			return "rtt/min_rtt/max_rtt/p95_rtt/mdev 须为 null 或 [0,60000) 毫秒"
 		}
 	}
@@ -1120,12 +1153,29 @@ func validateLatencySample(smp *latencySample, now int64) string {
 		return "rtts 数量不能超过 1000"
 	}
 	for _, v := range smp.RTTs {
-		if v < 0 || v >= 60000 {
+		if v < 0 || v >= maxRttMs {
 			return "rtts 元素须在 [0,60000) 毫秒"
 		}
 	}
 	if len(smp.RTTs)+smp.Lost > smp.Sent {
 		return "rtts+lost 不能大于 sent"
+	}
+	if smp.Recv < 0 || smp.Recv > smp.Sent-smp.Lost {
+		return "recv 须在 0-(sent-lost) 之间"
+	}
+	// 没有 rtts 时 sum_rtt/sum_sq 被原样当聚合权重写库，之后所有窗口均值都按它算，
+	// 且 7 天后会被降采样固化进聚合行。不设上界的话一条上报就能永久污染该目标
+	if smp.SumRTT < 0 || smp.SumSq < 0 {
+		return "sum_rtt/sum_sq 不能为负"
+	}
+	if smp.Recv == 0 && (smp.SumRTT > 0 || smp.SumSq > 0) {
+		return "recv 为 0 时 sum_rtt/sum_sq 须为 0"
+	}
+	if smp.SumRTT > float64(smp.Recv)*maxRttMs {
+		return "sum_rtt 不能超过 recv × 60000 毫秒"
+	}
+	if smp.SumSq > float64(smp.Recv)*maxRttMs*maxRttMs {
+		return "sum_sq 不能超过 recv × 60000² 毫秒²"
 	}
 	return ""
 }

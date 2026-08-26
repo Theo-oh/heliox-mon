@@ -245,3 +245,54 @@ func jsonInt(v int64) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }
+
+// TestValidateLatencySample_AggregateWeights 覆盖 recv/sum_rtt/sum_sq 三个聚合权重字段。
+// 无 rtts 时它们被原样写库并参与之后所有窗口均值，且 7 天后固化进聚合行——
+// 一条不设上界的上报足以永久污染该目标的读数。
+func TestValidateLatencySample_AggregateWeights(t *testing.T) {
+	now := time.Now().Unix()
+	tests := []struct {
+		name    string
+		smp     latencySample
+		wantErr bool
+	}{
+		{
+			name: "正常：recv 与 sum 自洽",
+			smp:  latencySample{Sent: 10, Lost: 0, Recv: 10, SumRTT: 300, SumSq: 9200},
+		},
+		{
+			name:    "sum_rtt 远超 recv 上界",
+			smp:     latencySample{Sent: 1, Lost: 0, Recv: 1, SumRTT: 5e11},
+			wantErr: true,
+		},
+		{
+			name:    "sum_sq 远超 recv 上界",
+			smp:     latencySample{Sent: 1, Lost: 0, Recv: 1, SumSq: 5e15},
+			wantErr: true,
+		},
+		{
+			name:    "recv 大于 sent-lost",
+			smp:     latencySample{Sent: 10, Lost: 5, Recv: 8},
+			wantErr: true,
+		},
+		{
+			name:    "全丢包却带权重",
+			smp:     latencySample{Sent: 10, Lost: 10, Recv: 0, SumRTT: 100},
+			wantErr: true,
+		},
+		{
+			name:    "负权重",
+			smp:     latencySample{Sent: 10, Lost: 0, Recv: 10, SumRTT: -1},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			smp := tt.smp
+			got := validateLatencySample(&smp, now)
+			if (got != "") != tt.wantErr {
+				t.Errorf("validateLatencySample() = %q, wantErr = %v", got, tt.wantErr)
+			}
+		})
+	}
+}

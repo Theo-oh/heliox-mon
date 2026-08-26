@@ -66,6 +66,7 @@ HELIOX_MON_PASS=test go run ./cmd/heliox-mon
   - ES module 不能用 `file://` 打开（CORS 拒绝，报错与真实故障无关），调试一律跑 `HELIOX_MON_PASS=test go run ./cmd/heliox-mon`。
   - 类型检查由根目录 `jsconfig.json`（`checkJs` + JSDoc）提供，只作用于编辑器，不进 CI、不引入 npm 依赖。`jsconfig.json` 刻意放在仓库根而非 `web/` 下，避免被 `go:embed js` 打进二进制。
 - **HTTP 响应统一用 `writeJSON` 辅助函数**（`internal/api/router.go`）输出 JSON；写出失败记日志而非静默忽略。
+  `/api/latency` 额外套 `gzipJSON`（逐包样本让 24h 视图接近 1MB，前端每 60 秒全量重拉）；**SSE 端点不能套**，压缩流会被缓冲，实时推送变成一次性吐出。
 - **SQLite 用纯 Go 驱动 `modernc.org/sqlite`（无需 CGO）**，WAL 模式；表结构与迁移集中在 `internal/storage/sqlite.go` 的 `migrate()`，启动时执行。
 - **配置全部来自环境变量**（`internal/config/config.go`），无配置文件；唯一例外是读取 heliox 的 `.env` 以获取 `SNELL_PORT`/`VLESS_PORT`。`HELIOX_MON_PASS` 必填，缺失则启动失败。
 - **认证**：Web 用 HMAC 签名的无状态 token + HttpOnly Cookie 会话（`internal/api/session.go`），`/api/*` 同时兼容 Basic Auth；可选 Cloudflare Turnstile。**签名密钥持久化在 `config` 表**，不要改回进程内存里的 session map——那样每次更新/重启都会把所有浏览器踢回登录页；也不要改成从 `HELIOX_MON_PASS` 派生密钥，那等于让持有合法 token 的人可以离线爆破管理员密码。
