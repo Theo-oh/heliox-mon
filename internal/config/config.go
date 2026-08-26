@@ -16,6 +16,11 @@ import (
 const defaultTurnstileSiteKey = "0x4AAAAAACOhRkua9joDOJiB"
 
 // PingTarget 延迟监控目标
+// MaxPingCount 单次探测的最大发包数。上限存在的理由不是 ping 本身，而是
+// collector 的 maxRTTsPerPoint：一个时间桶装不下整轮样本时，API 就不再下发
+// 逐包 rtts，前端的真样本 P95 会静默退化。两者必须是同一个数。
+const MaxPingCount = 40
+
 type PingTarget struct {
 	Tag string // 显示名称
 	IP  string // IP 地址
@@ -106,6 +111,17 @@ func Load() (*Config, error) {
 		TurnstileSiteKey:   getEnv("HELIOX_TURNSTILE_SITEKEY", defaultTurnstileSiteKey),
 		DevNoAuth:          devAuthAllowed && getEnvBool("HELIOX_MON_DEV_NO_AUTH", false),
 		ReportToken:        getEnv("HELIOX_MON_REPORT_TOKEN", ""),
+	}
+
+	// PING_COUNT 夹在 [1, MaxPingCount]：一次探测的逐包样本必须能整包放进一个时间桶，
+	// 超了 API 就不再下发 rtts，前端会永久退回「P95 约」且界面上没有任何提示
+	if cfg.PingCount < 1 {
+		log.Printf("警告：PING_COUNT=%d 无效，按 1 处理", cfg.PingCount)
+		cfg.PingCount = 1
+	}
+	if cfg.PingCount > MaxPingCount {
+		log.Printf("警告：PING_COUNT=%d 超过上限，按 %d 处理", cfg.PingCount, MaxPingCount)
+		cfg.PingCount = MaxPingCount
 	}
 
 	// 解析报警阈值

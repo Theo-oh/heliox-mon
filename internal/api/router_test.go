@@ -251,6 +251,7 @@ func jsonInt(v int64) string {
 // 一条不设上界的上报足以永久污染该目标的读数。
 func TestValidateLatencySample_AggregateWeights(t *testing.T) {
 	now := time.Now().Unix()
+	rtt30 := 30.0
 	tests := []struct {
 		name    string
 		smp     latencySample
@@ -284,6 +285,17 @@ func TestValidateLatencySample_AggregateWeights(t *testing.T) {
 			name:    "负权重",
 			smp:     latencySample{Sent: 10, Lost: 0, Recv: 10, SumRTT: -1},
 			wantErr: true,
+		},
+		{
+			// 落库会是 recv=10、sum_rtt=0 的桶：既把整个窗口拖回回退路径，
+			// 又给加权均值塞进一个分子为 0、分母为 10 的桶
+			name:    "recv>0 却一个 RTT 都没给",
+			smp:     latencySample{Sent: 10, Lost: 0, Recv: 10},
+			wantErr: true,
+		},
+		{
+			name: "recv>0 只给 rtt_ms（旧客户端）仍放行",
+			smp:  latencySample{Sent: 10, Lost: 0, Recv: 10, RttMs: &rtt30},
 		},
 	}
 	for _, tt := range tests {

@@ -1171,6 +1171,12 @@ func validateLatencySample(smp *latencySample, now int64) string {
 	if smp.Recv == 0 && (smp.SumRTT > 0 || smp.SumSq > 0) {
 		return "recv 为 0 时 sum_rtt/sum_sq 须为 0"
 	}
+	// 反向同样要堵：recv>0 却一个 RTT 都没给，落库就是 recv=N、sum_rtt=0 的桶。
+	// 它既把整个窗口从逐包精确路径拖回回退路径（P95 变「约」），又给加权均值塞进
+	// 一个分子为 0、分母为 N 的桶，把该目标的均值往 0 拉
+	if smp.Recv > 0 && len(smp.RTTs) == 0 && smp.SumRTT <= 0 && smp.RttMs == nil {
+		return "recv 大于 0 时须提供 rtts、sum_rtt 或 rtt_ms 之一"
+	}
 	if smp.SumRTT > float64(smp.Recv)*maxRttMs {
 		return "sum_rtt 不能超过 recv × 60000 毫秒"
 	}

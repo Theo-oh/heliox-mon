@@ -127,6 +127,34 @@ func TestLoad_ClampsResetDay(t *testing.T) {
 	}
 }
 
+// PING_COUNT 超过 MaxPingCount 时，一轮探测的样本装不进一个时间桶，API 就不再
+// 下发逐包 rtts，前端会永久退回「P95 约」且界面上没有任何提示——所以必须夹住。
+func TestLoad_ClampsPingCount(t *testing.T) {
+	t.Setenv("HELIOX_MON_PASS", "secret")
+	t.Setenv("HELIOX_ENV_PATH", "/nonexistent/.env")
+
+	for _, tt := range []struct {
+		in   string
+		want int
+	}{
+		{"100", MaxPingCount},
+		{"0", 1},
+		{"-5", 1},
+		{"20", 20},
+	} {
+		t.Run(tt.in, func(t *testing.T) {
+			t.Setenv("PING_COUNT", tt.in)
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load 失败: %v", err)
+			}
+			if cfg.PingCount != tt.want {
+				t.Errorf("PING_COUNT=%s -> PingCount = %d, want %d", tt.in, cfg.PingCount, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoad_RequiresPassword(t *testing.T) {
 	// 清空可能影响结果的环境变量
 	t.Setenv("HELIOX_MON_PASS", "")

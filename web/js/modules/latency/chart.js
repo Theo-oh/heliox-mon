@@ -368,11 +368,6 @@ function latencyYAxis(yMax, pal, gridLine) {
   };
 }
 
-/**
- * 左轴上限取「留 15% 顶部余量」后的整齐值，好让顶格刻度带单位也是整数。
- * 只统计缩放窗口内的点：轴按整段数据定死时，白天一个 400ms 的尖峰会让夜里
- * 那段 160ms 的曲线永远被压在图底三分之一，放大看细节这件事就白做了。
- */
 function packetExtrema(points) {
   let max = null;
   let min = null;
@@ -395,6 +390,11 @@ function pointsInWindow(points, win) {
   });
 }
 
+/**
+ * 左轴上限取「留 15% 顶部余量」后的整齐值，好让顶格刻度带单位也是整数。
+ * 只统计缩放窗口内的点：轴按整段数据定死时，白天一个 400ms 的尖峰会让夜里
+ * 那段 160ms 的曲线永远被压在图底三分之一，放大看细节这件事就白做了。
+ */
 function latencyAxisMax(series, timeRange, opts) {
   const win = zoomWindow(timeRange, opts.zoom);
   let max = 0;

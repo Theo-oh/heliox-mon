@@ -71,11 +71,14 @@ func (c *Collector) pingStats(target string) (LatencySummary, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 
-	// 去掉 -q：要逐包 time= 才能算真 P95/max。间隔走 PING_GAP_MS（此前配置了却没传给 ping）
+	// 去掉 -q：要逐包 time= 才能算真 P95/max。间隔走 PING_GAP_MS（此前配置了却没传给 ping）。
+	// -n 是去掉 -q 之后才需要的：逐包输出会让 iputils 对回包地址做反向解析，
+	// 解析器被黑洞的机器上每轮探测会多出一次可达数秒的 getnameinfo 阻塞，吃掉 budget
 	cmd := exec.CommandContext(ctx, "ping",
 		"-c", strconv.Itoa(count),
 		"-i", intervalArg,
 		"-W", timeoutArg,
+		"-n",
 		target,
 	)
 	output, err := cmd.CombinedOutput()

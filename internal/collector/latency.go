@@ -118,6 +118,8 @@ func parseRTTsJSON(raw string) []float64 {
 	}
 	var out []float64
 	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		// 退回聚合路径本身是安全的，但静默退回意味着「P95 变成约」查不出原因
+		log.Printf("解析 RTT 样本失败，该行退回聚合口径: %v", err)
 		return nil
 	}
 	return out

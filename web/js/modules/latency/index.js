@@ -21,6 +21,9 @@ let latencyData = null;
 let latencyModel = null;
 let latencyZoom = { start: 0, end: 100 };
 let statsRaf = null;
+let zoomRenderTimer = null;
+/** 上一次整图渲染用的缩放窗口，用来判断是否真的需要重绘 @type {{start:number,end:number}|null} */
+let renderedZoom = null;
 
 /** 已选中的目标标签；空集合意味着「还没初始化过」，见 syncTargetPills */
 const activeTags = new Set();
@@ -212,8 +215,10 @@ function renderAll() {
     onZoom: (zoom) => {
       latencyZoom = zoom;
       scheduleStats();
+      scheduleZoomRender();
     },
   });
+  renderedZoom = { ...latencyZoom };
 
   setText(
     "lat-pop-note",
@@ -249,6 +254,26 @@ function syncTargetPillState() {
     const idx = order.findIndex((t) => t.tag === tag);
     if (dot && idx >= 0) dot.style.background = targetColor(colors, idx);
   });
+}
+
+// 缩放过程中 chart.js 只 merge 左轴（见 rescaleAxis 的注释：滚轮连续触发，重建整张图
+// 既卡顿又要和手势抢 dataZoom 状态）。但 markPoint / markLine 的坐标是整图渲染时按窗口
+// 算好的常量，只缩轴不重绘的话，y 轴已经收到新量程而极值点还钉在上一个窗口的值上，
+// 会被画到网格外。手势停下后补一次重绘，比较 renderedZoom 是防 setOption 反弹出的
+// dataZoom 事件把这里变成每 200ms 一次的重绘循环
+function scheduleZoomRender() {
+  if (zoomRenderTimer) clearTimeout(zoomRenderTimer);
+  zoomRenderTimer = setTimeout(() => {
+    zoomRenderTimer = null;
+    if (
+      renderedZoom &&
+      renderedZoom.start === latencyZoom.start &&
+      renderedZoom.end === latencyZoom.end
+    ) {
+      return;
+    }
+    renderAll();
+  }, 200);
 }
 
 function scheduleStats() {

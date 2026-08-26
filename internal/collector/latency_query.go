@@ -3,12 +3,15 @@ package collector
 import (
 	"database/sql"
 
+	"github.com/hh/heliox-mon/internal/config"
 	"github.com/hh/heliox-mon/internal/storage"
 )
 
 // 单个时间桶最多把这么多个成功包塞进 JSON。超过说明粒度已经合并了多轮探测，
 // 前端用桶摘要做缩放统计，不再拉整段原始样本。
-const maxRTTsPerPoint = 40
+// 必须等于 config.MaxPingCount：一轮探测的样本要能整包放进一个桶，否则
+// 单目标单探测就超限，前端的真样本 P95 会静默退化成「约」。
+const maxRTTsPerPoint = config.MaxPingCount
 
 // LatencyPoint 是 API / 前端用的一个时间桶。
 type LatencyPoint struct {
