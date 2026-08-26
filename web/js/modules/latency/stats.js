@@ -51,9 +51,12 @@ function renderBanner(model, now) {
   banner.classList.remove("focus-ok", "focus-warn", "focus-down");
   banner.classList.add(`focus-${st.status}`);
 
-  // 出事的不是焦点目标时点名，否则「链路中断」与旁边正常的读数无法互相解释
-  const culprit =
-    worst.status !== "ok" && worst.tag && worst.tag !== focusTag ? ` · ${worst.tag}` : "";
+  // 出事的不是焦点目标时点名，否则「链路中断」与旁边正常的读数无法互相解释。
+  // 标题是 nowrap 的，目标多了只列两个再给总数，避免把横幅头部撑开
+  const culprits = worst.status === "ok" ? [] : worst.tags.filter((t) => t && t !== focusTag);
+  const culprit = culprits.length
+    ? ` · ${culprits.length > 2 ? `${culprits.slice(0, 2).join("、")} 等 ${culprits.length} 条` : culprits.join("、")}`
+    : "";
   setText("lat-banner-title", `${STATUS_TEXT[worst.status]}${culprit}`);
 
   const prefix = model.series.length > 1 && focusTag ? `${focusTag} ` : "";
@@ -88,15 +91,28 @@ const STATUS_RANK = { ok: 0, warn: 1, down: 2 };
 
 /**
  * 所有选中目标里最差的状态及其归属目标。焦点目标已经算过，不重复算。
+ *
+ * 非焦点目标只在「探测在跑、包却回不来」时才拉响横幅：没有数据、或数据已经陈旧的
+ * 一律不参与判定。`client:*` 是客户端间歇上报的，`/api/latency` 只要窗口内出现过
+ * 就会列出它，关掉浏览器后那个目标会带着小时级的 ageMs 在列表里滞留一整天——把它
+ * 算作「链路中断」会让横幅在服务端一切正常时长期钉在红色。真停采时焦点目标自己也
+ * 会陈旧并判 down，横幅照样报，这里跳过不会漏。
+ *
  * @param {any} model @param {number} now @param {any} focusSt @param {any} focus
  */
 function worstStatus(model, now, focusSt, focus) {
-  let worst = { status: focusSt.status, tag: focus?.tag || "" };
+  const worst = { status: focusSt.status, tags: [focus?.tag || ""] };
   model.series.forEach((s) => {
-    if (s.tag === focus?.tag) return;
+    if (s.tag === focus?.tag || !s.points.length) return;
     const st = deriveLinkStatus(s.points, model, now);
-    if (STATUS_RANK[st.status] > STATUS_RANK[worst.status]) {
-      worst = { status: st.status, tag: s.tag };
+    if (st.ageMs > model.gapMs) return;
+    const rank = STATUS_RANK[st.status];
+    if (rank > STATUS_RANK[worst.status]) {
+      worst.status = st.status;
+      worst.tags = [s.tag];
+    } else if (rank === STATUS_RANK[worst.status]) {
+      // 同档也要记下：两条链路同时断时只点名靠前的那个，另一条会被读成好的
+      worst.tags.push(s.tag);
     }
   });
   return worst;
