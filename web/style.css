@@ -1523,6 +1523,20 @@ body.theme-light .date-range {
   white-space: nowrap;
 }
 
+/* 读数的状态色跟随焦点目标自身（focus-*），而非横幅整体状态（is-*）：
+   多目标时横幅按最差目标报警，健康焦点的读数不该被一并染红 */
+.lat-banner.focus-ok {
+  --lat-focus-status: var(--accent-green);
+}
+
+.lat-banner.focus-warn {
+  --lat-focus-status: var(--accent-orange);
+}
+
+.lat-banner.focus-down {
+  --lat-focus-status: var(--accent-red);
+}
+
 /* 当前延迟：链路正常时保持中性色，劣化/中断才跟着状态变色 */
 .lat-banner-lead {
   font-size: 26px;
@@ -1532,9 +1546,9 @@ body.theme-light .date-range {
   font-variant-numeric: tabular-nums;
 }
 
-.lat-banner.is-warn .lat-banner-lead,
-.lat-banner.is-down .lat-banner-lead {
-  color: var(--lat-status);
+.lat-banner.focus-warn .lat-banner-lead,
+.lat-banner.focus-down .lat-banner-lead {
+  color: var(--lat-focus-status, var(--lat-status));
 }
 
 .lat-banner-val {
@@ -1544,9 +1558,9 @@ body.theme-light .date-range {
   font-variant-numeric: tabular-nums;
 }
 
-/* 丢包读数：只要状态不是「正常」，它就是那个需要被看见的数字 */
-.lat-banner:not(.is-ok) #lat-loss-now {
-  color: var(--lat-status);
+/* 丢包读数：只要焦点目标的状态不是「正常」，它就是那个需要被看见的数字 */
+.lat-banner:not(.focus-ok) #lat-loss-now {
+  color: var(--lat-focus-status, var(--lat-status));
 }
 
 .lat-banner-unit {

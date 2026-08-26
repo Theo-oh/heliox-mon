@@ -36,11 +36,28 @@ function renderBanner(model, now) {
   const banner = $("lat-banner");
   if (!banner) return;
 
-  const st = deriveLinkStatus(model, now);
-  banner.classList.remove("is-ok", "is-warn", "is-down");
-  banner.classList.add(`is-${st.status}`);
-  setText("lat-banner-title", STATUS_TEXT[st.status]);
+  // 读数只讲焦点目标。跨目标求平均会得到一条实际不存在的链路：CU 40ms 与 GC 170ms
+  // 平均出的 105ms 既不是任何一条的现状，也无法据此判断哪条出了问题
+  const focus = model.series.find((s) => s.tag === model.statsTag) || model.series[0];
+  const focusTag = focus?.tag || "";
+  const st = deriveLinkStatus(focus ? focus.points : [], model, now);
+  // 状态灯与标题按所有选中目标里最差的那条判定：焦点恰好选中健康的那条时，
+  // 另一条断了也必须在横幅上看得见
+  const worst = worstStatus(model, now, st, focus);
 
+  banner.classList.remove("is-ok", "is-warn", "is-down");
+  banner.classList.add(`is-${worst.status}`);
+  // 数值的着色跟随焦点自身状态，否则「链路中断」会把健康焦点的读数一并染红
+  banner.classList.remove("focus-ok", "focus-warn", "focus-down");
+  banner.classList.add(`focus-${st.status}`);
+
+  // 出事的不是焦点目标时点名，否则「链路中断」与旁边正常的读数无法互相解释
+  const culprit =
+    worst.status !== "ok" && worst.tag && worst.tag !== focusTag ? ` · ${worst.tag}` : "";
+  setText("lat-banner-title", `${STATUS_TEXT[worst.status]}${culprit}`);
+
+  const prefix = model.series.length > 1 && focusTag ? `${focusTag} ` : "";
+  setText("lat-now-label", `${prefix}当前延迟`);
   setText("lat-now", st.status === "down" ? "--" : formatNumber(st.rtt));
 
   // 中断时第二格换成「已持续」——此刻「抖动多少」没有意义，「断了多久」才有
@@ -66,12 +83,32 @@ function renderBanner(model, now) {
   );
 }
 
+// 状态严重度排序，用来在多个目标间挑出最差的那条
+const STATUS_RANK = { ok: 0, warn: 1, down: 2 };
+
 /**
- * 推导链路当前状态。判据全部相对化：无数据 → 中断；最近窗口全超时 → 中断；
- * 丢包 ≥ 2% 或均值明显高于基线 → 劣化；其余正常。
+ * 所有选中目标里最差的状态及其归属目标。焦点目标已经算过，不重复算。
+ * @param {any} model @param {number} now @param {any} focusSt @param {any} focus
  */
-function deriveLinkStatus(model, now) {
-  const merged = mergeByBucket(model.series);
+function worstStatus(model, now, focusSt, focus) {
+  let worst = { status: focusSt.status, tag: focus?.tag || "" };
+  model.series.forEach((s) => {
+    if (s.tag === focus?.tag) return;
+    const st = deriveLinkStatus(s.points, model, now);
+    if (STATUS_RANK[st.status] > STATUS_RANK[worst.status]) {
+      worst = { status: st.status, tag: s.tag };
+    }
+  });
+  return worst;
+}
+
+/**
+ * 推导单个目标的当前状态。判据全部相对化：无数据 → 中断；最近窗口全超时 → 中断；
+ * 丢包 ≥ 2% 或均值明显高于基线 → 劣化；其余正常。
+ * @param {any[]} points 该目标的原始点位 @param {any} model @param {number} now
+ */
+function deriveLinkStatus(points, model, now) {
+  const merged = buildTimeline(points);
   const empty = { status: "down", rtt: null, jitter: null, loss: null, ageMs: 0, downMs: 0 };
   if (!merged.length) return empty;
 
@@ -351,35 +388,18 @@ function renderLegend(model, ctx) {
 /* 工具                                                                         */
 /* -------------------------------------------------------------------------- */
 
-/** 把多个目标压成一条按时间桶对齐的时间线，供状态判定使用 */
-function mergeByBucket(series) {
-  /** @type {Map<number, {ts: number, rtts: number[], jitters: number[], sampleLists: number[][], sent: number, lost: number}>} */
-  const map = new Map();
-  series.forEach((s) => {
-    s.points.forEach((p) => {
-      const ts = p.ts * 1000;
-      const row = map.get(ts) || { ts, rtts: [], jitters: [], sampleLists: [], sent: 0, lost: 0 };
-      if (p.rtt_ms !== null && p.rtt_ms !== undefined) row.rtts.push(p.rtt_ms);
-      if (p.jitter !== null && p.jitter !== undefined) row.jitters.push(p.jitter);
-      if (Array.isArray(p.rtts) && p.rtts.length) row.sampleLists.push(p.rtts);
-      row.sent += p.sent || 0;
-      row.lost += p.lost || 0;
-      map.set(ts, row);
-    });
-  });
-  return Array.from(map.values())
-    .sort((a, b) => a.ts - b.ts)
-    .map((row) => ({
-      ts: row.ts,
-      rtt: row.rtts.length ? row.rtts.reduce((a, b) => a + b, 0) / row.rtts.length : null,
-      jitter: row.jitters.length
-        ? row.jitters.reduce((a, b) => a + b, 0) / row.jitters.length
-        : null,
-      succJitter:
-        row.sampleLists.length === 1 ? meanSuccessiveDiff(row.sampleLists[0]) : null,
-      sent: row.sent,
-      lost: row.lost,
-    }));
+/** 把一个目标的点位整理成状态判定用的时间线 */
+function buildTimeline(points) {
+  return points
+    .map((p) => ({
+      ts: p.ts * 1000,
+      rtt: num(p.rtt_ms),
+      jitter: num(p.jitter),
+      succJitter: Array.isArray(p.rtts) && p.rtts.length ? meanSuccessiveDiff(p.rtts) : null,
+      sent: p.sent || 0,
+      lost: p.lost || 0,
+    }))
+    .sort((a, b) => a.ts - b.ts);
 }
 
 function meanSuccessiveDiff(values) {
