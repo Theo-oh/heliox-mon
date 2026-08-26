@@ -165,12 +165,14 @@ function syncTargetPills(targets) {
     btn.appendChild(document.createTextNode(t.tag));
     btn.addEventListener("click", () => {
       // 至少留一个目标，全关掉只会得到一张空图
+      // 焦点只跟随「选中」这个动作：取消选中时若也改焦点，
+      // 用户原先锁定的目标会被静默换成刚被关掉的这个
       if (activeTags.has(t.tag) && activeTags.size > 1) {
         activeTags.delete(t.tag);
       } else {
         activeTags.add(t.tag);
+        statsFocusTag = t.tag;
       }
-      statsFocusTag = t.tag;
       latencyZoom = { start: 0, end: 100 };
       renderAll();
     });
@@ -288,6 +290,13 @@ function buildLatencyModel(data, tags) {
     statsFocusTag && series.some((s) => s.tag === statsFocusTag)
       ? statsFocusTag
       : series[0]?.tag || "";
+  // 指标条整行只讲焦点目标。丢包/异常时长若仍按所有选中目标求和，同一行里
+  // 「最大 480ms」是单目标的、「丢包 3%」是两条链路合并的，读数无法互相解释。
+  // 图上的丢包底色仍用全量 lossSeries——那是叠加展示，不是一个要被读出来的数
+  const focusSeries = series.find((s) => s.tag === statsTag);
+  const focusLossSeries = focusSeries
+    ? buildLossSeries([focusSeries], stepMs, gapMs)
+    : [];
 
   return {
     granularity,
@@ -298,6 +307,7 @@ function buildLatencyModel(data, tags) {
     series,
     statsTag,
     lossSeries,
+    focusLossSeries,
     gapAreas: buildGapAreas(series, stepMs, gapMs),
     lossAreas: buildLossAreas(lossSeries, LOSS_THRESHOLD, stepMs),
     timeRange: buildTimeRange(series),

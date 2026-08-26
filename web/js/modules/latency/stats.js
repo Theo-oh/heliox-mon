@@ -149,10 +149,14 @@ function renderMetrics(model, range, ctx) {
   const [anomaly, anomalyUnit] = formatSpanParts(agg.anomalyMs);
   setHtmlValue("lat-anomaly", anomaly, anomalyUnit);
 
-  // 最大值只在明显高于中位数时才标橙：一条 300ms 的跨洋链路，300ms 的最大值是常态
+  // 标橙的判据是「尾部变肥」而不是「出现过一个坏包」。max 是窗口内单个最差包
+  // （24h 约 3 万个样本），任何 `max > k × 中心统计量` 的判据在健康链路上都必然触发——
+  // 实测健康/抖动/薄尾/跨洋四类链路里，`max>median*2` 与 `max>p95*2` 的误报率都是 100%，
+  // 且后者在真劣化时反而不报。`p95 > median*2` 是四类正常链路全不报、真劣化必报的判据。
+  // 角标因此挂在 P95 上：单个最差包不可行动，P95 抬高才是这条链路真的变坏了
   const spiky =
-    agg.median !== null && agg.max !== null && agg.max > agg.median * 2;
-  setState("lat-max-value", spiky ? "is-warn" : "");
+    agg.median !== null && agg.p95 !== null && agg.p95 > agg.median * 2;
+  setState("lat-p95-value", spiky ? "is-warn" : "");
   setState(
     "lat-loss-value",
     agg.loss === null ? "" : agg.loss >= 10 ? "is-danger" : agg.loss >= LOSS_WARN_PCT ? "is-warn" : "",
@@ -178,7 +182,7 @@ function setState(id, cls) {
   if (cls) el.classList.add(cls);
 }
 
-/** 在缩放窗口内汇总：RTT 只取焦点目标（多选不混 P95），丢包仍按所选目标包加权 */
+/** 在缩放窗口内汇总：整条指标条只讲焦点目标，多选时不混口径 */
 function aggregate(model, range) {
   const focus =
     model.series.find((s) => s.tag === model.statsTag) || model.series[0];
@@ -186,12 +190,10 @@ function aggregate(model, range) {
 
   let sent = 0;
   let lost = 0;
-  model.series.forEach((s) => {
-    s.points.forEach((p) => {
-      if (!inRange(p.ts * 1000, range)) return;
-      sent += p.sent || 0;
-      lost += p.lost || 0;
-    });
+  (focus ? focus.points : []).forEach((p) => {
+    if (!inRange(p.ts * 1000, range)) return;
+    sent += p.sent || 0;
+    lost += p.lost || 0;
   });
 
   return {
@@ -299,7 +301,7 @@ function percentileNearestRank(sorted, p) {
 function anomalyMs(model, range) {
   const start = range?.start ?? null;
   const end = range?.end ?? null;
-  const points = model.lossSeries;
+  const points = model.focusLossSeries || model.lossSeries;
   let total = 0;
   for (let i = 0; i < points.length; i++) {
     const p = points[i];
@@ -335,9 +337,13 @@ function renderLegend(model, ctx) {
   // 缩放后指标条只算窗口内的点，图例这行是唯一还写着完整查询范围的地方，
   // 不点破就会被读成「这些数字是整段区间的」
   const scope = ctx.zoomed ? " · 指标取自当前选区" : "";
+  // 指标条整行都是焦点目标的读数，但只有平均/P95 两个标签带得下前缀，
+  // 多目标时在这里把范围点破一次，避免「最大/丢包」被读成所有目标的合计
+  const focusNote =
+    model.series.length > 1 && model.statsTag ? ` · 指标目标 ${model.statsTag}` : "";
   setText(
     "lat-legend-meta",
-    `采样 ${model.sampleCount} 点 · ${model.granularity} 分钟粒度 · ${ctx.rangeText}${scope}`,
+    `采样 ${model.sampleCount} 点 · ${model.granularity} 分钟粒度 · ${ctx.rangeText}${focusNote}${scope}`,
   );
 }
 

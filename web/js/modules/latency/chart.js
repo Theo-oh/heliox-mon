@@ -141,9 +141,13 @@ export function renderLatencyChart(model, opts) {
 function buildSeries(model, opts, theme) {
   const { pal, colors, labelBg } = theme;
   const series = [];
+  // 平均线与极值点都必须只看当前缩放窗口：y 轴量程本来就按窗口重算，
+  // 三者口径不一致时极值标记会被画到网格外，平均线也和指标条的「选区平均」对不上
+  const win = zoomWindow(model.timeRange, opts.zoom);
   model.series.forEach((s, i) => {
     const color = targetColor(colors, s.idx);
-    const avg = averageRtt(s.points);
+    const points = pointsInWindow(s.points, win);
+    const avg = averageRtt(points);
     series.push({
       name: s.tag,
       type: "line",
@@ -176,7 +180,7 @@ function buildSeries(model, opts, theme) {
               data: [{ yAxis: avg }],
             }
           : undefined,
-      markPoint: buildMarkPoint(s, color, opts, pal),
+      markPoint: buildMarkPoint(points, color, opts, pal),
       markArea: i === 0 ? buildMarkArea(model, pal, labelBg) : undefined,
     });
     if (opts.showP95 && s.p95Line) {
@@ -236,10 +240,12 @@ function lossBandSeries(data, stepMs, pal) {
   };
 }
 
-// 末点小圆点标出「最新一次探测」；开了极值再叠加该目标的最高/最低点
-function buildMarkPoint(s, color, opts, pal) {
+// 末点小圆点标出窗口内「最近一次探测」；开了极值再叠加该目标的最高/最低点。
+// points 已按缩放窗口过滤——窗口外的标记本来就被裁掉，不过滤只会让极值标记凭空消失
+/** @param {any[]} points */
+function buildMarkPoint(points, color, opts, pal) {
   const data = [];
-  const last = lastValidPoint(s.points);
+  const last = lastValidPoint(points);
   if (last) {
     data.push({
       coord: last,
@@ -250,7 +256,7 @@ function buildMarkPoint(s, color, opts, pal) {
     });
   }
   if (opts.showMax) {
-    const extrema = packetExtrema(s.points);
+    const extrema = packetExtrema(points);
     const label = {
       show: true,
       color: pal.text,
@@ -378,6 +384,15 @@ function packetExtrema(points) {
     if (lo !== null && lo !== undefined && (!min || lo < min[1])) min = [ts, lo];
   });
   return { max, min };
+}
+
+/** @param {any[]} points @param {{start:number,end:number}|null} win */
+function pointsInWindow(points, win) {
+  if (!win) return points;
+  return points.filter((p) => {
+    const ts = p.ts * 1000;
+    return ts >= win.start && ts <= win.end;
+  });
 }
 
 function latencyAxisMax(series, timeRange, opts) {
