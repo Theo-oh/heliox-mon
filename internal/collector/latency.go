@@ -134,9 +134,8 @@ func (s *LatencySummary) fillLegacy() {
 	if s.Recv > 0 && s.Avg != nil && s.Mdev != nil && s.SumSq == 0 {
 		s.SumSq = ((*s.Mdev)*(*s.Mdev) + (*s.Avg)*(*s.Avg)) * float64(s.Recv)
 	}
-	if s.Max == nil && s.Avg != nil {
-		s.Max = s.Avg
-	}
+	// 旧行没有 max_rtt 就让它保持 nil：拿分钟均值冒充实测最大值，
+	// 等于把「不知道」谎报成一个具体读数，前端显示 -- 更诚实
 }
 
 // mergeSummaries 合并多条探测/分钟行。有完整逐包样本时 P95/max 按包计算；
@@ -166,8 +165,9 @@ func mergeSummaries(parts []LatencySummary) LatencySummary {
 		}
 		if p.Recv > 0 && len(p.RTTs) == 0 {
 			allHaveSamples = false
+			all = nil // 已确定要走回退路径，攒下的样本不会再被用到
 		}
-		if len(p.RTTs) > 0 {
+		if allHaveSamples && len(p.RTTs) > 0 {
 			all = append(all, p.RTTs...)
 		}
 	}

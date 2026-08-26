@@ -28,13 +28,14 @@ stats=$(printf '%s\n' "$times" | tail -n +2 | awk -v n="$N" '
     ms = $2 * 1000
     c++
     v[c] = ms
+    ord[c] = ms
     s += ms
     ss += ms * ms
   }
   END {
     lost = n - c
     if (c == 0) {
-      printf "null null null null null %d 0 []"
+      printf "null null null null null %d 0 []", lost
       exit
     }
     for (i = 1; i <= c; i++) {
@@ -49,10 +50,11 @@ stats=$(printf '%s\n' "$times" | tail -n +2 | awk -v n="$N" '
     if (rank < 1) rank = 1
     if (rank > c) rank = c
     p95 = v[rank]
+    # rtts 按到达顺序输出：前端用相邻样本差算抖动，喂排序后的数组会让读数恒等于极差/(c-1)
     json = "["
     for (i = 1; i <= c; i++) {
       if (i > 1) json = json ","
-      json = json sprintf("%.2f", v[i])
+      json = json sprintf("%.2f", ord[i])
     }
     json = json "]"
     printf "%.2f %.2f %.2f %.2f %.2f %d %d %s", avg, min, max, p95, sd, lost, c, json

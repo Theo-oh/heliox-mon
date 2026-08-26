@@ -260,8 +260,10 @@ func TestMergeSummaries_LegacyNoSamples(t *testing.T) {
 	if got.P95 != nil {
 		t.Errorf("无逐包样本时 P95 应留空, got %v", formatFloatPtr(got.P95))
 	}
-	if got.Max == nil || *got.Max != 30 {
-		t.Errorf("legacy max 退回均值 = %v, want 30", formatFloatPtr(got.Max))
+	// 旧行没有 max_rtt，就该留空让前端显示 --；拿分钟均值冒充实测最大值
+	// 等于把「不知道」谎报成一个具体读数
+	if got.Max != nil {
+		t.Errorf("旧行无 max_rtt 时应留空, got %v", formatFloatPtr(got.Max))
 	}
 }
 

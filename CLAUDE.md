@@ -76,7 +76,7 @@ HELIOX_MON_PASS=test go run ./cmd/heliox-mon
 
 - 流量只统计物理网卡：`readProcNetDev` 通过 `isVirtualIface` 排除 `lo`/容器网桥/隧道接口（tun/wg/cloudflared 等），避免代理流量被重复计入。新增隧道类型需更新前缀列表。
 - 累计计数器用偏移量处理重启/溢出（`initTrafficOffsets` + 采集时检测回退）；不要改成直接用原始 `/proc` 值。
-- 延迟数据：每次探测解析逐包 RTT（不要只存 ping 摘要均值），原始记录保留 7 天，更早的按 10 分钟桶从真实样本算出 P95/max 后再丢掉 `rtts`，聚合行保留 90 天（`aggregateLatencyData`）——不要退回成直接 DELETE 或对均值再平均。`PING_GAP_MS` 必须传给 `ping -i`。
+- 延迟数据：每次探测解析逐包 RTT（不要只存 ping 摘要均值），原始记录保留 7 天，更早的按 10 分钟桶从真实样本算出 P95/max 后再丢掉 `rtts`，聚合行保留 90 天（`aggregateLatencyData`）——不要退回成直接 DELETE 或对均值再平均。`PING_GAP_MS` 必须传给 `ping -i`，且非 root 下要夹到 200ms——iputils 对非 root 强制 `-i >= 0.2`，更小的值会让 ping 以退出码 2 失败，而该退出码被归为「执行环境错误」只打日志跳过，结果是延迟图整片变空。
 - CPU 使用率按 `busy = total - idle - iowait` 计算（`parseCPUStatLine`）：iowait 期间 CPU 是空闲的，不能算进使用率；`guest`/`guest_nice` 已被内核计入 `user`/`nice`，累加 `/proc/stat` 时只取到 `steal` 为止，多加会让分母偏大。steal 单独作为指标暴露，不要并回使用率。
 - CPU 使用率与 TCP 重传率都依赖两次采样的差值，首次采样无基准时返回 `ok=false`，API 输出 `null` 让前端显示 `--`——不要为了「好看」填 0，那是把「不知道」谎报成「正常」。同理 `countEstablished` 读 `/proc/net/tcp{,6}` 出错（含 `scanner.Err()`）时返回 `nil` 而非部分结果，`conns_total` 随之输出 `null`：少算的连接数一样会被当真值展示。
 - 连接数扫描每 15 秒一次（`connsCollectInterval`），其余轮次复用 `lastConns`。`/proc/net/tcp` 是 seq_file 全表遍历且内核持锁，别为了「更实时」改回每 5 秒——高连接数下监控自己就会成为负载源。

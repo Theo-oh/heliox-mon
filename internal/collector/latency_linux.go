@@ -4,11 +4,19 @@ import (
 	"context"
 	"errors"
 	"log"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+// iputils 对非 root 用户强制的最小发包间隔（ping: "minimal interval allowed for user is 200ms"）
+const minPingInterval = 200 * time.Millisecond
+
+// 间隔被夹住只提示一次，否则每轮采集都会刷一行日志
+var clampWarn sync.Once
 
 // doCollectLatency 执行延迟采集
 func (c *Collector) doCollectLatency() {
@@ -41,7 +49,17 @@ func (c *Collector) pingStats(target string) (LatencySummary, bool) {
 	}
 	interval := c.cfg.PingGap
 	if interval <= 0 {
-		interval = 200 * time.Millisecond
+		interval = minPingInterval
+	}
+	// iputils 对非 root 强制 -i >= 0.2s，更小的值会让 ping 直接以退出码 2 失败，
+	// 采集随之全线跳过。此前 -i 没传给 ping，存量配置里的小间隔是空转的，
+	// 现在必须夹住，否则一次更新就把延迟图变空
+	if interval < minPingInterval && os.Geteuid() != 0 {
+		clampWarn.Do(func() {
+			log.Printf("警告：PING_GAP_MS 小于 %dms 且当前非 root，已按 %dms 执行",
+				minPingInterval.Milliseconds(), minPingInterval.Milliseconds())
+		})
+		interval = minPingInterval
 	}
 
 	// -W / -i 直接用秒（含小数），不再 int() 截断把毫秒级配置静默归零
