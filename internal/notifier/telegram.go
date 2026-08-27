@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -224,10 +225,10 @@ func (n *Notifier) latencySection(startTs, endTs int64) string {
 		case s.ok:
 			rows = append(rows, [2]string{
 				esc(s.tag),
-				fmt.Sprintf("%.1fms  最低 %.1f  丢%s", s.avgRTT, s.minRTT, formatLoss(s.loss)),
+				fmt.Sprintf("%.1fms  最低 %.1f  丢%s", s.avgRTT, s.minRTT, esc(formatLoss(s.loss))),
 			})
 		case s.sent > 0:
-			rows = append(rows, [2]string{esc(s.tag), "⚠️ 全程无响应  丢" + formatLoss(s.loss)})
+			rows = append(rows, [2]string{esc(s.tag), "⚠️ 全程无响应  丢" + esc(formatLoss(s.loss))})
 		default:
 			rows = append(rows, [2]string{esc(s.tag), "无数据"})
 		}
@@ -259,8 +260,10 @@ func (n *Notifier) latencyWindow(startTs, endTs int64) string {
 		time.Unix(maxTs.Int64, 0).In(tz).Format("15:04")
 }
 
-// formatLoss 渲染全天丢包率。默认每分钟 5 个包、单目标一天约 7200 个包，
-// 整数百分比要丢满 36 个包才不显示成 0，会把日常的零星丢包全部抹平，
+// formatLoss 渲染全天丢包率，返回纯文本（含裸 `<`），拼进 parse_mode=HTML 的消息前
+// 必须经 esc：Telegram 会把 `<0.01%` 当成标签起始，整条消息以 400 失败。
+// 默认每次探测 20 个包、单目标一天约 28800 个包，
+// 整数百分比要丢满 144 个包才不显示成 0，会把日常的零星丢包全部抹平，
 // 故保留两位小数，并对非零极小值给出下限提示而不是 0.00%。
 func formatLoss(loss float64) string {
 	switch {
@@ -411,7 +414,13 @@ func (n *Notifier) sendTelegram(text string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Telegram API 返回 %d", resp.StatusCode)
+		// 400 的真正原因（如 can't parse entities / chat not found）只在响应体的
+		// description 里，只记状态码等于把唯一的线索丢掉；限长读避免异常响应撑爆日志
+		detail, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		if err != nil {
+			return fmt.Errorf("Telegram API 返回 %d，读取响应体失败: %w", resp.StatusCode, err)
+		}
+		return fmt.Errorf("Telegram API 返回 %d: %s", resp.StatusCode, strings.TrimSpace(string(detail)))
 	}
 
 	return nil

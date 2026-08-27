@@ -112,19 +112,22 @@ func TestDailyLatency(t *testing.T) {
 	insertLatency(t, db, "1.1.1.1", 2500, 99, 99, 5, 0)
 	// bad: 全丢包，rtt/min 为 NULL，sent=5 lost=5
 	insertLatencyNull(t, db, "2.2.2.2", 1300, 5, 5)
+	// tiny: 丢包率低于 0.01%，formatLoss 会给出带裸 `<` 的下限文案
+	insertLatency(t, db, "3.3.3.3", 1400, 30, 30, 30000, 1)
 
 	cfg := &config.Config{
 		Timezone: time.UTC, // latencyWindow 需要非 nil 时区
 		PingTargets: []config.PingTarget{
 			{Tag: "A&B", IP: "1.1.1.1"}, // 含 HTML 元字符，验证转义
 			{Tag: "Bad", IP: "2.2.2.2"},
+			{Tag: "Tiny", IP: "3.3.3.3"},
 		},
 	}
 	n := New(cfg, db)
 
 	stats := n.dailyLatency(start, end)
-	if len(stats) != 2 {
-		t.Fatalf("stats 长度=%d，期望 2", len(stats))
+	if len(stats) != 3 {
+		t.Fatalf("stats 长度=%d，期望 3", len(stats))
 	}
 	if !stats[0].ok || stats[0].avgRTT != 15 || stats[0].minRTT != 8 || stats[0].loss != 0 {
 		t.Errorf("good 目标 stats=%+v，期望 avg=15 min=8 loss=0 ok=true", stats[0])
@@ -135,13 +138,17 @@ func TestDailyLatency(t *testing.T) {
 
 	// 小节应为 HTML 富文本：含加粗标题、可折叠引用块、ms 单位、全丢包标记，且 Tag 已转义
 	sec := n.latencySection(start, end)
-	for _, want := range []string{"<b>网络延迟</b>", "<blockquote expandable>", "</blockquote>", "ms", "全程无响应", "丢100.00%", "A&amp;B"} {
+	for _, want := range []string{"<b>网络延迟</b>", "<blockquote expandable>", "</blockquote>", "ms", "全程无响应", "丢100.00%", "A&amp;B", "丢&lt;0.01%"} {
 		if !strings.Contains(sec, want) {
 			t.Errorf("小节缺少 %q：\n%s", want, sec)
 		}
 	}
 	if strings.Contains(sec, "A&B") { // 未转义的原文不应出现
 		t.Errorf("Tag 未转义：\n%s", sec)
+	}
+	// 裸 `<` 会被 Telegram 当成标签起始，整条日报以 400 失败
+	if strings.Contains(sec, "<0.01%") {
+		t.Errorf("丢包率下限文案未转义：\n%s", sec)
 	}
 }
 
