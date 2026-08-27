@@ -167,14 +167,19 @@ function syncTargetPills(targets) {
     btn.appendChild(dot);
     btn.appendChild(document.createTextNode(t.tag));
     btn.addEventListener("click", () => {
-      // 至少留一个目标，全关掉只会得到一张空图
-      // 焦点只跟随「选中」这个动作：取消选中时若也改焦点，
-      // 用户原先锁定的目标会被静默换成刚被关掉的这个
-      if (activeTags.has(t.tag) && activeTags.size > 1) {
-        activeTags.delete(t.tag);
-      } else {
+      // 三态单击。关键是中间那档：目标已在图上但不是焦点时，单击切焦点而不是把它
+      // 关掉——默认所有目标都是选中的，若沿用「已选中就取消选中」，两条链路都在图上
+      // 时根本没有切焦点的入口，只能靠「关掉再打开」绕，中途图上还会少一条线
+      if (!activeTags.has(t.tag)) {
         activeTags.add(t.tag);
         statsFocusTag = t.tag;
+      } else if (statsFocusTag !== t.tag) {
+        statsFocusTag = t.tag;
+      } else if (activeTags.size > 1) {
+        // 已是焦点再点才移出图表；至少留一个目标，全关掉只会得到一张空图。
+        // 清空焦点让 buildLatencyModel 回退到剩下的第一个，别指向已关掉的目标
+        activeTags.delete(t.tag);
+        statsFocusTag = "";
       }
       latencyZoom = { start: 0, end: 100 };
       renderAll();
@@ -205,6 +210,10 @@ function renderAll() {
   syncRangeButtons();
   if (!latencyData) return;
   latencyModel = buildLatencyModel(latencyData, activeTags);
+  // 把回退结果固化回来：statsFocusTag 为空或指向已关掉的目标时，实际焦点是
+  // series[0]。不同步的话胶囊的三态判断会和画面上的焦点对不上，第一次点当前
+  // 焦点那枚胶囊只会「设了个已经生效的焦点」，看起来像点了没反应
+  statsFocusTag = latencyModel.statsTag;
 
   renderLatencyChart(latencyModel, {
     showLoss: checked("show-loss"),
@@ -250,6 +259,15 @@ function syncTargetPillState() {
     const pill = /** @type {HTMLElement} */ (el);
     const tag = pill.dataset.tag || "";
     pill.classList.toggle("is-active", activeTags.has(tag));
+    // 焦点态要和「在图上显示」分开标：横幅与指标条的读数只讲焦点这一条，
+    // 两枚胶囊都亮着蓝底时，没有这个标识就无从知道数字属于谁
+    const isFocus = order.length > 1 && tag === latencyModel?.statsTag;
+    pill.classList.toggle("is-focus", isFocus);
+    pill.title = !activeTags.has(tag)
+      ? "加入图表并作为指标目标"
+      : isFocus
+        ? "移出图表"
+        : "作为指标目标（横幅与指标条只讲这一条）";
     const dot = /** @type {HTMLElement|null} */ (pill.querySelector(".lat-dot"));
     const idx = order.findIndex((t) => t.tag === tag);
     if (dot && idx >= 0) dot.style.background = targetColor(colors, idx);

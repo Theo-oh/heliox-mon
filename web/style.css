@@ -1235,6 +1235,19 @@ body.theme-light .lat-target-pill.is-active {
   border-color: rgba(10, 132, 255, 0.28);
 }
 
+/* 焦点目标（横幅与指标条的读数只讲它）。写在 is-active 之后靠后来居上取胜；
+   亮色主题的 is-active 是 (0,3,0)，比这里更特异，必须补一条同权重的覆盖，
+   否则亮色下边框会被压回去、焦点态看不出来 */
+.lat-target-pill.is-focus {
+  border-color: rgba(10, 132, 255, 0.7);
+  box-shadow: 0 0 0 1px rgba(10, 132, 255, 0.35);
+}
+
+body.theme-light .lat-target-pill.is-focus {
+  border-color: rgba(10, 132, 255, 0.6);
+  box-shadow: 0 0 0 1px rgba(10, 132, 255, 0.28);
+}
+
 /* 未选中的目标把圆点也压灰，否则一枚亮色圆点看着仍像在图上 */
 .lat-target-pill:not(.is-active) .lat-dot {
   opacity: 0.4;
